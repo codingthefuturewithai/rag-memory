@@ -10,6 +10,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from src.core.chunking import ChunkingConfig, get_document_chunker
 from src.core.collections import get_collection_manager
 from src.core.database import get_database
 from src.ingestion.document_store import get_document_store
@@ -263,7 +264,9 @@ def ingest_directory(path, collection, extensions, recursive):
 @click.option("--collection", required=True, help="Collection name")
 @click.option("--headless/--no-headless", default=True, help="Run browser in headless mode")
 @click.option("--verbose", is_flag=True, help="Enable verbose crawling output")
-def ingest_url(url, collection, headless, verbose):
+@click.option("--chunk-size", type=int, default=2500, help="Chunk size for web pages (default: 2500)")
+@click.option("--chunk-overlap", type=int, default=300, help="Chunk overlap (default: 300)")
+def ingest_url(url, collection, headless, verbose, chunk_size, chunk_overlap):
     """Crawl and ingest a web page with automatic chunking."""
     try:
         console.print(f"[bold blue]Crawling URL: {url}[/bold blue]")
@@ -279,11 +282,18 @@ def ingest_url(url, collection, headless, verbose):
 
         console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
 
-        # Ingest the content
+        # Create custom chunker for web pages (larger chunks)
+        web_chunking_config = ChunkingConfig(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+        web_chunker = get_document_chunker(web_chunking_config)
+
+        # Ingest the content with custom chunker
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
-        doc_store = get_document_store(db, embedder, coll_mgr)
+        doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
 
         source_id, chunk_ids = doc_store.ingest_document(
             content=result.content,
@@ -298,6 +308,7 @@ def ingest_url(url, collection, headless, verbose):
         )
         console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
         console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
+        console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
 
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")

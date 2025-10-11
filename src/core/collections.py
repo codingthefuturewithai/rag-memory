@@ -135,10 +135,13 @@ class CollectionManager:
 
     def delete_collection(self, name: str) -> bool:
         """
-        Delete a collection by name.
+        Delete a collection by name and clean up orphaned documents.
 
-        Note: Due to CASCADE, this will also remove document-collection relationships,
-        but not the documents themselves.
+        This performs a complete cleanup:
+        1. Gets all source documents in this collection
+        2. Deletes the collection (CASCADE removes chunk_collections entries)
+        3. Deletes orphaned chunks (chunks not in any collection)
+        4. Deletes orphaned source documents (documents with no chunks)
 
         Args:
             name: Collection name.
@@ -148,21 +151,57 @@ class CollectionManager:
         """
         conn = self.db.connect()
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                DELETE FROM collections WHERE name = %s
-                RETURNING id;
-                """,
-                (name,),
-            )
+            # Get collection ID first
+            cur.execute("SELECT id FROM collections WHERE name = %s", (name,))
             result = cur.fetchone()
 
-            if result:
-                logger.info(f"Deleted collection '{name}'")
-                return True
-            else:
+            if not result:
                 logger.warning(f"Collection '{name}' not found")
                 return False
+
+            collection_id = result[0]
+
+            # Get all source documents in this collection before deletion
+            cur.execute(
+                """
+                SELECT DISTINCT dc.source_document_id
+                FROM document_chunks dc
+                INNER JOIN chunk_collections cc ON dc.id = cc.chunk_id
+                WHERE cc.collection_id = %s
+                """,
+                (collection_id,)
+            )
+            source_doc_ids = [row[0] for row in cur.fetchall()]
+
+            # Delete the collection (CASCADE removes chunk_collections)
+            cur.execute(
+                "DELETE FROM collections WHERE id = %s",
+                (collection_id,)
+            )
+
+            # Delete orphaned chunks (not in any collection anymore)
+            cur.execute(
+                """
+                DELETE FROM document_chunks
+                WHERE id NOT IN (SELECT chunk_id FROM chunk_collections)
+                """
+            )
+            deleted_chunks = cur.rowcount
+
+            # Delete orphaned source documents (no chunks left)
+            cur.execute(
+                """
+                DELETE FROM source_documents
+                WHERE id NOT IN (SELECT DISTINCT source_document_id FROM document_chunks)
+                """
+            )
+            deleted_docs = cur.rowcount
+
+            logger.info(
+                f"Deleted collection '{name}' and cleaned up {deleted_docs} documents "
+                f"with {deleted_chunks} chunks"
+            )
+            return True
 
 
 def get_collection_manager(database: Database) -> CollectionManager:

@@ -28,8 +28,9 @@ class TestWebIngestionIntegration:
         try:
             coll_mgr.create_collection(collection_name, "Test collection for web integration")
         except ValueError:
-            # Collection already exists, that's fine
-            pass
+            # Collection already exists - delete and recreate for clean state
+            coll_mgr.delete_collection(collection_name)
+            coll_mgr.create_collection(collection_name, "Test collection for web integration")
 
         yield {
             "db": db,
@@ -39,6 +40,54 @@ class TestWebIngestionIntegration:
             "searcher": searcher,
             "collection_name": collection_name,
         }
+
+        # TEARDOWN: Delete all data created during test
+        try:
+            conn = db.connect()
+            with conn.cursor() as cur:
+                # Get collection ID before deletion
+                cur.execute("SELECT id FROM collections WHERE name = %s", (collection_name,))
+                result = cur.fetchone()
+
+                if result:
+                    collection_id = result[0]
+
+                    # Step 1: Get all source documents from this collection
+                    cur.execute(
+                        """
+                        SELECT DISTINCT dc.source_document_id
+                        FROM document_chunks dc
+                        INNER JOIN chunk_collections cc ON dc.id = cc.chunk_id
+                        WHERE cc.collection_id = %s
+                        """,
+                        (collection_id,)
+                    )
+                    source_doc_ids = [row[0] for row in cur.fetchall()]
+
+                    # Step 2: Delete the collection (CASCADE deletes chunk_collections)
+                    coll_mgr.delete_collection(collection_name)
+
+                    # Step 3: Delete all chunks belonging to source documents from this collection
+                    if source_doc_ids:
+                        cur.execute(
+                            """
+                            DELETE FROM document_chunks
+                            WHERE source_document_id = ANY(%s)
+                            """,
+                            (source_doc_ids,)
+                        )
+
+                        # Step 4: Delete the source documents
+                        cur.execute(
+                            """
+                            DELETE FROM source_documents
+                            WHERE id = ANY(%s)
+                            """,
+                            (source_doc_ids,)
+                        )
+        except Exception as e:
+            # Log but don't fail the test if cleanup fails
+            print(f"Warning: Cleanup failed for collection {collection_name}: {e}")
 
     async def test_crawl_ingest_search_pipeline(self, setup_components):
         """Test complete pipeline: crawl web page, ingest, then search."""
