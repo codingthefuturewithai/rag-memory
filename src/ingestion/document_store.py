@@ -8,10 +8,10 @@ import numpy as np
 from pgvector.psycopg import register_vector
 from psycopg.types.json import Jsonb
 
-from src.chunking import DocumentChunker, get_document_chunker
-from src.collections import CollectionManager
-from src.database import Database
-from src.embeddings import EmbeddingGenerator
+from src.core.chunking import DocumentChunker, get_document_chunker
+from src.core.collections import CollectionManager
+from src.core.database import Database
+from src.core.embeddings import EmbeddingGenerator
 
 logger = logging.getLogger(__name__)
 
