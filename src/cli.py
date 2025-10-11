@@ -1,5 +1,6 @@
 """Command-line interface for the pgvector RAG POC."""
 
+import asyncio
 import json
 import logging
 import sys
@@ -14,6 +15,7 @@ from src.core.database import get_database
 from src.ingestion.document_store import get_document_store
 from src.core.embeddings import get_embedding_generator
 from src.retrieval.search import get_similarity_search
+from src.ingestion.web_crawler import crawl_single_page
 
 # Configure logging
 logging.basicConfig(
@@ -253,6 +255,54 @@ def ingest_directory(path, collection, extensions, recursive):
 
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
+@ingest.command("url")
+@click.argument("url")
+@click.option("--collection", required=True, help="Collection name")
+@click.option("--headless/--no-headless", default=True, help="Run browser in headless mode")
+@click.option("--verbose", is_flag=True, help="Enable verbose crawling output")
+def ingest_url(url, collection, headless, verbose):
+    """Crawl and ingest a web page with automatic chunking."""
+    try:
+        console.print(f"[bold blue]Crawling URL: {url}[/bold blue]")
+
+        # Crawl the page
+        result = asyncio.run(crawl_single_page(url, headless=headless, verbose=verbose))
+
+        if not result.success:
+            console.print(f"[bold red]✗ Failed to crawl {url}[/bold red]")
+            if result.error:
+                console.print(f"[bold red]Error: {result.error.error_message}[/bold red]")
+            sys.exit(1)
+
+        console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
+
+        # Ingest the content
+        db = get_database()
+        embedder = get_embedding_generator()
+        coll_mgr = get_collection_manager(db)
+        doc_store = get_document_store(db, embedder, coll_mgr)
+
+        source_id, chunk_ids = doc_store.ingest_document(
+            content=result.content,
+            filename=result.metadata.get("title", url),
+            collection_name=collection,
+            metadata=result.metadata,
+            file_type="web_page",
+        )
+
+        console.print(
+            f"[bold green]✓ Ingested web page (ID: {source_id}) with {len(chunk_ids)} chunks to collection '{collection}'[/bold green]"
+        )
+        console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
+        console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
