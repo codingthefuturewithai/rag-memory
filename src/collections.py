@@ -70,9 +70,9 @@ class CollectionManager:
                     c.name,
                     c.description,
                     c.created_at,
-                    COUNT(dc.document_id) as document_count
+                    COUNT(DISTINCT cc.chunk_id) as document_count
                 FROM collections c
-                LEFT JOIN document_collections dc ON c.id = dc.collection_id
+                LEFT JOIN chunk_collections cc ON c.id = cc.collection_id
                 GROUP BY c.id, c.name, c.description, c.created_at
                 ORDER BY c.created_at DESC;
                 """
@@ -113,9 +113,9 @@ class CollectionManager:
                     c.name,
                     c.description,
                     c.created_at,
-                    COUNT(dc.document_id) as document_count
+                    COUNT(DISTINCT cc.chunk_id) as document_count
                 FROM collections c
-                LEFT JOIN document_collections dc ON c.id = dc.collection_id
+                LEFT JOIN chunk_collections cc ON c.id = cc.collection_id
                 WHERE c.name = %s
                 GROUP BY c.id, c.name, c.description, c.created_at;
                 """,
@@ -163,71 +163,6 @@ class CollectionManager:
             else:
                 logger.warning(f"Collection '{name}' not found")
                 return False
-
-    def add_document_to_collection(
-        self, document_id: int, collection_name: str
-    ) -> bool:
-        """
-        Add a document to a collection.
-
-        Args:
-            document_id: ID of the document.
-            collection_name: Name of the collection.
-
-        Returns:
-            True if successfully added.
-
-        Raises:
-            ValueError: If collection doesn't exist.
-        """
-        collection = self.get_collection(collection_name)
-        if not collection:
-            raise ValueError(f"Collection '{collection_name}' not found")
-
-        conn = self.db.connect()
-        try:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO document_collections (document_id, collection_id)
-                    VALUES (%s, %s)
-                    ON CONFLICT DO NOTHING;
-                    """,
-                    (document_id, collection["id"]),
-                )
-                logger.info(
-                    f"Added document {document_id} to collection '{collection_name}'"
-                )
-                return True
-        except Exception as e:
-            logger.error(f"Failed to add document to collection: {e}")
-            raise
-
-    def get_collection_documents(self, collection_name: str) -> List[int]:
-        """
-        Get all document IDs in a collection.
-
-        Args:
-            collection_name: Name of the collection.
-
-        Returns:
-            List of document IDs.
-        """
-        collection = self.get_collection(collection_name)
-        if not collection:
-            return []
-
-        conn = self.db.connect()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT document_id FROM document_collections
-                WHERE collection_id = %s;
-                """,
-                (collection["id"],),
-            )
-            results = cur.fetchall()
-            return [row[0] for row in results]
 
 
 def get_collection_manager(database: Database) -> CollectionManager:

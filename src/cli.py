@@ -11,8 +11,8 @@ from rich.table import Table
 
 from src.collections import get_collection_manager
 from src.database import get_database
+from src.document_store import get_document_store
 from src.embeddings import get_embedding_generator
-from src.ingestion import get_document_ingestion
 from src.search import get_similarity_search
 
 # Configure logging
@@ -75,7 +75,8 @@ def status():
             table.add_column("Metric", style="cyan")
             table.add_column("Value", style="green")
 
-            table.add_row("Documents", str(stats["documents"]))
+            table.add_row("Documents", str(stats["source_documents"]))
+            table.add_row("Chunks", str(stats["chunks"]))
             table.add_row("Collections", str(stats["collections"]))
             table.add_row("Database Size", stats["database_size"])
 
@@ -175,51 +176,25 @@ def ingest():
     pass
 
 
-@ingest.command("text")
-@click.argument("text")
-@click.option("--collection", required=True, help="Collection name")
-@click.option("--metadata", help="Metadata as JSON string")
-def ingest_text(text, collection, metadata):
-    """Ingest a text document."""
-    try:
-        db = get_database()
-        embedder = get_embedding_generator()
-        coll_mgr = get_collection_manager(db)
-        ingestion = get_document_ingestion(db, embedder, coll_mgr)
-
-        metadata_dict = json.loads(metadata) if metadata else None
-
-        console.print("[bold blue]Ingesting document...[/bold blue]")
-        doc_id = ingestion.ingest_text(text, collection, metadata_dict)
-
-        console.print(
-            f"[bold green]✓ Ingested document (ID: {doc_id}) to collection '{collection}'[/bold green]"
-        )
-
-    except Exception as e:
-        console.print(f"[bold red]Error: {e}[/bold red]")
-        sys.exit(1)
-
-
 @ingest.command("file")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--collection", required=True, help="Collection name")
 @click.option("--metadata", help="Additional metadata as JSON string")
 def ingest_file(path, collection, metadata):
-    """Ingest a document from a file."""
+    """Ingest a document from a file with automatic chunking."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
-        ingestion = get_document_ingestion(db, embedder, coll_mgr)
+        doc_store = get_document_store(db, embedder, coll_mgr)
 
         metadata_dict = json.loads(metadata) if metadata else None
 
         console.print(f"[bold blue]Ingesting file: {path}[/bold blue]")
-        doc_id = ingestion.ingest_file(path, collection, metadata_dict)
 
+        source_id, chunk_ids = doc_store.ingest_file(path, collection, metadata_dict)
         console.print(
-            f"[bold green]✓ Ingested file (ID: {doc_id}) to collection '{collection}'[/bold green]"
+            f"[bold green]✓ Ingested file (ID: {source_id}) with {len(chunk_ids)} chunks to collection '{collection}'[/bold green]"
         )
 
     except Exception as e:
@@ -235,22 +210,45 @@ def ingest_file(path, collection, metadata):
 )
 @click.option("--recursive", is_flag=True, help="Search subdirectories")
 def ingest_directory(path, collection, extensions, recursive):
-    """Ingest all files from a directory."""
+    """Ingest all files from a directory with automatic chunking."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
-        ingestion = get_document_ingestion(db, embedder, coll_mgr)
+        doc_store = get_document_store(db, embedder, coll_mgr)
 
         ext_list = [ext.strip() for ext in extensions.split(",")]
+        path_obj = Path(path)
 
         console.print(
             f"[bold blue]Ingesting files from: {path} (extensions: {ext_list})[/bold blue]"
         )
-        doc_ids = ingestion.ingest_directory(path, collection, ext_list, recursive)
+
+        # Find all matching files
+        files = []
+        if recursive:
+            for ext in ext_list:
+                files.extend(path_obj.rglob(f"*{ext}"))
+        else:
+            for ext in ext_list:
+                files.extend(path_obj.glob(f"*{ext}"))
+
+        files = sorted(set(files))  # Remove duplicates and sort
+
+        # Ingest each file
+        source_ids = []
+        total_chunks = 0
+        for file_path in files:
+            try:
+                source_id, chunk_ids = doc_store.ingest_file(str(file_path), collection)
+                source_ids.append(source_id)
+                total_chunks += len(chunk_ids)
+                console.print(f"  ✓ {file_path.name}: {len(chunk_ids)} chunks")
+            except Exception as e:
+                console.print(f"  ✗ {file_path.name}: {e}")
 
         console.print(
-            f"[bold green]✓ Ingested {len(doc_ids)} documents to collection '{collection}'[/bold green]"
+            f"[bold green]✓ Ingested {len(source_ids)} documents with {total_chunks} total chunks to collection '{collection}'[/bold green]"
         )
 
     except Exception as e:
@@ -263,18 +261,33 @@ def ingest_directory(path, collection, extensions, recursive):
 @click.option("--collection", help="Search within specific collection")
 @click.option("--limit", default=10, help="Maximum number of results")
 @click.option("--threshold", type=float, help="Minimum similarity score (0-1)")
-@click.option("--verbose", is_flag=True, help="Show full document content")
-def search(query, collection, limit, threshold, verbose):
-    """Search for similar documents."""
+@click.option("--metadata", help="Filter by metadata (JSON string)")
+@click.option("--verbose", is_flag=True, help="Show full chunk content")
+@click.option("--show-source", is_flag=True, help="Include full source document content")
+def search(query, collection, limit, threshold, metadata, verbose, show_source):
+    """Search for similar document chunks."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
         searcher = get_similarity_search(db, embedder, coll_mgr)
 
-        console.print(f"[bold blue]Searching for: {query}[/bold blue]")
+        # Parse metadata filter if provided
+        metadata_filter = None
+        if metadata:
+            try:
+                metadata_filter = json.loads(metadata)
+            except json.JSONDecodeError as e:
+                console.print(f"[bold red]Invalid JSON in metadata filter: {e}[/bold red]")
+                sys.exit(1)
 
-        results = searcher.search(query, limit, threshold, collection)
+        console.print(f"[bold blue]Searching for: {query}[/bold blue]")
+        if metadata_filter:
+            console.print(f"[dim]Metadata filter: {metadata_filter}[/dim]")
+
+        results = searcher.search_chunks(
+            query, limit, threshold, collection, include_source=show_source, metadata_filter=metadata_filter
+        )
 
         if not results:
             console.print("[yellow]No results found[/yellow]")
@@ -284,18 +297,23 @@ def search(query, collection, limit, threshold, verbose):
 
         for i, result in enumerate(results, 1):
             console.print(f"[bold cyan]Result {i}:[/bold cyan]")
-            console.print(f"  Document ID: {result.document_id}")
+            console.print(f"  Chunk ID: {result.chunk_id}")
+            console.print(f"  Source: {result.source_filename} (Doc ID: {result.source_document_id})")
+            console.print(f"  Chunk: {result.chunk_index + 1}")
             console.print(
                 f"  Similarity: [bold green]{result.similarity:.4f}[/bold green]"
             )
-            console.print(f"  Distance: {result.distance:.4f}")
+            console.print(f"  Position: chars {result.char_start}-{result.char_end}")
 
             if verbose:
-                console.print(f"  Content: {result.content[:200]}...")
+                console.print(f"  Content:\n{result.content}")
                 if result.metadata:
                     console.print(f"  Metadata: {json.dumps(result.metadata, indent=2)}")
+                if show_source and result.source_content:
+                    console.print(f"  [dim]Full Source ({len(result.source_content)} chars)[/dim]")
             else:
-                console.print(f"  Preview: {result.content[:100]}...")
+                preview_len = 150 if show_source else 100
+                console.print(f"  Preview: {result.content[:preview_len]}...")
 
             console.print()
 
@@ -304,171 +322,104 @@ def search(query, collection, limit, threshold, verbose):
         sys.exit(1)
 
 
-@main.command("test-similarity")
-def test_similarity():
-    """Test similarity search with known documents."""
+@main.group()
+def document():
+    """Manage source documents."""
+    pass
+
+
+@document.command("list")
+@click.option("--collection", help="Filter by collection")
+def document_list(collection):
+    """List all source documents."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
-        ingestion = get_document_ingestion(db, embedder, coll_mgr)
-        searcher = get_similarity_search(db, embedder, coll_mgr)
+        doc_store = get_document_store(db, embedder, coll_mgr)
 
-        console.print("[bold blue]Running similarity tests...[/bold blue]\n")
+        console.print("[bold blue]Listing source documents...[/bold blue]\n")
 
-        # Create test collection
-        collection_name = "similarity_test"
-        try:
-            coll_mgr.create_collection(
-                collection_name, "Test collection for similarity validation"
-            )
-            console.print(f"[green]Created test collection '{collection_name}'[/green]")
-        except ValueError:
-            console.print(
-                f"[yellow]Test collection '{collection_name}' already exists[/yellow]"
-            )
+        documents = doc_store.list_source_documents(collection)
 
-        # Test documents with expected similarity ranges
-        test_cases = [
-            {
-                "name": "High Similarity Test",
-                "document": "PostgreSQL is a powerful relational database system with advanced features for storing and querying data efficiently.",
-                "query": "What is PostgreSQL and what type of database is it?",
-                "expected_range": (0.70, 0.95),
-            },
-            {
-                "name": "Medium Similarity Test",
-                "document": "Python is a popular programming language widely used for data science, machine learning, and web development.",
-                "query": "Tell me about machine learning tools and frameworks",
-                "expected_range": (0.50, 0.75),
-            },
-            {
-                "name": "Low Similarity Test",
-                "document": "The weather today is sunny and warm with clear blue skies.",
-                "query": "How do I configure a database server?",
-                "expected_range": (0.10, 0.40),
-            },
-        ]
+        if not documents:
+            console.print("[yellow]No documents found[/yellow]")
+            return
 
-        results_table = Table(title="Similarity Test Results")
-        results_table.add_column("Test", style="cyan")
-        results_table.add_column("Expected Range", style="blue")
-        results_table.add_column("Actual Score", style="green")
-        results_table.add_column("Status", style="white")
+        table = Table(title=f"Source Documents{f' in {collection}' if collection else ''}")
+        table.add_column("ID", style="cyan")
+        table.add_column("Filename", style="white")
+        table.add_column("Type", style="blue")
+        table.add_column("Size", style="green")
+        table.add_column("Chunks", style="magenta")
+        table.add_column("Created", style="dim")
 
-        for test_case in test_cases:
-            # Ingest document
-            doc_id = ingestion.ingest_text(
-                test_case["document"],
-                collection_name,
-                {"test_name": test_case["name"]},
+        for doc in documents:
+            size_kb = doc["file_size"] / 1024 if doc["file_size"] else 0
+            table.add_row(
+                str(doc["id"]),
+                doc["filename"],
+                doc["file_type"] or "text",
+                f"{size_kb:.1f} KB",
+                str(doc["chunk_count"]),
+                str(doc["created_at"]),
             )
 
-            # Search for it
-            search_results = searcher.search(
-                test_case["query"], limit=1, collection_name=collection_name
-            )
-
-            if search_results:
-                similarity = search_results[0].similarity
-                expected_min, expected_max = test_case["expected_range"]
-
-                if expected_min <= similarity <= expected_max:
-                    status = "✓ PASS"
-                    style = "green"
-                else:
-                    status = "✗ FAIL"
-                    style = "red"
-
-                results_table.add_row(
-                    test_case["name"],
-                    f"{expected_min:.2f} - {expected_max:.2f}",
-                    f"[{style}]{similarity:.4f}[/{style}]",
-                    f"[{style}]{status}[/{style}]",
-                )
-            else:
-                results_table.add_row(
-                    test_case["name"],
-                    f"{test_case['expected_range'][0]:.2f} - {test_case['expected_range'][1]:.2f}",
-                    "[red]N/A[/red]",
-                    "[red]✗ NO RESULTS[/red]",
-                )
-
-        console.print()
-        console.print(results_table)
-        console.print()
-        console.print(
-            "[bold]Note:[/bold] High similarity scores (0.70-0.95) indicate proper "
-            "vector normalization is working!"
-        )
+        console.print(table)
+        console.print(f"\n[bold]Total: {len(documents)} documents[/bold]")
 
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")
         sys.exit(1)
 
 
-@main.command()
-def benchmark():
-    """Run performance benchmarks."""
-    import time
-
+@document.command("view")
+@click.argument("doc_id", type=int)
+@click.option("--show-chunks", is_flag=True, help="Show all chunks")
+@click.option("--show-content", is_flag=True, help="Show full document content")
+def document_view(doc_id, show_chunks, show_content):
+    """View a source document and its chunks."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
-        ingestion = get_document_ingestion(db, embedder, coll_mgr)
-        searcher = get_similarity_search(db, embedder, coll_mgr)
+        doc_store = get_document_store(db, embedder, coll_mgr)
 
-        console.print("[bold blue]Running performance benchmarks...[/bold blue]\n")
+        console.print(f"[bold blue]Viewing document {doc_id}...[/bold blue]\n")
 
-        # Create benchmark collection
-        collection_name = "benchmark"
-        try:
-            coll_mgr.create_collection(collection_name, "Benchmark collection")
-        except ValueError:
-            pass
+        # Get source document
+        doc = doc_store.get_source_document(doc_id)
+        if not doc:
+            console.print(f"[bold red]Document {doc_id} not found[/bold red]")
+            sys.exit(1)
 
-        # Test documents
-        test_docs = [
-            "PostgreSQL is a powerful open-source relational database system.",
-            "Python is a versatile programming language for many applications.",
-            "Machine learning models require large amounts of training data.",
-            "Cloud computing provides scalable infrastructure for applications.",
-            "Data science involves analyzing and interpreting complex data sets.",
-        ]
+        # Display document info
+        console.print("[bold cyan]Document Info:[/bold cyan]")
+        console.print(f"  ID: {doc['id']}")
+        console.print(f"  Filename: {doc['filename']}")
+        console.print(f"  Type: {doc['file_type']}")
+        console.print(f"  Size: {doc['file_size']} bytes ({doc['file_size']/1024:.1f} KB)")
+        console.print(f"  Created: {doc['created_at']}")
+        console.print(f"  Updated: {doc['updated_at']}")
+        if doc["metadata"]:
+            console.print(f"  Metadata: {json.dumps(doc['metadata'], indent=2)}")
 
-        # Benchmark ingestion
-        console.print("[cyan]Benchmarking document ingestion...[/cyan]")
-        start_time = time.time()
-        doc_ids = ingestion.ingest_batch(test_docs, collection_name)
-        ingestion_time = time.time() - start_time
+        if show_content:
+            console.print(f"\n[bold cyan]Content:[/bold cyan]")
+            console.print(f"{doc['content'][:1000]}..." if len(doc['content']) > 1000 else doc['content'])
 
-        console.print(
-            f"  Ingested {len(doc_ids)} documents in {ingestion_time:.3f}s "
-            f"({len(doc_ids)/ingestion_time:.2f} docs/s)"
-        )
+        # Get chunks
+        chunks = doc_store.get_document_chunks(doc_id)
+        console.print(f"\n[bold cyan]Chunks: {len(chunks)}[/bold cyan]")
 
-        # Benchmark search
-        console.print("\n[cyan]Benchmarking similarity search...[/cyan]")
-        query = "Tell me about databases and data storage"
-
-        search_times = []
-        for i in range(5):
-            start_time = time.time()
-            results = searcher.search(query, limit=10, collection_name=collection_name)
-            search_time = time.time() - start_time
-            search_times.append(search_time)
-
-        avg_search_time = sum(search_times) / len(search_times)
-        console.print(
-            f"  Average search time: {avg_search_time*1000:.2f}ms (over {len(search_times)} runs)"
-        )
-        console.print(f"  Found {len(results)} results per query")
-
-        if results:
-            console.print(
-                f"  Top result similarity: {results[0].similarity:.4f}"
-            )
+        if show_chunks and chunks:
+            for chunk in chunks:
+                console.print(f"\n  [bold]Chunk {chunk['chunk_index']}:[/bold] (ID: {chunk['id']})")
+                console.print(f"    Position: chars {chunk['char_start']}-{chunk['char_end']}")
+                console.print(f"    Length: {len(chunk['content'])} chars")
+                console.print(f"    Preview: {chunk['content'][:100]}...")
+        elif chunks:
+            console.print(f"  Use --show-chunks to view all {len(chunks)} chunks")
 
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")

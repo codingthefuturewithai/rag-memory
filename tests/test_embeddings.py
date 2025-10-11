@@ -53,11 +53,11 @@ class TestEmbeddingNormalization:
 
         # Normalized vector
         normalized_vector = [0.6, 0.8]
-        assert embedder.verify_normalization(normalized_vector) is True
+        assert embedder.verify_normalization(normalized_vector) == True
 
         # Non-normalized vector
         non_normalized_vector = [3.0, 4.0]
-        assert embedder.verify_normalization(non_normalized_vector) is False
+        assert embedder.verify_normalization(non_normalized_vector) == False
 
     def test_embedding_dimension(self):
         """Test get_embedding_dimension method."""
@@ -71,7 +71,6 @@ class TestEmbeddingNormalization:
 class TestEmbeddingGeneration:
     """Test embedding generation with OpenAI API."""
 
-    @pytest.mark.skip(reason="Requires OpenAI API key and makes actual API calls")
     def test_generate_embedding(self):
         """Test generating a single embedding."""
         embedder = EmbeddingGenerator()
@@ -83,9 +82,8 @@ class TestEmbeddingGeneration:
         assert len(embedding) == 1536
 
         # Check that it's normalized
-        assert embedder.verify_normalization(embedding) is True
+        assert embedder.verify_normalization(embedding) == True
 
-    @pytest.mark.skip(reason="Requires OpenAI API key and makes actual API calls")
     def test_generate_embeddings_batch(self):
         """Test generating multiple embeddings in batch."""
         embedder = EmbeddingGenerator()
@@ -104,7 +102,7 @@ class TestEmbeddingGeneration:
         # Check all are normalized
         for embedding in embeddings:
             assert len(embedding) == 1536
-            assert embedder.verify_normalization(embedding) is True
+            assert embedder.verify_normalization(embedding) == True
 
     def test_empty_text_raises_error(self):
         """Test that empty text raises ValueError."""

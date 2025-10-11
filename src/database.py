@@ -85,13 +85,17 @@ class Database:
         Get database statistics.
 
         Returns:
-            Dictionary with document count, collection count, and database size.
+            Dictionary with document counts, collection count, and database size.
         """
         conn = self.connect()
         with conn.cursor() as cur:
-            # Count documents
-            cur.execute("SELECT COUNT(*) FROM documents;")
-            doc_count = cur.fetchone()[0]
+            # Count source documents
+            cur.execute("SELECT COUNT(*) FROM source_documents;")
+            source_doc_count = cur.fetchone()[0]
+
+            # Count document chunks
+            cur.execute("SELECT COUNT(*) FROM document_chunks;")
+            chunk_count = cur.fetchone()[0]
 
             # Count collections
             cur.execute("SELECT COUNT(*) FROM collections;")
@@ -102,7 +106,8 @@ class Database:
             db_size = cur.fetchone()[0]
 
             return {
-                "documents": doc_count,
+                "source_documents": source_doc_count,
+                "chunks": chunk_count,
                 "collections": collection_count,
                 "database_size": db_size,
             }
@@ -123,12 +128,14 @@ class Database:
                 cur.execute(
                     """
                     SELECT table_name FROM information_schema.tables
-                    WHERE table_schema = 'public' AND table_name IN ('documents', 'collections');
+                    WHERE table_schema = 'public'
+                    AND table_name IN ('source_documents', 'document_chunks', 'collections');
                 """
                 )
                 existing_tables = [row[0] for row in cur.fetchall()]
 
-                if "documents" in existing_tables and "collections" in existing_tables:
+                required_tables = {"source_documents", "document_chunks", "collections"}
+                if required_tables.issubset(set(existing_tables)):
                     logger.info("Database schema already initialized")
                     return True
 

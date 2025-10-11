@@ -14,46 +14,74 @@ from src.embeddings import EmbeddingGenerator
 logger = logging.getLogger(__name__)
 
 
-class SearchResult:
-    """Represents a single search result."""
+class ChunkSearchResult:
+    """Represents a search result for a document chunk."""
 
     def __init__(
         self,
-        document_id: int,
+        chunk_id: int,
         content: str,
         metadata: Dict,
         similarity: float,
         distance: float,
+        source_document_id: int,
+        source_filename: str,
+        chunk_index: int,
+        char_start: int,
+        char_end: int,
+        source_content: Optional[str] = None,
     ):
         """
-        Initialize search result.
+        Initialize chunk search result.
 
         Args:
-            document_id: Document ID.
-            content: Document content.
-            metadata: Document metadata.
-            similarity: Similarity score (0-1, higher is better).
-            distance: Cosine distance from query (0-2, lower is better).
+            chunk_id: Chunk ID
+            content: Chunk content
+            metadata: Chunk metadata
+            similarity: Similarity score (0-1, higher is better)
+            distance: Cosine distance from query (0-2, lower is better)
+            source_document_id: Source document ID
+            source_filename: Source document filename
+            chunk_index: Chunk index within document
+            char_start: Character start position in source
+            char_end: Character end position in source
+            source_content: Optional full source document content
         """
-        self.document_id = document_id
+        self.chunk_id = chunk_id
         self.content = content
         self.metadata = metadata
         self.similarity = similarity
         self.distance = distance
+        self.source_document_id = source_document_id
+        self.source_filename = source_filename
+        self.chunk_index = chunk_index
+        self.char_start = char_start
+        self.char_end = char_end
+        self.source_content = source_content
 
     def to_dict(self) -> Dict:
         """Convert to dictionary representation."""
-        return {
-            "document_id": self.document_id,
+        result = {
+            "chunk_id": self.chunk_id,
             "content": self.content,
             "metadata": self.metadata,
             "similarity": round(self.similarity, 4),
             "distance": round(self.distance, 4),
+            "source_document_id": self.source_document_id,
+            "source_filename": self.source_filename,
+            "chunk_index": self.chunk_index,
+            "char_start": self.char_start,
+            "char_end": self.char_end,
         }
+        if self.source_content is not None:
+            result["source_content"] = self.source_content
+        return result
 
     def __repr__(self):
         return (
-            f"SearchResult(id={self.document_id}, similarity={self.similarity:.4f})"
+            f"ChunkSearchResult(chunk_id={self.chunk_id}, "
+            f"similarity={self.similarity:.4f}, "
+            f"source={self.source_filename})"
         )
 
 
@@ -83,30 +111,34 @@ class SimilaritySearch:
         register_vector(conn)
         logger.info("SimilaritySearch initialized")
 
-    def search(
+    def search_chunks(
         self,
         query: str,
         limit: int = 10,
         threshold: Optional[float] = None,
         collection_name: Optional[str] = None,
-    ) -> List[SearchResult]:
+        include_source: bool = False,
+        metadata_filter: Optional[Dict] = None,
+    ) -> List[ChunkSearchResult]:
         """
-        Perform similarity search.
+        Search document chunks using similarity search.
 
         Args:
-            query: Query text.
-            limit: Maximum number of results to return.
-            threshold: Minimum similarity score (0-1). Results below this are filtered out.
-            collection_name: Optional collection name to limit search scope.
+            query: Query text
+            limit: Maximum number of results
+            threshold: Minimum similarity score (0-1)
+            collection_name: Optional collection filter
+            include_source: Include full source document content in results
+            metadata_filter: Optional metadata filter (JSONB containment check)
 
         Returns:
-            List of SearchResult objects, sorted by similarity (highest first).
+            List of ChunkSearchResult objects
         """
         if not query or not query.strip():
             raise ValueError("Query cannot be empty")
 
         # Generate normalized query embedding
-        logger.debug(f"Generating embedding for query: {query[:100]}...")
+        logger.debug(f"Generating embedding for chunk query: {query[:100]}...")
         query_embedding = self.embedder.generate_embedding(query, normalize=True)
 
         # Verify normalization
@@ -118,201 +150,198 @@ class SimilaritySearch:
 
         conn = self.db.connect()
 
-        # Build query based on whether collection filter is specified
-        if collection_name:
+        # Build query based on filters
+        # Determine which filters are active
+        has_collection = collection_name is not None
+        has_metadata = metadata_filter is not None
+
+        # Build WHERE clause conditions
+        where_conditions = []
+        params = [query_embedding]
+
+        if has_collection:
             collection = self.collection_mgr.get_collection(collection_name)
             if not collection:
                 raise ValueError(f"Collection '{collection_name}' not found")
+            where_conditions.append("cc.collection_id = %s")
+            params.append(collection["id"])
 
-            # Search within specific collection
-            sql_query = """
-                SELECT
-                    d.id,
-                    d.content,
-                    d.metadata,
-                    d.embedding <=> %s AS distance
-                FROM documents d
-                INNER JOIN document_collections dc ON d.id = dc.document_id
-                WHERE dc.collection_id = %s
-                ORDER BY distance
-                LIMIT %s;
-            """
-            params = (query_embedding, collection["id"], limit)
-            logger.debug(f"Searching in collection '{collection_name}'")
+        if has_metadata:
+            where_conditions.append("dc.metadata @> %s::jsonb")
+            params.append(Jsonb(metadata_filter))
+
+        # Build WHERE clause
+        where_clause = ""
+        if where_conditions:
+            where_clause = "WHERE " + " AND ".join(where_conditions)
+
+        # Build complete query based on include_source and collection filter
+        if has_collection:
+            # Need to join chunk_collections table
+            if include_source:
+                sql_query = f"""
+                    SELECT
+                        dc.id,
+                        dc.content,
+                        dc.metadata,
+                        dc.embedding <=> %s AS distance,
+                        dc.source_document_id,
+                        sd.filename,
+                        dc.chunk_index,
+                        dc.char_start,
+                        dc.char_end,
+                        sd.content AS source_content
+                    FROM document_chunks dc
+                    INNER JOIN source_documents sd ON dc.source_document_id = sd.id
+                    INNER JOIN chunk_collections cc ON dc.id = cc.chunk_id
+                    {where_clause}
+                    ORDER BY distance
+                    LIMIT %s;
+                """
+            else:
+                sql_query = f"""
+                    SELECT
+                        dc.id,
+                        dc.content,
+                        dc.metadata,
+                        dc.embedding <=> %s AS distance,
+                        dc.source_document_id,
+                        sd.filename,
+                        dc.chunk_index,
+                        dc.char_start,
+                        dc.char_end
+                    FROM document_chunks dc
+                    INNER JOIN source_documents sd ON dc.source_document_id = sd.id
+                    INNER JOIN chunk_collections cc ON dc.id = cc.chunk_id
+                    {where_clause}
+                    ORDER BY distance
+                    LIMIT %s;
+                """
         else:
-            # Search all documents
-            sql_query = """
-                SELECT
-                    id,
-                    content,
-                    metadata,
-                    embedding <=> %s AS distance
-                FROM documents
-                ORDER BY distance
-                LIMIT %s;
-            """
-            params = (query_embedding, limit)
-            logger.debug("Searching all documents")
+            # No collection filter, no need to join chunk_collections
+            if include_source:
+                sql_query = f"""
+                    SELECT
+                        dc.id,
+                        dc.content,
+                        dc.metadata,
+                        dc.embedding <=> %s AS distance,
+                        dc.source_document_id,
+                        sd.filename,
+                        dc.chunk_index,
+                        dc.char_start,
+                        dc.char_end,
+                        sd.content AS source_content
+                    FROM document_chunks dc
+                    INNER JOIN source_documents sd ON dc.source_document_id = sd.id
+                    {where_clause}
+                    ORDER BY distance
+                    LIMIT %s;
+                """
+            else:
+                sql_query = f"""
+                    SELECT
+                        dc.id,
+                        dc.content,
+                        dc.metadata,
+                        dc.embedding <=> %s AS distance,
+                        dc.source_document_id,
+                        sd.filename,
+                        dc.chunk_index,
+                        dc.char_start,
+                        dc.char_end
+                    FROM document_chunks dc
+                    INNER JOIN source_documents sd ON dc.source_document_id = sd.id
+                    {where_clause}
+                    ORDER BY distance
+                    LIMIT %s;
+                """
+
+        # Add limit to params
+        params.append(limit)
+        params = tuple(params)
+
+        # Log search parameters
+        log_msg = f"Searching chunks"
+        if has_collection:
+            log_msg += f" in collection '{collection_name}'"
+        if has_metadata:
+            log_msg += f" with metadata filter: {metadata_filter}"
+        logger.debug(log_msg)
 
         # Execute search
         with conn.cursor() as cur:
             cur.execute(sql_query, params)
             results = cur.fetchall()
 
-        # Convert to SearchResult objects
-        search_results = []
+        # Convert to ChunkSearchResult objects
+        chunk_results = []
         for row in results:
-            doc_id, content, metadata, distance = row
+            if include_source:
+                (
+                    chunk_id,
+                    content,
+                    metadata,
+                    distance,
+                    source_id,
+                    filename,
+                    chunk_idx,
+                    char_start,
+                    char_end,
+                    source_content,
+                ) = row
+            else:
+                (
+                    chunk_id,
+                    content,
+                    metadata,
+                    distance,
+                    source_id,
+                    filename,
+                    chunk_idx,
+                    char_start,
+                    char_end,
+                ) = row
+                source_content = None
 
-            # Convert distance to similarity: similarity = 1 - distance
-            # pgvector's <=> operator returns cosine distance (0-2)
-            # We convert to similarity score (0-1) where 1 is identical
+            # Convert distance to similarity
             similarity = 1.0 - distance
 
-            # Metadata comes as dict from JSONB column - no parsing needed
+            # Metadata comes as dict from JSONB column
             metadata = metadata or {}
 
             # Apply threshold filter if specified
             if threshold is not None and similarity < threshold:
                 continue
 
-            result = SearchResult(
-                document_id=doc_id,
+            result = ChunkSearchResult(
+                chunk_id=chunk_id,
                 content=content,
                 metadata=metadata,
                 similarity=similarity,
                 distance=distance,
+                source_document_id=source_id,
+                source_filename=filename,
+                chunk_index=chunk_idx,
+                char_start=char_start,
+                char_end=char_end,
+                source_content=source_content,
             )
-            search_results.append(result)
+            chunk_results.append(result)
 
         logger.info(
-            f"Found {len(search_results)} results for query (limit={limit}, "
+            f"Found {len(chunk_results)} chunk results for query (limit={limit}, "
             f"threshold={threshold}, collection={collection_name})"
         )
 
-        if search_results:
+        if chunk_results:
             logger.debug(
-                f"Top result: similarity={search_results[0].similarity:.4f}, "
-                f"distance={search_results[0].distance:.4f}"
+                f"Top chunk: similarity={chunk_results[0].similarity:.4f}, "
+                f"source={chunk_results[0].source_filename}, "
+                f"chunk_index={chunk_results[0].chunk_index}"
             )
 
-        return search_results
-
-    def search_with_metadata_filter(
-        self,
-        query: str,
-        metadata_filter: Dict,
-        limit: int = 10,
-        threshold: Optional[float] = None,
-    ) -> List[SearchResult]:
-        """
-        Perform similarity search with metadata filtering.
-
-        Args:
-            query: Query text.
-            metadata_filter: Dictionary of metadata key-value pairs to filter by.
-            limit: Maximum number of results to return.
-            threshold: Minimum similarity score (0-1).
-
-        Returns:
-            List of SearchResult objects.
-        """
-        if not query or not query.strip():
-            raise ValueError("Query cannot be empty")
-
-        # Generate normalized query embedding
-        query_embedding = self.embedder.generate_embedding(query, normalize=True)
-
-        # Convert to numpy array for pgvector
-        query_embedding = np.array(query_embedding)
-
-        conn = self.db.connect()
-
-        # Build metadata filter condition
-        # Using JSONB @> operator for containment check
-        sql_query = """
-            SELECT
-                id,
-                content,
-                metadata,
-                embedding <=> %s AS distance
-            FROM documents
-            WHERE metadata @> %s::jsonb
-            ORDER BY distance
-            LIMIT %s;
-        """
-
-        # Wrap metadata_filter with Jsonb() for psycopg3 JSONB comparison
-        params = (query_embedding, Jsonb(metadata_filter), limit)
-
-        logger.debug(f"Searching with metadata filter: {metadata_filter}")
-
-        # Execute search
-        with conn.cursor() as cur:
-            cur.execute(sql_query, params)
-            results = cur.fetchall()
-
-        # Convert to SearchResult objects
-        search_results = []
-        for row in results:
-            doc_id, content, metadata, distance = row
-            similarity = 1.0 - distance
-            # Metadata comes as dict from JSONB column
-            metadata = metadata or {}
-
-            if threshold is not None and similarity < threshold:
-                continue
-
-            result = SearchResult(
-                document_id=doc_id,
-                content=content,
-                metadata=metadata,
-                similarity=similarity,
-                distance=distance,
-            )
-            search_results.append(result)
-
-        logger.info(
-            f"Found {len(search_results)} results with metadata filter"
-        )
-        return search_results
-
-    def get_document_by_id(self, document_id: int) -> Optional[Dict]:
-        """
-        Retrieve a document by its ID.
-
-        Args:
-            document_id: Document ID.
-
-        Returns:
-            Dictionary with document information, or None if not found.
-        """
-        conn = self.db.connect()
-
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, content, metadata, created_at, updated_at
-                FROM documents
-                WHERE id = %s;
-                """,
-                (document_id,),
-            )
-            result = cur.fetchone()
-
-            if result:
-                doc_id, content, metadata, created_at, updated_at = result
-                # Metadata comes as dict from JSONB column
-                metadata = metadata or {}
-
-                return {
-                    "id": doc_id,
-                    "content": content,
-                    "metadata": metadata,
-                    "created_at": created_at,
-                    "updated_at": updated_at,
-                }
-            return None
+        return chunk_results
 
 
 def get_similarity_search(

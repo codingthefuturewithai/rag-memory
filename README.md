@@ -148,7 +148,7 @@ uv run poc ingest text "Python tutorial" --collection tutorials --metadata '{"au
 ### Search
 
 ```bash
-# Basic search
+# Basic search (searches document chunks)
 uv run poc search "What is PostgreSQL?"
 
 # Search within a collection
@@ -160,8 +160,17 @@ uv run poc search "machine learning" --limit 5
 # Filter by similarity threshold
 uv run poc search "RAG systems" --threshold 0.7
 
-# Verbose output (show full content)
+# Filter by metadata (JSONB containment)
+uv run poc search "python tutorial" --metadata '{"language":"python","level":"beginner"}'
+
+# Combine collection and metadata filters
+uv run poc search "programming guide" --collection tutorials --metadata '{"language":"python"}'
+
+# Verbose output (show full chunk content)
 uv run poc search "vector embeddings" --verbose
+
+# Include full source document content
+uv run poc search "embeddings" --show-source
 ```
 
 ### Testing & Benchmarking

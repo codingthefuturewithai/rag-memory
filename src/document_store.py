@@ -1,0 +1,364 @@
+"""Store and manage full documents with chunking."""
+
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
+import numpy as np
+from pgvector.psycopg import register_vector
+from psycopg.types.json import Jsonb
+
+from src.chunking import DocumentChunker, get_document_chunker
+from src.collections import CollectionManager
+from src.database import Database
+from src.embeddings import EmbeddingGenerator
+
+logger = logging.getLogger(__name__)
+
+
+class DocumentStore:
+    """Manage full documents and their chunks."""
+
+    def __init__(
+        self,
+        database: Database,
+        embedding_generator: EmbeddingGenerator,
+        collection_manager: CollectionManager,
+        chunker: Optional[DocumentChunker] = None,
+    ):
+        """
+        Initialize document store.
+
+        Args:
+            database: Database instance
+            embedding_generator: Embedding generator instance
+            collection_manager: Collection manager instance
+            chunker: Optional DocumentChunker (uses default if None)
+        """
+        self.db = database
+        self.embedder = embedding_generator
+        self.collection_mgr = collection_manager
+        self.chunker = chunker or get_document_chunker()
+
+        # Register pgvector type with psycopg
+        conn = self.db.connect()
+        register_vector(conn)
+        logger.info("DocumentStore initialized with pgvector support")
+
+    def ingest_document(
+        self,
+        content: str,
+        filename: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        file_type: str = "text",
+    ) -> Tuple[int, List[int]]:
+        """
+        Ingest a document: store full text, chunk it, generate embeddings.
+
+        Args:
+            content: Full document text
+            filename: Document filename/identifier
+            collection_name: Collection to add chunks to
+            metadata: Optional metadata for the document
+            file_type: File type (text, markdown, pdf, etc.)
+
+        Returns:
+            Tuple of (source_document_id, list_of_chunk_ids)
+        """
+        conn = self.db.connect()
+
+        # 1. Store the full source document
+        logger.info(f"Storing source document: {filename}")
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO source_documents
+                (filename, content, file_type, file_size, metadata)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    filename,
+                    content,
+                    file_type,
+                    len(content),
+                    Jsonb(metadata or {}),
+                ),
+            )
+            source_id = cur.fetchone()[0]
+
+        # 2. Get or create collection
+        collection = self.collection_mgr.get_collection(collection_name)
+        if not collection:
+            logger.info(f"Creating collection '{collection_name}'")
+            self.collection_mgr.create_collection(collection_name)
+            collection = self.collection_mgr.get_collection(collection_name)
+
+        # 3. Chunk the document
+        logger.info(f"Chunking document ({len(content)} chars)...")
+        chunks = self.chunker.chunk_text(content, metadata)
+
+        stats = self.chunker.get_stats(chunks)
+        logger.info(
+            f"Created {stats['num_chunks']} chunks. "
+            f"Avg: {stats['avg_chunk_size']:.0f} chars, "
+            f"Range: {stats['min_chunk_size']}-{stats['max_chunk_size']}"
+        )
+
+        # 4. Generate embeddings and store chunks
+        chunk_ids = []
+        for chunk_doc in chunks:
+            # Generate embedding for this chunk
+            embedding = self.embedder.generate_embedding(
+                chunk_doc.page_content, normalize=True
+            )
+
+            # Convert to numpy array for pgvector
+            embedding_array = np.array(embedding)
+
+            # Store chunk
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO document_chunks
+                    (source_document_id, chunk_index, content,
+                     char_start, char_end, metadata, embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        source_id,
+                        chunk_doc.metadata.get("chunk_index", 0),
+                        chunk_doc.page_content,
+                        chunk_doc.metadata.get("char_start", 0),
+                        chunk_doc.metadata.get("char_end", 0),
+                        Jsonb(chunk_doc.metadata),
+                        embedding_array,
+                    ),
+                )
+                chunk_id = cur.fetchone()[0]
+                chunk_ids.append(chunk_id)
+
+            # Link chunk to collection
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO chunk_collections (chunk_id, collection_id)
+                    VALUES (%s, %s)
+                    """,
+                    (chunk_id, collection["id"]),
+                )
+
+        logger.info(f"✅ Ingested document {source_id} with {len(chunk_ids)} chunks")
+
+        return source_id, chunk_ids
+
+    def ingest_file(
+        self,
+        file_path: str,
+        collection_name: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[int, List[int]]:
+        """
+        Read a file from disk and ingest it.
+
+        Args:
+            file_path: Path to the file
+            collection_name: Collection to add to
+            metadata: Optional metadata
+
+        Returns:
+            Tuple of (source_document_id, list_of_chunk_ids)
+        """
+        path = Path(file_path)
+
+        if not path.exists():
+            raise FileNotFoundError(f"File not found: {file_path}")
+
+        # Read file
+        try:
+            content = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            # Try with latin-1 as fallback
+            content = path.read_text(encoding="latin-1")
+
+        # Determine file type from extension
+        file_type = path.suffix.lstrip(".").lower() or "text"
+
+        # Add file info to metadata
+        file_metadata = metadata or {}
+        file_metadata.update(
+            {
+                "filename": path.name,
+                "file_path": str(path.absolute()),
+                "file_type": file_type,
+            }
+        )
+
+        return self.ingest_document(
+            content=content,
+            filename=path.name,
+            collection_name=collection_name,
+            metadata=file_metadata,
+            file_type=file_type,
+        )
+
+    def get_source_document(self, doc_id: int) -> Optional[Dict[str, Any]]:
+        """
+        Retrieve a full source document.
+
+        Args:
+            doc_id: Source document ID
+
+        Returns:
+            Document dictionary or None if not found
+        """
+        conn = self.db.connect()
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, filename, content, file_type, file_size,
+                       metadata, created_at, updated_at
+                FROM source_documents
+                WHERE id = %s
+                """,
+                (doc_id,),
+            )
+            result = cur.fetchone()
+
+            if result:
+                return {
+                    "id": result[0],
+                    "filename": result[1],
+                    "content": result[2],
+                    "file_type": result[3],
+                    "file_size": result[4],
+                    "metadata": result[5] or {},
+                    "created_at": result[6],
+                    "updated_at": result[7],
+                }
+            return None
+
+    def list_source_documents(
+        self, collection_name: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        List all source documents, optionally filtered by collection.
+
+        Args:
+            collection_name: Optional collection filter
+
+        Returns:
+            List of document dictionaries
+        """
+        conn = self.db.connect()
+
+        with conn.cursor() as cur:
+            if collection_name:
+                cur.execute(
+                    """
+                    SELECT DISTINCT
+                        sd.id, sd.filename, sd.file_type,
+                        sd.file_size, sd.created_at,
+                        COUNT(dc.id) as chunk_count
+                    FROM source_documents sd
+                    JOIN document_chunks dc ON dc.source_document_id = sd.id
+                    JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                    JOIN collections c ON c.id = cc.collection_id
+                    WHERE c.name = %s
+                    GROUP BY sd.id
+                    ORDER BY sd.created_at DESC
+                    """,
+                    (collection_name,),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT
+                        sd.id, sd.filename, sd.file_type,
+                        sd.file_size, sd.created_at,
+                        COUNT(dc.id) as chunk_count
+                    FROM source_documents sd
+                    LEFT JOIN document_chunks dc ON dc.source_document_id = sd.id
+                    GROUP BY sd.id
+                    ORDER BY sd.created_at DESC
+                    """
+                )
+
+            results = cur.fetchall()
+            documents = []
+            for row in results:
+                documents.append(
+                    {
+                        "id": row[0],
+                        "filename": row[1],
+                        "file_type": row[2],
+                        "file_size": row[3],
+                        "created_at": row[4],
+                        "chunk_count": row[5],
+                    }
+                )
+
+            return documents
+
+    def get_document_chunks(self, source_id: int) -> List[Dict[str, Any]]:
+        """
+        Get all chunks for a source document.
+
+        Args:
+            source_id: Source document ID
+
+        Returns:
+            List of chunk dictionaries
+        """
+        conn = self.db.connect()
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, chunk_index, content, char_start, char_end, metadata
+                FROM document_chunks
+                WHERE source_document_id = %s
+                ORDER BY chunk_index
+                """,
+                (source_id,),
+            )
+            results = cur.fetchall()
+
+            chunks = []
+            for row in results:
+                chunks.append(
+                    {
+                        "id": row[0],
+                        "chunk_index": row[1],
+                        "content": row[2],
+                        "char_start": row[3],
+                        "char_end": row[4],
+                        "metadata": row[5] or {},
+                    }
+                )
+
+            return chunks
+
+
+def get_document_store(
+    database: Database,
+    embedding_generator: EmbeddingGenerator,
+    collection_manager: CollectionManager,
+    chunker: Optional[DocumentChunker] = None,
+) -> DocumentStore:
+    """
+    Factory function to get a DocumentStore instance.
+
+    Args:
+        database: Database instance
+        embedding_generator: Embedding generator instance
+        collection_manager: Collection manager instance
+        chunker: Optional DocumentChunker
+
+    Returns:
+        Configured DocumentStore instance
+    """
+    return DocumentStore(database, embedding_generator, collection_manager, chunker)
