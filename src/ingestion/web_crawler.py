@@ -3,10 +3,16 @@
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, Optional
-from urllib.parse import urlparse
+from typing import Dict, List, Optional, Set
+from urllib.parse import urlparse, urljoin
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
+from crawl4ai import (
+    AsyncWebCrawler,
+    BFSDeepCrawlStrategy,
+    BrowserConfig,
+    CacheMode,
+    CrawlerRunConfig,
+)
 
 from src.ingestion.models import CrawlError, CrawlResult
 
@@ -26,6 +32,7 @@ class WebCrawler:
         """
         self.headless = headless
         self.verbose = verbose
+        self.visited_urls: Set[str] = set()  # Track visited URLs to prevent duplicates
 
         # Browser configuration
         self.browser_config = BrowserConfig(
@@ -183,6 +190,140 @@ class WebCrawler:
             metadata["parent_url"] = parent_url
 
         return metadata
+
+    async def crawl_with_depth(
+        self,
+        url: str,
+        max_depth: int = 1,
+        crawl_root_url: Optional[str] = None,
+    ) -> List[CrawlResult]:
+        """
+        Crawl a website following links up to max_depth.
+
+        Uses BFSDeepCrawlStrategy for breadth-first traversal.
+
+        Args:
+            url: Starting URL
+            max_depth: Maximum depth to crawl (0 = only starting page, 1 = starting + direct links, etc.)
+            crawl_root_url: Root URL for the crawl session (defaults to url)
+
+        Returns:
+            List of CrawlResult objects, one per page crawled
+        """
+        if not crawl_root_url:
+            crawl_root_url = url
+
+        crawl_timestamp = datetime.now(timezone.utc)
+        crawl_session_id = str(uuid.uuid4())
+
+        logger.info(
+            f"Starting deep crawl from {url} (max_depth={max_depth}, session={crawl_session_id})"
+        )
+
+        results: List[CrawlResult] = []
+        self.visited_urls.clear()  # Reset visited tracking for this crawl session
+
+        # Configure BFSDeepCrawlStrategy
+        crawl_strategy = BFSDeepCrawlStrategy(max_depth=max_depth)
+
+        # Multi-page crawler config
+        deep_crawler_config = CrawlerRunConfig(
+            cache_mode=CacheMode.BYPASS,
+            word_count_threshold=10,
+            excluded_tags=["nav", "footer", "header", "aside"],
+            remove_overlay_elements=True,
+            deep_crawl_strategy=crawl_strategy,
+        )
+
+        try:
+            async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                # Start crawling - returns list when deep_crawl_strategy is set
+                crawl_results = await crawler.arun(
+                    url=url,
+                    config=deep_crawler_config,
+                )
+
+                # Process each crawled page
+                for depth, crawl_result in enumerate(crawl_results):
+                    page_url = crawl_result.url
+                    self.visited_urls.add(page_url)
+
+                    if crawl_result.success:
+                        # Determine parent URL (first page has no parent)
+                        parent_url = None
+                        if depth > 0:
+                            # Parent is the starting URL for depth 1, and could be any previously crawled page
+                            # For simplicity, we'll use the starting URL as parent for all depth=1 pages
+                            parent_url = url
+
+                        metadata = self._build_metadata(
+                            url=page_url,
+                            crawl_root_url=crawl_root_url,
+                            crawl_timestamp=crawl_timestamp,
+                            crawl_session_id=crawl_session_id,
+                            crawl_depth=depth,
+                            result=crawl_result,
+                            parent_url=parent_url,
+                        )
+                        results.append(
+                            CrawlResult(
+                                url=page_url,
+                                content=crawl_result.markdown.raw_markdown,
+                                metadata=metadata,
+                                success=True,
+                                links_found=crawl_result.links.get("internal", [])
+                                if crawl_result.links
+                                else [],
+                            )
+                        )
+                        logger.info(
+                            f"Successfully crawled page {page_url} (depth={depth}, {len(crawl_result.markdown.raw_markdown)} chars)"
+                        )
+                    else:
+                        error = CrawlError(
+                            url=page_url,
+                            error_type="crawl_failed",
+                            error_message=crawl_result.error_message or "Unknown error",
+                            timestamp=crawl_timestamp,
+                            status_code=crawl_result.status_code,
+                        )
+                        results.append(
+                            CrawlResult(
+                                url=page_url,
+                                content="",
+                                metadata={},
+                                success=False,
+                                error=error,
+                            )
+                        )
+                        logger.warning(f"Failed to crawl {page_url}: {error.error_message}")
+
+                logger.info(
+                    f"Deep crawl completed: {len(results)} pages crawled, "
+                    f"{sum(1 for r in results if r.success)} successful"
+                )
+                return results
+
+        except Exception as e:
+            error = CrawlError(
+                url=url,
+                error_type=type(e).__name__,
+                error_message=str(e),
+                timestamp=crawl_timestamp,
+            )
+            logger.exception(f"Exception during deep crawl from {url}")
+            # Return whatever we managed to crawl plus the error
+            if not results:
+                results.append(
+                    CrawlResult(
+                        url=url,
+                        content="",
+                        metadata={},
+                        success=False,
+                        error=error,
+                    )
+                )
+            return results
 
 
 async def crawl_single_page(
