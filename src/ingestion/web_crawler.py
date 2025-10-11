@@ -2,13 +2,13 @@
 
 import logging
 import uuid
-from datetime import datetime
-from typing import Dict, List, Optional
-from urllib.parse import urljoin, urlparse
+from datetime import datetime, timezone
+from typing import Dict, Optional
+from urllib.parse import urlparse
 
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CacheMode, CrawlerRunConfig
 
-from src.ingestion.models import BatchCrawlResult, CrawlError, CrawlResult
+from src.ingestion.models import CrawlError, CrawlResult
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class WebCrawler:
         if not crawl_root_url:
             crawl_root_url = url
 
-        crawl_timestamp = datetime.utcnow()
+        crawl_timestamp = datetime.now(timezone.utc)
         crawl_session_id = str(uuid.uuid4())
 
         logger.info(f"Crawling page: {url}")

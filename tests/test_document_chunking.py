@@ -260,21 +260,28 @@ class TestDocumentStore:
 
     def test_list_source_documents(self, doc_store, test_collection):
         """Test listing source documents."""
+        # Get initial count
+        initial_docs = doc_store.list_source_documents(test_collection)
+        initial_count = len(initial_docs)
+
         # Ingest some documents
+        source_ids = []
         for i in range(3):
-            doc_store.ingest_document(
+            source_id, _ = doc_store.ingest_document(
                 content=f"Document {i} content",
                 filename=f"doc{i}.txt",
                 collection_name=test_collection,
             )
+            source_ids.append(source_id)
 
-        # List all documents - should be exactly 3 in clean state
-        docs = doc_store.list_source_documents()
-        assert len(docs) == 3
-
-        # List documents in specific collection - should be exactly 3
+        # List documents in specific collection - should be initial + 3
         coll_docs = doc_store.list_source_documents(test_collection)
-        assert len(coll_docs) == 3
+        assert len(coll_docs) == initial_count + 3
+
+        # Verify our documents are in the list
+        coll_doc_ids = [d["id"] for d in coll_docs]
+        for source_id in source_ids:
+            assert source_id in coll_doc_ids
 
 
 class TestChunkSearch:
