@@ -381,6 +381,178 @@ def ingest_url(url, collection, headless, verbose, chunk_size, chunk_overlap, fo
 
 
 @main.command()
+@click.argument("url")
+@click.option("--collection", required=True, help="Collection name")
+@click.option("--headless/--no-headless", default=True, help="Run browser in headless mode")
+@click.option("--verbose", is_flag=True, help="Enable verbose crawling output")
+@click.option("--chunk-size", type=int, default=2500, help="Chunk size for web pages (default: 2500)")
+@click.option("--chunk-overlap", type=int, default=300, help="Chunk overlap (default: 300)")
+@click.option("--follow-links", is_flag=True, help="Follow internal links (multi-page crawl)")
+@click.option("--max-depth", type=int, default=1, help="Maximum crawl depth when following links (default: 1)")
+def recrawl(url, collection, headless, verbose, chunk_size, chunk_overlap, follow_links, max_depth):
+    """Re-crawl a URL by deleting old pages and re-ingesting.
+
+    This command finds all source documents where metadata.crawl_root_url matches
+    the specified URL, deletes those documents and their chunks, then re-crawls
+    and re-ingests the content. Other documents in the collection are unaffected.
+
+    Examples:
+        # Re-crawl single page
+        uv run poc recrawl https://example.com --collection docs
+
+        # Re-crawl with link following
+        uv run poc recrawl https://example.com --collection docs --follow-links --max-depth 2
+    """
+    try:
+        # Create custom chunker for web pages (larger chunks)
+        web_chunking_config = ChunkingConfig(
+            chunk_size=chunk_size,
+            chunk_overlap=chunk_overlap,
+        )
+        web_chunker = get_document_chunker(web_chunking_config)
+
+        # Initialize database components
+        db = get_database()
+        embedder = get_embedding_generator()
+        coll_mgr = get_collection_manager(db)
+        doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
+
+        console.print(f"[bold blue]Re-crawling: {url}[/bold blue]")
+        console.print(f"[dim]Finding existing documents with crawl_root_url = {url}...[/dim]")
+
+        # Step 1: Find all source documents with matching crawl_root_url
+        conn = db.connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, filename, metadata
+                FROM source_documents
+                WHERE metadata->>'crawl_root_url' = %s
+                """,
+                (url,)
+            )
+            existing_docs = cur.fetchall()
+
+        if not existing_docs:
+            console.print(f"[yellow]No existing documents found with crawl_root_url = {url}[/yellow]")
+            console.print("[dim]Proceeding with fresh crawl...[/dim]")
+            old_doc_count = 0
+        else:
+            old_doc_count = len(existing_docs)
+            console.print(f"[yellow]Found {old_doc_count} existing documents to delete[/yellow]")
+
+            # Step 2: Delete the old documents and their chunks
+            for doc_id, filename, metadata in existing_docs:
+                try:
+                    # Get chunk count before deletion
+                    chunks = doc_store.get_document_chunks(doc_id)
+                    chunk_count = len(chunks)
+
+                    # Delete the document (cascades to chunks and chunk_collections)
+                    with conn.cursor() as cur:
+                        # Delete chunks first
+                        cur.execute(
+                            "DELETE FROM document_chunks WHERE source_document_id = %s",
+                            (doc_id,)
+                        )
+                        # Delete source document
+                        cur.execute(
+                            "DELETE FROM source_documents WHERE id = %s",
+                            (doc_id,)
+                        )
+
+                    console.print(f"  [dim]✓ Deleted document {doc_id}: {filename} ({chunk_count} chunks)[/dim]")
+                except Exception as e:
+                    console.print(f"  [red]✗ Failed to delete document {doc_id}: {e}[/red]")
+
+        console.print(f"\n[bold blue]Starting crawl...[/bold blue]")
+
+        # Step 3: Perform the crawl
+        if follow_links:
+            # Multi-page crawl with link following
+            console.print(f"[dim]Crawling with link following (max_depth={max_depth})...[/dim]")
+
+            crawler = WebCrawler(headless=headless, verbose=verbose)
+            results = asyncio.run(crawler.crawl_with_depth(url, max_depth=max_depth))
+
+            if not results:
+                console.print(f"[bold red]✗ No pages crawled from {url}[/bold red]")
+                sys.exit(1)
+
+            console.print(f"[green]✓ Crawled {len(results)} pages[/green]")
+
+            # Ingest each page
+            total_chunks = 0
+            successful_ingests = 0
+            for i, result in enumerate(results, 1):
+                if not result.success:
+                    console.print(f"  [yellow]⚠ Skipped failed page {i}: {result.url}[/yellow]")
+                    continue
+
+                try:
+                    source_id, chunk_ids = doc_store.ingest_document(
+                        content=result.content,
+                        filename=result.metadata.get("title", result.url),
+                        collection_name=collection,
+                        metadata=result.metadata,
+                        file_type="web_page",
+                    )
+                    total_chunks += len(chunk_ids)
+                    successful_ingests += 1
+                    console.print(
+                        f"  [dim]✓ Page {i}/{len(results)}: {result.metadata.get('title', result.url)[:50]}... "
+                        f"({len(chunk_ids)} chunks, depth={result.metadata.get('crawl_depth', 0)})[/dim]"
+                    )
+                except Exception as e:
+                    console.print(f"  [red]✗ Failed to ingest page {i}: {e}[/red]")
+
+            console.print(
+                f"\n[bold green]✓ Re-crawl complete![/bold green]"
+            )
+            console.print(f"[bold]Deleted {old_doc_count} old pages, crawled {successful_ingests} new pages with {total_chunks} total chunks[/bold]")
+            console.print(f"[dim]Collection: '{collection}'[/dim]")
+            console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
+
+        else:
+            # Single-page crawl
+            console.print(f"[dim]Crawling single page...[/dim]")
+
+            result = asyncio.run(crawl_single_page(url, headless=headless, verbose=verbose))
+
+            if not result.success:
+                console.print(f"[bold red]✗ Failed to crawl {url}[/bold red]")
+                if result.error:
+                    console.print(f"[bold red]Error: {result.error.error_message}[/bold red]")
+                sys.exit(1)
+
+            console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
+
+            # Ingest the content
+            source_id, chunk_ids = doc_store.ingest_document(
+                content=result.content,
+                filename=result.metadata.get("title", url),
+                collection_name=collection,
+                metadata=result.metadata,
+                file_type="web_page",
+            )
+
+            console.print(
+                f"\n[bold green]✓ Re-crawl complete![/bold green]"
+            )
+            console.print(f"[bold]Deleted {old_doc_count} old pages, crawled 1 new page with {len(chunk_ids)} chunks[/bold]")
+            console.print(f"[dim]Collection: '{collection}'[/dim]")
+            console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
+            console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
+            console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
+@main.command()
 @click.argument("query")
 @click.option("--collection", help="Search within specific collection")
 @click.option("--limit", default=10, help="Maximum number of results")

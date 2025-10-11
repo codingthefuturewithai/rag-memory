@@ -50,6 +50,17 @@ uv run poc ingest file <path> --collection <name> --no-chunking  # Store whole d
 uv run poc ingest directory <path> --collection <name> --extensions .txt,.md
 uv run poc ingest directory <path> --collection <name> --recursive
 
+# Web page ingestion (uses Crawl4AI for web scraping)
+uv run poc ingest url <url> --collection <name>  # Crawl single page
+uv run poc ingest url <url> --collection <name> --follow-links  # Follow internal links (depth=1)
+uv run poc ingest url <url> --collection <name> --follow-links --max-depth 2  # Follow links 2 levels deep
+uv run poc ingest url <url> --collection <name> --chunk-size 2500 --chunk-overlap 300  # Custom chunking
+
+# Re-crawl web pages (delete old, re-ingest new)
+# Only deletes pages matching crawl_root_url - other documents in collection unaffected
+uv run poc recrawl <url> --collection <name>  # Re-crawl single page
+uv run poc recrawl <url> --collection <name> --follow-links --max-depth 2  # Re-crawl with link following
+
 # Document management
 uv run poc document list [--collection NAME]  # List all source documents
 uv run poc document view <ID> [--show-chunks] [--show-content]  # View document details
@@ -285,6 +296,69 @@ results = searcher.search_chunks(
    - Programmatic filtering via `search_with_metadata_filter()` (not in CLI yet)
 
 3. **Both**: Use collections for major topics + metadata for attributes
+
+## Web Crawling and Re-crawl Strategy
+
+### Crawl Metadata
+Every web page crawled gets these critical metadata fields:
+- `crawl_root_url`: The starting URL of the crawl session (used for re-crawl matching)
+- `crawl_session_id`: Unique UUID for this crawl session
+- `crawl_timestamp`: ISO 8601 timestamp of when the crawl occurred
+- `crawl_depth`: Distance from root URL (0 = starting page, 1 = direct links, etc.)
+- `parent_url`: URL of the parent page (for depth > 0)
+
+### Re-crawl Command
+The `recrawl` command implements a "nuclear option" strategy:
+1. Find all source documents where `metadata.crawl_root_url` matches the target URL
+2. Delete those documents and their chunks (NOT the entire collection)
+3. Re-crawl from the root URL with specified parameters
+4. Ingest new pages into the same collection
+5. Report: "Deleted X old pages, crawled Y new pages"
+
+**Why this approach:**
+- ✅ Safe for mixed collections (only deletes pages from specific crawl root)
+- ✅ You can have multiple crawl roots in one collection
+- ✅ You can mix web pages + file ingestion in same collection
+- ✅ Handles site redesigns, URL changes, deleted pages automatically
+- ✅ No risk of stale content or duplicate pages
+- ✅ Predictable behavior (always fresh data)
+
+**Example workflow:**
+```bash
+# Initial crawl of docs site (depth=2)
+uv run poc ingest url https://docs.example.com --collection api-docs --follow-links --max-depth 2
+
+# Later, re-crawl to update content
+uv run poc recrawl https://docs.example.com --collection api-docs --follow-links --max-depth 2
+
+# Add different docs to same collection (unaffected by recrawl above)
+uv run poc ingest url https://guides.example.com --collection api-docs --follow-links
+```
+
+### Metadata Filtering
+Search can filter by crawl metadata (programmatic API):
+```python
+# Find only content from specific crawl session
+results = searcher.search_chunks(
+    query="feature X",
+    collection_name="docs",
+    metadata_filter={"crawl_session_id": "abc-123"}
+)
+
+# Find only content from root URL (all pages from that crawl)
+results = searcher.search_chunks(
+    query="feature X",
+    collection_name="docs",
+    metadata_filter={"crawl_root_url": "https://docs.example.com"}
+)
+
+# Find only starting pages (depth=0)
+results = searcher.search_chunks(
+    query="feature X",
+    collection_name="docs",
+    metadata_filter={"crawl_depth": 0}
+)
+```
 
 ## Testing Philosophy
 
