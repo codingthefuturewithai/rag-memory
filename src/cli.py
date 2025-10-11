@@ -9,11 +9,11 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from src.collections import get_collection_manager
-from src.database import get_database
-from src.document_store import get_document_store
-from src.embeddings import get_embedding_generator
-from src.search import get_similarity_search
+from src.core.collections import get_collection_manager
+from src.core.database import get_database
+from src.ingestion.document_store import get_document_store
+from src.core.embeddings import get_embedding_generator
+from src.retrieval.search import get_similarity_search
 
 # Configure logging
 logging.basicConfig(

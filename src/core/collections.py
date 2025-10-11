@@ -3,7 +3,7 @@
 import logging
 from typing import List, Optional
 
-from src.database import Database
+from src.core.database import Database
 
 logger = logging.getLogger(__name__)
 
