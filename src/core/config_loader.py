@@ -183,7 +183,7 @@ def create_default_config() -> bool:
             f.write("# This file is automatically managed by rag-memory\n")
             f.write("# You can edit or delete this file anytime\n\n")
             f.write("# PostgreSQL connection for RAG Memory (default Docker setup)\n")
-            f.write("DATABASE_URL=postgresql://raguser:ragpass@localhost:54320/rag_poc\n\n")
+            f.write("DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory\n\n")
             f.write("# OpenAI API key for embeddings\n")
             f.write("OPENAI_API_KEY=your-api-key-here\n")
 

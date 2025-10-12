@@ -5,14 +5,14 @@ services:
     environment:
       POSTGRES_USER: raguser
       POSTGRES_PASSWORD: ragpassword
-      POSTGRES_DB: rag_poc
+      POSTGRES_DB: rag_memory
     ports:
       - "54320:5432"
     volumes:
       - pgvector_data:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U raguser -d rag_poc"]
+      test: ["CMD-SHELL", "pg_isready -U raguser -d rag_memory"]
       interval: 10s
       timeout: 5s
       retries: 5

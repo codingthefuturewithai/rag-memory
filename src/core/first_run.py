@@ -45,7 +45,7 @@ def check_and_setup_config() -> bool:
         console.print("\n[yellow]Setup cancelled. You can configure manually by creating:[/yellow]")
         console.print(f"[cyan]{config_path}[/cyan]\n")
         console.print("[dim]With the following content:[/dim]")
-        console.print("[dim]DATABASE_URL=postgresql://raguser:ragpass@localhost:54320/rag_poc[/dim]")
+        console.print("[dim]DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory[/dim]")
         console.print("[dim]OPENAI_API_KEY=your-api-key-here[/dim]\n")
         return False
 
@@ -57,7 +57,7 @@ def check_and_setup_config() -> bool:
         "[dim]If you're using the default Docker setup, press Enter to accept the default.[/dim]"
     )
 
-    default_db_url = "postgresql://raguser:ragpass@localhost:54320/rag_poc"
+    default_db_url = "postgresql://raguser:ragpassword@localhost:54320/rag_memory"
     database_url = Prompt.ask(
         "Database URL",
         default=default_db_url,
