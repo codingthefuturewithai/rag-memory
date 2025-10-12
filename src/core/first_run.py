@@ -107,7 +107,14 @@ def ensure_config_or_exit():
     """
     Ensure configuration exists, or run first-time setup.
     Exits the program if setup fails or user declines.
+
+    Also loads environment variables using the three-tier system.
     """
+    # First, load environment variables (three-tier: env vars → .env → ~/.rag-memory-env)
+    from .config_loader import load_environment_variables
+    load_environment_variables()
+
+    # Then check if config exists (or run setup wizard)
     if not check_and_setup_config():
         console.print("[yellow]⚠ Configuration is required to use RAG Memory[/yellow]")
         console.print("[dim]Run any command again to restart the setup wizard.[/dim]\n")

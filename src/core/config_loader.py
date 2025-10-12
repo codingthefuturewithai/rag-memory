@@ -202,5 +202,6 @@ def create_default_config() -> bool:
         return False
 
 
-# Load environment variables when module is imported
-load_environment_variables()
+# Note: Environment variables are NOT loaded at module import.
+# For CLI usage: load_environment_variables() is called by first_run.py (ensure_config_or_exit)
+# For MCP usage: Environment variables are provided by the MCP client in JSON config

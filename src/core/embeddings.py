@@ -7,10 +7,8 @@ from typing import List
 import numpy as np
 from openai import OpenAI
 
-# Load environment variables using three-tier system
-from .config_loader import load_environment_variables
-
-load_environment_variables()
+# Note: Environment variables are loaded by CLI (via first_run.py) or provided by MCP client.
+# No automatic config loading at module import to avoid issues with MCP server usage.
 
 logger = logging.getLogger(__name__)
 

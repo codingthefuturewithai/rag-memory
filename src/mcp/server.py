@@ -5,6 +5,7 @@ Exposes RAG functionality via Model Context Protocol for AI agents.
 """
 
 import logging
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -32,20 +33,46 @@ from src.mcp.tools import (
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Initialize MCP server
+# Global variables to hold RAG components (initialized by lifespan)
+db = None
+embedder = None
+coll_mgr = None
+searcher = None
+doc_store = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastMCP):
+    """
+    Lifespan context manager for MCP server initialization and teardown.
+
+    This initializes RAG components when the server starts, making them
+    available to all tools. Components are initialized lazily here rather
+    than at module import time to avoid issues with MCP client startup.
+    """
+    global db, embedder, coll_mgr, searcher, doc_store
+
+    # Initialize RAG components when server starts
+    logger.info("Initializing RAG components...")
+    db = get_database()
+    embedder = get_embedding_generator()
+    coll_mgr = get_collection_manager(db)
+    searcher = get_similarity_search(db, embedder, coll_mgr)
+    doc_store = get_document_store(db, embedder, coll_mgr)
+    logger.info("MCP server initialized with RAG components")
+
+    yield {}  # Server runs here
+
+    # Cleanup on shutdown
+    logger.info("Shutting down MCP server...")
+    if db:
+        db.close()
+
+
+# Initialize MCP server with lifespan
 # Note: For local testing with streamable-http, auth is disabled by default
 # For production use, configure proper authentication
-mcp = FastMCP("rag-memory")
-
-# Initialize RAG components once (reused across tool calls)
-logger.info("Initializing RAG components...")
-db = get_database()
-embedder = get_embedding_generator()
-coll_mgr = get_collection_manager(db)
-searcher = get_similarity_search(db, embedder, coll_mgr)
-doc_store = get_document_store(db, embedder, coll_mgr)
-
-logger.info("MCP server initialized with RAG components")
+mcp = FastMCP("rag-memory", lifespan=lifespan)
 
 
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)
