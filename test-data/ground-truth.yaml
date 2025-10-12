@@ -1,0 +1,345 @@
+# Ground Truth Labels for RAG Optimization Testing
+# Created: 2025-10-11
+# Evaluator: Claude (AI Assistant)
+#
+# Relevance Levels:
+#   highly_relevant: Directly answers the query, primary/authoritative source
+#   relevant: Contains useful related information, secondary source
+#   not_relevant: Off-topic or only tangentially related
+
+queries:
+  - query_id: wf-01
+    query: "Claude Code configuration options"
+    description: "User wants to know how to configure Claude Code"
+    labeled_results:
+      - rank: 1
+        chunk_id: 686
+        source_document_id: 216
+        relevance: highly_relevant
+        reasoning: "ClaudeAgentOptions dataclass - exactly what user needs for configuration"
+
+      - rank: 2-9
+        chunk_ids: [849, 816, 785, 744, 804, 770, 798, 870]
+        relevance: not_relevant
+        reasoning: "Navigation sidebars, not actual configuration content"
+
+      - rank: 10
+        chunk_id: 769
+        relevance: not_relevant
+        reasoning: "Just a homepage header, no configuration details"
+
+    summary: "Only 1/10 results highly relevant. Poor recall for this query."
+
+  - query_id: wf-03
+    query: "GitHub Actions integration guide"
+    description: "User wants guide for setting up GitHub Actions with Claude Code"
+    labeled_results:
+      - rank: 1
+        chunk_id: 819  # Chunk 19 from Doc 231
+        relevance: highly_relevant
+        reasoning: "AWS Bedrock auth setup - core part of GitHub Actions integration"
+
+      - rank: 2
+        chunk_id: 814  # Chunk 2
+        relevance: highly_relevant
+        reasoning: "Table of contents for GitHub Actions guide"
+
+      - rank: 3
+        chunk_id: 817  # Chunk 5
+        relevance: highly_relevant
+        reasoning: "Why use Claude Code GitHub Actions - foundational context"
+
+      - rank: 4
+        chunk_id: 818  # Chunk 6
+        relevance: highly_relevant
+        reasoning: "Manual setup instructions"
+
+      - rank: 5
+        chunk_id: 821  # Chunk 9
+        relevance: relevant
+        reasoning: "Example use cases - helpful but not setup instructions"
+
+      - rank: 6
+        chunk_id: 828  # Chunk 16
+        relevance: highly_relevant
+        reasoning: "Cloud provider authentication configuration"
+
+      - rank: 7
+        chunk_id: 825  # Chunk 13
+        relevance: highly_relevant
+        reasoning: "AWS Bedrock & Google Vertex AI setup"
+
+      - rank: 8
+        chunk_id: 834  # Chunk 22
+        relevance: relevant
+        reasoning: "Advanced configuration - useful supplementary info"
+
+      - rank: 9
+        chunk_id: 822  # Chunk 10
+        relevance: relevant
+        reasoning: "Best practices - useful but not core setup"
+
+      - rank: 10
+        chunk_id: 815  # Chunk 3
+        relevance: relevant
+        reasoning: "Prerequisites - helpful context"
+
+    summary: "Excellent! 6/10 highly relevant, 4/10 relevant. Total: 10/10 useful results."
+
+  - query_id: tech-03
+    query: "implementing custom hooks for git operations"
+    description: "User wants to implement custom hooks specifically for git operations"
+    labeled_results:
+      - rank: 1
+        chunk_id: 821  # GitHub Actions examples
+        relevance: not_relevant
+        reasoning: "GitHub Actions examples, not hooks for git operations"
+
+      - rank: 2
+        chunk_id: 695  # Python hook usage example
+        relevance: highly_relevant
+        reasoning: "Hook usage example from Agent SDK - exactly what user needs"
+
+      - rank: 3
+        chunk_id: 636  # TypeScript hook types
+        relevance: highly_relevant
+        reasoning: "Hook types documentation - foundational for implementing hooks"
+
+      - rank: 4-5
+        chunk_ids: [818, 822]  # GitHub Actions setup/best practices
+        relevance: not_relevant
+        reasoning: "GitHub Actions content, not hook implementation"
+
+      - rank: 6
+        chunk_id: 637  # BaseHookInput TypeScript
+        relevance: relevant
+        reasoning: "Hook interface details - useful for implementation"
+
+      - rank: 7-8
+        chunk_ids: [639, 638]  # Hook TypeScript types
+        relevance: relevant
+        reasoning: "More hook type definitions - useful reference"
+
+      - rank: 9
+        chunk_id: 864  # Custom slash commands
+        relevance: not_relevant
+        reasoning: "Slash commands, not hooks"
+
+      - rank: 10
+        chunk_id: 835  # Customizing behavior
+        relevance: not_relevant
+        reasoning: "General behavior customization, not hook implementation"
+
+    summary: "Mixed results. 2/10 highly relevant, 3/10 relevant, 5/10 not relevant. Needs improvement."
+
+  - query_id: abbr-01
+    query: "MCP server setup"
+    description: "MCP = Model Context Protocol. User wants setup instructions."
+    labeled_results:
+      - rank: 1
+        chunk_id: 854  # Popular MCP servers
+        relevance: highly_relevant
+        reasoning: "List of popular MCP servers - great starting point"
+
+      - rank: 2
+        chunk_id: 850  # ToC for MCP
+        relevance: highly_relevant
+        reasoning: "Table of contents showing all MCP setup topics"
+
+      - rank: 3
+        chunk_id: 851  # MCP page structure
+        relevance: relevant
+        reasoning: "Overview of MCP authentication and configuration"
+
+      - rank: 4
+        chunk_id: 860  # Plugin-provided MCP servers
+        relevance: relevant
+        reasoning: "Another way to get MCP servers - useful info"
+
+      - rank: 5
+        chunk_id: 857  # Infrastructure & DevOps MCP servers
+        relevance: relevant
+        reasoning: "Specific MCP server examples"
+
+      - rank: 6
+        chunk_id: 859  # Managing servers
+        relevance: highly_relevant
+        reasoning: "Commands for managing MCP servers - key operational info"
+
+      - rank: 7
+        chunk_id: 868  # Enterprise MCP config
+        relevance: relevant
+        reasoning: "Enterprise setup - relevant for some users"
+
+      - rank: 8
+        chunk_id: 861  # MCP installation scopes
+        relevance: highly_relevant
+        reasoning: "Understanding scope levels - important setup concept"
+
+      - rank: 9
+        chunk_id: 853  # What you can do with MCP
+        relevance: relevant
+        reasoning: "Use cases - provides context but not setup instructions"
+
+      - rank: 10
+        chunk_id: 864  # Practical examples
+        relevance: relevant
+        reasoning: "Examples - helpful after setup is complete"
+
+    summary: "Excellent! 4/10 highly relevant, 6/10 relevant. Total: 10/10 useful."
+
+  - query_id: abbr-02
+    query: "SDK migration"
+    description: "User wants info about migrating SDK (likely Claude Code SDK to Agent SDK)"
+    labeled_results:
+      - rank: 1
+        chunk_id: 731  # Migration steps
+        relevance: highly_relevant
+        reasoning: "Actual migration steps - exactly what user needs"
+
+      - rank: 2
+        chunk_id: 734  # Why the rename
+        relevance: relevant
+        reasoning: "Context about the migration - useful background"
+
+      - rank: 3
+        chunk_id: 732  # Breaking changes
+        relevance: highly_relevant
+        reasoning: "Breaking changes in migration - critical information"
+
+      - rank: 4
+        chunk_id: 733  # Settings sources changes
+        relevance: highly_relevant
+        reasoning: "Specific breaking change details - important for migration"
+
+      - rank: 5-7
+        chunk_ids: [712, 707, 704]  # Python SDK reference code blocks
+        relevance: not_relevant
+        reasoning: "Just code blocks without context from API reference"
+
+      - rank: 8
+        chunk_id: 730  # Migration overview
+        relevance: highly_relevant
+        reasoning: "Overview of the migration - foundational information"
+
+      - rank: 9-10
+        chunk_ids: [744, 770]  # Navigation sidebars
+        relevance: not_relevant
+        reasoning: "Just navigation elements mentioning migration"
+
+    summary: "Good! 4/10 highly relevant, 1/10 relevant, 5/10 not relevant."
+
+  - query_id: poor-01
+    query: "how make agent work"
+    description: "Poorly worded - user probably wants basic agent setup/usage"
+    labeled_results:
+      - rank: 1
+        chunk_id: 874  # Refactor code workflow
+        relevance: not_relevant
+        reasoning: "About refactoring, not making agents work"
+
+      - rank: 2
+        chunk_id: 680  # Classes section marker
+        relevance: not_relevant
+        reasoning: "Just a section header"
+
+      - rank: 3
+        chunk_id: 738  # CLI agents flag
+        relevance: relevant
+        reasoning: "How to define agents via CLI - somewhat relevant"
+
+      - rank: 4-5
+        chunk_ids: [594, 590]  # Agent SDK overview installation
+        relevance: highly_relevant
+        reasoning: "Installation and getting started - exactly what beginner needs"
+
+      - rank: 6-7
+        chunk_ids: [592, 596]  # System prompts
+        relevance: highly_relevant
+        reasoning: "How to define agent behavior - core concept"
+
+      - rank: 8
+        chunk_id: 624  # TypeScript installation
+        relevance: relevant
+        reasoning: "Installation instructions - useful"
+
+      - rank: 9
+        chunk_id: 627  # TypeScript types
+        relevance: not_relevant
+        reasoning: "Just type definitions"
+
+      - rank: 10
+        chunk_id: 602  # Streaming input
+        relevance: relevant
+        reasoning: "Advanced usage - helpful but not beginner content"
+
+    summary: "Poor ranking. 2/10 highly relevant buried at ranks 4-7. Needs multi-query expansion."
+
+  - query_id: tech-02
+    query: "differences between Claude Code and Claude Agent SDK"
+    description: "User wants to understand the distinction between Claude Code and Agent SDK"
+    labeled_results:
+      - rank: 1-8
+        chunk_ids: [849, 870, 804, 770, 798, 785, 816, 744]
+        relevance: not_relevant
+        reasoning: "All navigation sidebars mentioning 'Migrate to Claude Agent SDK' link"
+
+      - rank: 9-10
+        chunk_ids: [590, 594]  # Agent SDK overview
+        relevance: relevant
+        reasoning: "Agent SDK overview - helpful but doesn't explain difference from Claude Code"
+
+    summary: "Very poor! 0/10 highly relevant. The actual migration guide (Doc 222) should be here but isn't in top 10."
+
+  - query_id: custom-01
+    query: "how to implement features using Claude Agent SDK"
+    description: "User wants guide for implementing features with Agent SDK"
+    labeled_results:
+      - rank: 1
+        chunk_id: 701  # Advanced features with ClaudeSDKClient
+        relevance: highly_relevant
+        reasoning: "Section on advanced features - exactly what user needs"
+
+      - rank: 2-5
+        chunk_ids: [591, 595, 590, 594]  # Agent SDK overview
+        relevance: highly_relevant
+        reasoning: "Core concepts, authentication, installation - foundational for implementing features"
+
+      - rank: 6-10
+        chunk_ids: [849, 770, 798, 744, 785]  # Navigation sidebars
+        relevance: not_relevant
+        reasoning: "Just navigation elements"
+
+    summary: "Good start! 5/10 highly relevant in top 5 ranks. But ranks 6-10 are noise."
+
+# Summary Statistics
+summary:
+  total_queries_labeled: 8
+  avg_highly_relevant_in_top_5: 2.875  # (1+5+2+4+3+2+0+5)/8
+  avg_relevant_in_top_5: 1.75
+  queries_with_poor_recall:
+    - wf-01: "Only 1 relevant result"
+    - tech-02: "No highly relevant results in top 10"
+    - poor-01: "Relevant results buried at ranks 4-7"
+
+  queries_with_good_recall:
+    - wf-03: "6 highly relevant + 4 relevant = perfect"
+    - abbr-01: "4 highly relevant + 6 relevant = perfect"
+    - custom-01: "5 highly relevant in top 5"
+
+# Expected Improvements by Phase
+expected_improvements:
+  phase1_hybrid:
+    - abbr-01: "Already good, hybrid should maintain or improve slightly"
+    - abbr-02: "Keyword matching 'SDK migration' should help"
+    - tech-02: "Should surface 'migration guide' doc via keywords"
+
+  phase2_multiquery:
+    - poor-01: "Huge win - reformulate to 'agent setup guide' or 'getting started'"
+    - tech-02: "Rephrase to 'Claude Code SDK vs Agent SDK' or 'migration guide'"
+    - wf-01: "Expand 'configuration' to include 'settings', 'options', 'customize'"
+
+  phase3_reranking:
+    - wf-03: "Already excellent, reranking should fine-tune order"
+    - custom-01: "Remove navigation noise from ranks 6-10"
+    - tech-03: "Promote hook implementation docs above GitHub Actions content"

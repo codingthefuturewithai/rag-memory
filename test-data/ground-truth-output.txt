@@ -1,0 +1,754 @@
+
+================================================================================
+Query ID: wf-01
+Query: Claude Code configuration options
+================================================================================
+
+[1] Similarity: 0.610 | Chunk 16
+    Source: Agent SDK reference - Python - Claude Docs (Doc ID: 216)
+    Content: ### 
+[​](https://docs.claude.com/en/api/agent-sdk/python#claudeagentoptions)
+`ClaudeAgentOptions`
+Configuration dataclass for Claude Code queries.
+Copy
+```
+@dataclass
+class ClaudeAgentOptions:
+    all...
+
+[2] Similarity: 0.574 | Chunk 1
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[3] Similarity: 0.574 | Chunk 1
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[4] Similarity: 0.574 | Chunk 1
+    Source: Troubleshooting - Claude Docs (Doc ID: 226)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[5] Similarity: 0.574 | Chunk 1
+    Source: CLI reference - Claude Docs (Doc ID: 220)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[6] Similarity: 0.574 | Chunk 1
+    Source: Claude Code on Google Vertex AI - Claude Docs (Doc ID: 228)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[7] Similarity: 0.574 | Chunk 1
+    Source: Claude Code on Amazon Bedrock - Claude Docs (Doc ID: 223)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[8] Similarity: 0.574 | Chunk 1
+    Source: Claude Code overview - Claude Docs (Doc ID: 227)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[9] Similarity: 0.574 | Chunk 1
+    Source: Common workflows - Claude Docs (Doc ID: 236)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[10] Similarity: 0.573 | Chunk 0
+    Source: Claude Code on Amazon Bedrock - Claude Docs (Doc ID: 223)
+    Content: [Claude Docs home page![light logo](https://mintcdn.com/anthropic-claude-docs/DcI2Ybid7ZEnFaf0/logo/light.svg?fit=max&auto=format&n=DcI2Ybid7ZEnFaf0&q=85&s=c877c45432515ee69194cb19e9f983a2)![dark logo...
+
+
+================================================================================
+Query ID: wf-03
+Query: GitHub Actions integration guide
+================================================================================
+
+[1] Similarity: 0.519 | Chunk 19
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: #### 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#for-aws-bedrock)
+For AWS Bedrock
+  1. **For AWS Authentication** :
+     * `AWS_ROLE_TO_ASSUME`
+  2. **For GitHub App (if using your...
+
+[2] Similarity: 0.517 | Chunk 2
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: On this page
+  * [Why use Claude Code GitHub Actions?](https://docs.claude.com/en/docs/claude-code/github-actions#why-use-claude-code-github-actions%3F)
+  * [What can Claude do?](https://docs.claude.c...
+
+[3] Similarity: 0.507 | Chunk 5
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#why-use-claude-code-github-actions%3F)
+Why use Claude Code GitHub Actions?
+  * **Instant PR creation** : Describe what you need, and ...
+
+[4] Similarity: 0.506 | Chunk 6
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#manual-setup)
+Manual setup
+If the `/install-github-app` command fails or you prefer manual setup, please follow these manual setup in...
+
+[5] Similarity: 0.498 | Chunk 9
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#example-use-cases)
+Example use cases
+Claude Code GitHub Actions can help you with a variety of tasks. The [examples directory](https:...
+
+[6] Similarity: 0.496 | Chunk 16
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: 2
+Configure cloud provider authentication
+Choose your cloud provider and set up secure authentication:
+AWS Bedrock
+**Configure AWS to allow GitHub Actions to authenticate securely without storing cred...
+
+[7] Similarity: 0.494 | Chunk 13
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#using-with-aws-bedrock-%26-google-vertex-ai)
+Using with AWS Bedrock & Google Vertex AI
+For enterprise environments, you can use Claud...
+
+[8] Similarity: 0.488 | Chunk 22
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#advanced-configuration)
+Advanced configuration
+### 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#action-parameters)...
+
+[9] Similarity: 0.482 | Chunk 10
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#best-practices)
+Best practices
+### 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#claude-md-configuration)
+CLAUDE.md...
+
+[10] Similarity: 0.474 | Chunk 3
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: * [Using with AWS Bedrock & Google Vertex AI](https://docs.claude.com/en/docs/claude-code/github-actions#using-with-aws-bedrock-%26-google-vertex-ai)
+  * [Prerequisites](https://docs.claude.com/en/doc...
+
+
+================================================================================
+Query ID: tech-03
+Query: implementing custom hooks for git operations
+================================================================================
+
+[1] Similarity: 0.400 | Chunk 9
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#example-use-cases)
+Example use cases
+Claude Code GitHub Actions can help you with a variety of tasks. The [examples directory](https:...
+
+[2] Similarity: 0.386 | Chunk 27
+    Source: Agent SDK reference - Python - Claude Docs (Doc ID: 216)
+    Content: ### 
+[​](https://docs.claude.com/en/api/agent-sdk/python#hook-usage-example)
+Hook Usage Example
+Copy
+```
+from claude_agent_sdk import query, ClaudeAgentOptions, HookMatcher, HookContext
+from typing im...
+
+[3] Similarity: 0.380 | Chunk 19
+    Source: Agent SDK reference - TypeScript - Claude Docs (Doc ID: 215)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/typescript#hook-types)
+Hook Types
+### 
+[​](https://docs.claude.com/en/api/agent-sdk/typescript#hookevent)
+`HookEvent`
+Available hook events.
+Copy
+```
+t...
+
+[4] Similarity: 0.377 | Chunk 6
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#manual-setup)
+Manual setup
+If the `/install-github-app` command fails or you prefer manual setup, please follow these manual setup in...
+
+[5] Similarity: 0.376 | Chunk 10
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#best-practices)
+Best practices
+### 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#claude-md-configuration)
+CLAUDE.md...
+
+[6] Similarity: 0.375 | Chunk 20
+    Source: Agent SDK reference - TypeScript - Claude Docs (Doc ID: 215)
+    Content: ### 
+[​](https://docs.claude.com/en/api/agent-sdk/typescript#basehookinput)
+`BaseHookInput`
+Base interface that all hook input types extend.
+Copy
+```
+type BaseHookInput = {
+  session_id: string;
+  tra...
+
+[7] Similarity: 0.368 | Chunk 22
+    Source: Agent SDK reference - TypeScript - Claude Docs (Doc ID: 215)
+    Content: ### 
+[​](https://docs.claude.com/en/api/agent-sdk/typescript#hookjsonoutput)
+`HookJSONOutput`
+Hook return value.
+Copy
+```
+type HookJSONOutput = AsyncHookJSONOutput | SyncHookJSONOutput;
+
+```
+
+#### 
+[​...
+
+[8] Similarity: 0.367 | Chunk 21
+    Source: Agent SDK reference - TypeScript - Claude Docs (Doc ID: 215)
+    Content: #### 
+[​](https://docs.claude.com/en/api/agent-sdk/typescript#subagentstophookinput)
+`SubagentStopHookInput`
+Copy
+```
+type SubagentStopHookInput = BaseHookInput & {
+  hook_event_name: 'SubagentStop';
+...
+
+[9] Similarity: 0.358 | Chunk 16
+    Source: Common workflows - Claude Docs (Doc ID: 236)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/common-workflows#create-custom-slash-commands)
+Create custom slash commands
+Claude Code supports custom slash commands that you can create to quickl...
+
+[10] Similarity: 0.357 | Chunk 23
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ### 
+[​](https://docs.claude.com/en/docs/claude-code/github-actions#customizing-claude%E2%80%99s-behavior)
+Customizing Claude’s behavior
+You can configure Claude’s behavior in two ways:
+  1. **CLAUDE....
+
+
+================================================================================
+Query ID: abbr-01
+Query: MCP server setup
+================================================================================
+
+[1] Similarity: 0.633 | Chunk 6
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#popular-mcp-servers)
+Popular MCP servers
+Here are some commonly used MCP servers you can connect to Claude Code:
+Use third party MCP servers at ...
+
+[2] Similarity: 0.610 | Chunk 2
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: On this page
+  * [What you can do with MCP](https://docs.claude.com/en/docs/claude-code/mcp#what-you-can-do-with-mcp)
+  * [Popular MCP servers](https://docs.claude.com/en/docs/claude-code/mcp#popular-...
+
+[3] Similarity: 0.607 | Chunk 3
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: * [Authenticate with remote MCP servers](https://docs.claude.com/en/docs/claude-code/mcp#authenticate-with-remote-mcp-servers)
+  * [Add MCP servers from JSON configuration](https://docs.claude.com/en/...
+
+[4] Similarity: 0.602 | Chunk 12
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ### 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#plugin-provided-mcp-servers)
+Plugin-provided MCP servers
+[Plugins](https://docs.claude.com/en/docs/claude-code/plugins) can bundle MCP servers,...
+
+[5] Similarity: 0.592 | Chunk 9
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ### Infrastructure & DevOps
+[**Cloudflare**](https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/)
+Build applications, analyze traffic, monitor performance, and ...
+
+[6] Similarity: 0.573 | Chunk 11
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ### 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#managing-your-servers)
+Managing your servers
+Once configured, you can manage your MCP servers with these commands:
+Copy
+```
+# List all configur...
+
+[7] Similarity: 0.570 | Chunk 20
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#enterprise-mcp-configuration)
+Enterprise MCP configuration
+For organizations that need centralized control over MCP servers, Claude Code support...
+
+[8] Similarity: 0.553 | Chunk 13
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#mcp-installation-scopes)
+MCP installation scopes
+MCP servers can be configured at three different scope levels, each serving distinct purposes f...
+
+[9] Similarity: 0.542 | Chunk 5
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#what-you-can-do-with-mcp)
+What you can do with MCP
+With MCP servers connected, you can ask Claude Code to:
+  * **Implement features from issue t...
+
+[10] Similarity: 0.520 | Chunk 16
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#practical-examples)
+Practical examples
+### 
+[​](https://docs.claude.com/en/docs/claude-code/mcp#example%3A-monitor-errors-with-sentry)
+Example: ...
+
+
+================================================================================
+Query ID: abbr-02
+Query: SDK migration
+================================================================================
+
+[1] Similarity: 0.479 | Chunk 3
+    Source: Migrate to Claude Agent SDK - Claude Docs (Doc ID: 222)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#migration-steps)
+Migration Steps
+### 
+[​](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#for-typescript%2Fjavas...
+
+[2] Similarity: 0.392 | Chunk 6
+    Source: Migrate to Claude Agent SDK - Claude Docs (Doc ID: 222)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#why-the-rename%3F)
+Why the Rename?
+The Claude Code SDK was originally designed for coding tasks, but it has evolved into a power...
+
+[3] Similarity: 0.389 | Chunk 4
+    Source: Migrate to Claude Agent SDK - Claude Docs (Doc ID: 222)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#breaking-changes)
+Breaking changes
+To improve isolation and explicit configuration, Claude Agent SDK v0.1.0 introduces breaking ...
+
+[4] Similarity: 0.386 | Chunk 5
+    Source: Migrate to Claude Agent SDK - Claude Docs (Doc ID: 222)
+    Content: ### 
+[​](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#settings-sources-no-longer-loaded-by-default)
+Settings Sources No Longer Loaded by Default
+**What changed:** The SDK no longer ...
+
+[5] Similarity: 0.384 | Chunk 44
+    Source: Agent SDK reference - Python - Claude Docs (Doc ID: 216)
+    Content: ```...
+
+[6] Similarity: 0.384 | Chunk 39
+    Source: Agent SDK reference - Python - Claude Docs (Doc ID: 216)
+    Content: ```...
+
+[7] Similarity: 0.384 | Chunk 36
+    Source: Agent SDK reference - Python - Claude Docs (Doc ID: 216)
+    Content: ```...
+
+[8] Similarity: 0.378 | Chunk 2
+    Source: Migrate to Claude Agent SDK - Claude Docs (Doc ID: 222)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#overview)
+Overview
+The Claude Code SDK has been renamed to the **Claude Agent SDK** and its documentation has been reorganized. ...
+
+[9] Similarity: 0.372 | Chunk 1
+    Source: CLI reference - Claude Docs (Doc ID: 220)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[10] Similarity: 0.372 | Chunk 1
+    Source: Claude Code on Amazon Bedrock - Claude Docs (Doc ID: 223)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+
+================================================================================
+Query ID: poor-01
+Query: how make agent work
+================================================================================
+
+[1] Similarity: 0.491 | Chunk 6
+    Source: Common workflows - Claude Docs (Doc ID: 236)
+    Content: ## 
+[​](https://docs.claude.com/en/docs/claude-code/common-workflows#refactor-code)
+Refactor code
+Suppose you need to update old code to use modern patterns and practices.
+1
+Identify legacy code for r...
+
+[2] Similarity: 0.456 | Chunk 10
+    Source: Agent SDK reference - Python - Claude Docs (Doc ID: 216)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/python#classes)
+Classes...
+
+[3] Similarity: 0.454 | Chunk 6
+    Source: CLI reference - Claude Docs (Doc ID: 220)
+    Content: ### 
+[​](https://docs.claude.com/en/docs/claude-code/cli-reference#agents-flag-format)
+Agents flag format
+The `--agents` flag accepts a JSON object that defines one or more custom subagents. Each suba...
+
+[4] Similarity: 0.434 | Chunk 2
+    Source: Agent SDK overview - Claude Docs (Doc ID: 200)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#installation)
+Installation
+TypeScript
+Python
+Copy
+```
+npm install @anthropic-ai/claude-agent-sdk
+
+```
+
+## 
+[​](https://docs.claude.com/en/api/...
+
+[5] Similarity: 0.434 | Chunk 2
+    Source: Agent SDK overview - Claude Docs (Doc ID: 196)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#installation)
+Installation
+TypeScript
+Python
+Copy
+```
+npm install @anthropic-ai/claude-agent-sdk
+
+```
+
+## 
+[​](https://docs.claude.com/en/api/...
+
+[6] Similarity: 0.422 | Chunk 4
+    Source: Agent SDK overview - Claude Docs (Doc ID: 196)
+    Content: ### 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#system-prompts)
+System Prompts
+System prompts define your agent’s role, expertise, and behavior. This is where you specify what kind of agent...
+
+[7] Similarity: 0.422 | Chunk 4
+    Source: Agent SDK overview - Claude Docs (Doc ID: 200)
+    Content: ### 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#system-prompts)
+System Prompts
+System prompts define your agent’s role, expertise, and behavior. This is where you specify what kind of agent...
+
+[8] Similarity: 0.407 | Chunk 7
+    Source: Agent SDK reference - TypeScript - Claude Docs (Doc ID: 215)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/typescript#installation)
+Installation
+Copy
+```
+npm install @anthropic-ai/claude-agent-sdk
+
+```...
+
+[9] Similarity: 0.388 | Chunk 10
+    Source: Agent SDK reference - TypeScript - Claude Docs (Doc ID: 215)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/typescript#types)
+Types...
+
+[10] Similarity: 0.384 | Chunk 4
+    Source: Streaming Input - Claude Docs (Doc ID: 204)
+    Content: ## Tool Integration
+Full access to all tools and custom MCP servers during the session
+## Hooks Support
+Use lifecycle hooks to customize behavior at various points
+## Real-time Feedback
+See responses ...
+
+
+================================================================================
+Query ID: tech-02
+Query: differences between Claude Code and Claude Agent SDK
+================================================================================
+
+[1] Similarity: 0.684 | Chunk 1
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[2] Similarity: 0.683 | Chunk 1
+    Source: Common workflows - Claude Docs (Doc ID: 236)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[3] Similarity: 0.683 | Chunk 1
+    Source: Claude Code on Google Vertex AI - Claude Docs (Doc ID: 228)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[4] Similarity: 0.683 | Chunk 1
+    Source: Claude Code on Amazon Bedrock - Claude Docs (Doc ID: 223)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[5] Similarity: 0.683 | Chunk 1
+    Source: Claude Code overview - Claude Docs (Doc ID: 227)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[6] Similarity: 0.683 | Chunk 1
+    Source: Troubleshooting - Claude Docs (Doc ID: 226)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[7] Similarity: 0.683 | Chunk 1
+    Source: Claude Code GitHub Actions - Claude Docs (Doc ID: 231)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[8] Similarity: 0.683 | Chunk 1
+    Source: CLI reference - Claude Docs (Doc ID: 220)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[9] Similarity: 0.664 | Chunk 2
+    Source: Agent SDK overview - Claude Docs (Doc ID: 196)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#installation)
+Installation
+TypeScript
+Python
+Copy
+```
+npm install @anthropic-ai/claude-agent-sdk
+
+```
+
+## 
+[​](https://docs.claude.com/en/api/...
+
+[10] Similarity: 0.664 | Chunk 2
+    Source: Agent SDK overview - Claude Docs (Doc ID: 200)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#installation)
+Installation
+TypeScript
+Python
+Copy
+```
+npm install @anthropic-ai/claude-agent-sdk
+
+```
+
+## 
+[​](https://docs.claude.com/en/api/...
+
+
+================================================================================
+Query ID: custom-01
+Query: how to implement features using Claude Agent SDK
+================================================================================
+
+[1] Similarity: 0.671 | Chunk 33
+    Source: Agent SDK reference - Python - Claude Docs (Doc ID: 216)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/python#advanced-features-with-claudesdkclient)
+Advanced Features with ClaudeSDKClient...
+
+[2] Similarity: 0.656 | Chunk 3
+    Source: Agent SDK overview - Claude Docs (Doc ID: 196)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#core-concepts)
+Core Concepts
+### 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#authentication)
+Authentication
+For basic authenticatio...
+
+[3] Similarity: 0.656 | Chunk 3
+    Source: Agent SDK overview - Claude Docs (Doc ID: 200)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#core-concepts)
+Core Concepts
+### 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#authentication)
+Authentication
+For basic authenticatio...
+
+[4] Similarity: 0.641 | Chunk 2
+    Source: Agent SDK overview - Claude Docs (Doc ID: 196)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#installation)
+Installation
+TypeScript
+Python
+Copy
+```
+npm install @anthropic-ai/claude-agent-sdk
+
+```
+
+## 
+[​](https://docs.claude.com/en/api/...
+
+[5] Similarity: 0.641 | Chunk 2
+    Source: Agent SDK overview - Claude Docs (Doc ID: 200)
+    Content: ## 
+[​](https://docs.claude.com/en/api/agent-sdk/overview#installation)
+Installation
+TypeScript
+Python
+Copy
+```
+npm install @anthropic-ai/claude-agent-sdk
+
+```
+
+## 
+[​](https://docs.claude.com/en/api/...
+
+[6] Similarity: 0.614 | Chunk 1
+    Source: Connect Claude Code to tools via MCP - Claude Docs (Doc ID: 235)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[7] Similarity: 0.613 | Chunk 1
+    Source: Claude Code on Amazon Bedrock - Claude Docs (Doc ID: 223)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[8] Similarity: 0.613 | Chunk 1
+    Source: Claude Code overview - Claude Docs (Doc ID: 227)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[9] Similarity: 0.613 | Chunk 1
+    Source: CLI reference - Claude Docs (Doc ID: 220)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+[10] Similarity: 0.613 | Chunk 1
+    Source: Troubleshooting - Claude Docs (Doc ID: 226)
+    Content: ##### Claude Code SDK
+  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)
+
+
+##### Deployment
+  * [Overview](https://docs.claude.com/en/docs/claude-code/t...
+
+
+
+Raw results saved to: test-data/ground-truth-raw.json
+
+Next: Review results and add 'relevance' labels to each result
+Options: 'highly_relevant', 'relevant', 'not_relevant'

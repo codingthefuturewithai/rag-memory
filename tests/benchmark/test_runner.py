@@ -17,6 +17,13 @@ from src.core.embeddings import get_embedding_generator
 from src.core.collections import get_collection_manager
 from src.retrieval.search import get_similarity_search
 
+# Import metrics module
+try:
+    from tests.benchmark.metrics import calculate_all_metrics, format_metrics_report, load_ground_truth
+    METRICS_AVAILABLE = True
+except ImportError:
+    METRICS_AVAILABLE = False
+
 
 def load_test_queries() -> List[Dict[str, Any]]:
     """Load test queries from YAML file."""
@@ -109,6 +116,15 @@ def run_baseline_benchmark(output_dir: str = "test-results") -> str:
     # Load test queries
     test_queries = load_test_queries()
     print(f"Loaded {len(test_queries)} test queries")
+
+    # Load ground truth if available
+    ground_truth = None
+    if METRICS_AVAILABLE:
+        try:
+            ground_truth = load_ground_truth()
+            print(f"Loaded ground truth labels for evaluation")
+        except Exception as e:
+            print(f"Warning: Could not load ground truth: {e}")
     print()
 
     # Run each query
@@ -128,6 +144,13 @@ def run_baseline_benchmark(output_dir: str = "test-results") -> str:
         result['expected_benefit'] = query_spec['expected_benefit']
         result['description'] = query_spec['description']
 
+        # Calculate evaluation metrics if ground truth available
+        if result['success'] and METRICS_AVAILABLE and ground_truth:
+            metrics = calculate_all_metrics(result['results'], query_id, ground_truth)
+            result['metrics'] = metrics
+        else:
+            result['metrics'] = None
+
         all_results.append(result)
 
         # Print quick summary
@@ -135,6 +158,10 @@ def run_baseline_benchmark(output_dir: str = "test-results") -> str:
             print(f"   ✓ Found {result['num_results']} results in {result['latency_ms']:.1f}ms")
             if result['num_results'] > 0:
                 print(f"   Top score: {result['results'][0]['similarity']:.3f}")
+
+            # Print evaluation metrics if available
+            if result.get('metrics') and result['metrics'].get('has_ground_truth'):
+                print(format_metrics_report(result['metrics']))
         else:
             print(f"   ✗ Error: {result['error']}")
         print()
@@ -151,6 +178,20 @@ def run_baseline_benchmark(output_dir: str = "test-results") -> str:
         'avg_top_similarity': round(sum(r['results'][0]['similarity'] for r in successful_queries if r['num_results'] > 0) / len([r for r in successful_queries if r['num_results'] > 0]), 3) if any(r['num_results'] > 0 for r in successful_queries) else 0,
         'by_category': {}
     }
+
+    # Add evaluation metrics to summary if available
+    queries_with_metrics = [r for r in successful_queries if r.get('metrics') and r['metrics'].get('has_ground_truth')]
+    if queries_with_metrics:
+        summary['evaluation_metrics'] = {
+            'queries_evaluated': len(queries_with_metrics),
+            'avg_recall@5_any': round(sum(r['metrics']['recall@5_any'] for r in queries_with_metrics) / len(queries_with_metrics), 3),
+            'avg_recall@5_high': round(sum(r['metrics']['recall@5_high'] for r in queries_with_metrics) / len(queries_with_metrics), 3),
+            'avg_precision@5_any': round(sum(r['metrics']['precision@5_any'] for r in queries_with_metrics) / len(queries_with_metrics), 3),
+            'avg_precision@5_high': round(sum(r['metrics']['precision@5_high'] for r in queries_with_metrics) / len(queries_with_metrics), 3),
+            'avg_mrr_any': round(sum(r['metrics']['mrr_any'] for r in queries_with_metrics) / len(queries_with_metrics), 3),
+            'avg_mrr_high': round(sum(r['metrics']['mrr_high'] for r in queries_with_metrics) / len(queries_with_metrics), 3),
+            'avg_ndcg@10': round(sum(r['metrics']['ndcg@10'] for r in queries_with_metrics) / len(queries_with_metrics), 3),
+        }
 
     # Per-category stats
     for category in ['well_formed', 'abbreviation', 'poorly_worded', 'technical']:
@@ -191,6 +232,16 @@ def run_baseline_benchmark(output_dir: str = "test-results") -> str:
     print(f"  Avg latency: {summary['avg_latency_ms']:.1f}ms")
     print(f"  Avg results per query: {summary['avg_results_per_query']:.1f}")
     print(f"  Avg top similarity: {summary['avg_top_similarity']:.3f}")
+
+    # Print evaluation metrics summary
+    if 'evaluation_metrics' in summary:
+        em = summary['evaluation_metrics']
+        print(f"\nEvaluation Metrics (based on {em['queries_evaluated']} labeled queries):")
+        print(f"  Recall@5:      {em['avg_recall@5_any']:.1%} (any relevant), {em['avg_recall@5_high']:.1%} (highly relevant)")
+        print(f"  Precision@5:   {em['avg_precision@5_any']:.1%} (any relevant), {em['avg_precision@5_high']:.1%} (highly relevant)")
+        print(f"  MRR:           {em['avg_mrr_any']:.3f} (any relevant), {em['avg_mrr_high']:.3f} (highly relevant)")
+        print(f"  nDCG@10:       {em['avg_ndcg@10']:.3f}")
+
     print()
     print("By Category:")
     for cat, stats in summary['by_category'].items():

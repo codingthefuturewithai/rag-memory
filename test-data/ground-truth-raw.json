@@ -1,0 +1,850 @@
+[
+  {
+    "query_id": "wf-01",
+    "query": "Claude Code configuration options",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 686,
+        "source_document_id": 216,
+        "source_filename": "Agent SDK reference - Python - Claude Docs",
+        "chunk_index": 16,
+        "similarity": 0.6100930622136903,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/python#claudeagentoptions)\n`ClaudeAgentOptions`\nConfiguration dataclass for Claude Code queries.\nCopy\n```\n@dataclass\nclass ClaudeAgentOptions:\n    allowed_tools: list[str] = field(default_factory=list)\n    system_prompt: str | SystemPromptPreset | No",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 849,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5741725475582464,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 816,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5738844871521159,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 785,
+        "source_document_id": 226,
+        "source_filename": "Troubleshooting - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5738844871521159,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 744,
+        "source_document_id": 220,
+        "source_filename": "CLI reference - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5738844871521159,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 804,
+        "source_document_id": 228,
+        "source_filename": "Claude Code on Google Vertex AI - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5738844871521159,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 770,
+        "source_document_id": 223,
+        "source_filename": "Claude Code on Amazon Bedrock - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5738844871521159,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 798,
+        "source_document_id": 227,
+        "source_filename": "Claude Code overview - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5738844871521159,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 870,
+        "source_document_id": 236,
+        "source_filename": "Common workflows - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.5738547019319354,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 769,
+        "source_document_id": 223,
+        "source_filename": "Claude Code on Amazon Bedrock - Claude Docs",
+        "chunk_index": 0,
+        "similarity": 0.5728398729253052,
+        "content_preview": "[Claude Docs home page![light logo](https://mintcdn.com/anthropic-claude-docs/DcI2Ybid7ZEnFaf0/logo/light.svg?fit=max&auto=format&n=DcI2Ybid7ZEnFaf0&q=85&s=c877c45432515ee69194cb19e9f983a2)![dark logo](https://mintcdn.com/anthropic-claude-docs/DcI2Ybid7ZEnFaf0/logo/dark.svg?fit=max&auto=format&n=DcI",
+        "relevance": null
+      }
+    ]
+  },
+  {
+    "query_id": "wf-03",
+    "query": "GitHub Actions integration guide",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 834,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 19,
+        "similarity": 0.5188626514848478,
+        "content_preview": "#### \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#for-aws-bedrock)\nFor AWS Bedrock\n  1. **For AWS Authentication** :\n     * `AWS_ROLE_TO_ASSUME`\n  2. **For GitHub App (if using your own app)** :\n     * `APP_ID`: Your GitHub App\u2019s ID\n     * `APP_PRIVATE_KEY`: The private key (.pem)",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 817,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.5172820378969895,
+        "content_preview": "On this page\n  * [Why use Claude Code GitHub Actions?](https://docs.claude.com/en/docs/claude-code/github-actions#why-use-claude-code-github-actions%3F)\n  * [What can Claude do?](https://docs.claude.com/en/docs/claude-code/github-actions#what-can-claude-do%3F)\n  * [Claude Code Action](https://docs.c",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 820,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 5,
+        "similarity": 0.5068970918655396,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#why-use-claude-code-github-actions%3F)\nWhy use Claude Code GitHub Actions?\n  * **Instant PR creation** : Describe what you need, and Claude creates a complete PR with all necessary changes\n  * **Automated code implementation** : Turn",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 821,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 6,
+        "similarity": 0.5061937132766472,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#manual-setup)\nManual setup\nIf the `/install-github-app` command fails or you prefer manual setup, please follow these manual setup instructions:\n  1. **Install the Claude GitHub app** to your repository: <https://github.com/apps/clau",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 824,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 9,
+        "similarity": 0.4983042776584625,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#example-use-cases)\nExample use cases\nClaude Code GitHub Actions can help you with a variety of tasks. The [examples directory](https://github.com/anthropics/claude-code-action/tree/main/examples) contains ready-to-use workflows for d",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 831,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 16,
+        "similarity": 0.4962063281597595,
+        "content_preview": "2\nConfigure cloud provider authentication\nChoose your cloud provider and set up secure authentication:\nAWS Bedrock\n**Configure AWS to allow GitHub Actions to authenticate securely without storing credentials.**\n> **Security Note** : Use repository-specific configurations and grant only the minimum r",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 828,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 13,
+        "similarity": 0.49419698119163513,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#using-with-aws-bedrock-%26-google-vertex-ai)\nUsing with AWS Bedrock & Google Vertex AI\nFor enterprise environments, you can use Claude Code GitHub Actions with your own cloud infrastructure. This approach gives you control over data ",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 837,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 22,
+        "similarity": 0.4880228638648987,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#advanced-configuration)\nAdvanced configuration\n### \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#action-parameters)\nAction parameters\nThe Claude Code Action v1 uses a simplified configuration: Parameter | Descriptio",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 825,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 10,
+        "similarity": 0.48182415853882865,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#best-practices)\nBest practices\n### \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#claude-md-configuration)\nCLAUDE.md configuration\nCreate a `CLAUDE.md` file in your repository root to define code style guidelines, re",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 818,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 3,
+        "similarity": 0.473653107881546,
+        "content_preview": "* [Using with AWS Bedrock & Google Vertex AI](https://docs.claude.com/en/docs/claude-code/github-actions#using-with-aws-bedrock-%26-google-vertex-ai)\n  * [Prerequisites](https://docs.claude.com/en/docs/claude-code/github-actions#prerequisites)\n  * [For Google Cloud Vertex AI:](https://docs.claude.co",
+        "relevance": null
+      }
+    ]
+  },
+  {
+    "query_id": "tech-03",
+    "query": "implementing custom hooks for git operations",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 824,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 9,
+        "similarity": 0.4002233207092697,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#example-use-cases)\nExample use cases\nClaude Code GitHub Actions can help you with a variety of tasks. The [examples directory](https://github.com/anthropics/claude-code-action/tree/main/examples) contains ready-to-use workflows for d",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 697,
+        "source_document_id": 216,
+        "source_filename": "Agent SDK reference - Python - Claude Docs",
+        "chunk_index": 27,
+        "similarity": 0.3860490803107909,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/python#hook-usage-example)\nHook Usage Example\nCopy\n```\nfrom claude_agent_sdk import query, ClaudeAgentOptions, HookMatcher, HookContext\nfrom typing import Any\nasync def validate_bash_command(\n    input_data: dict[str, Any],\n    tool_use_id: str | Non",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 655,
+        "source_document_id": 215,
+        "source_filename": "Agent SDK reference - TypeScript - Claude Docs",
+        "chunk_index": 19,
+        "similarity": 0.37975710630417137,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#hook-types)\nHook Types\n### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#hookevent)\n`HookEvent`\nAvailable hook events.\nCopy\n```\ntype HookEvent =\n  | 'PreToolUse'\n  | 'PostToolUse'\n  | 'Notification'\n  | 'UserPromptSubmit'\n  | 'Se",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 821,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 6,
+        "similarity": 0.3768540659714482,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#manual-setup)\nManual setup\nIf the `/install-github-app` command fails or you prefer manual setup, please follow these manual setup instructions:\n  1. **Install the Claude GitHub app** to your repository: <https://github.com/apps/clau",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 825,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 10,
+        "similarity": 0.3764590024948147,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#best-practices)\nBest practices\n### \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#claude-md-configuration)\nCLAUDE.md configuration\nCreate a `CLAUDE.md` file in your repository root to define code style guidelines, re",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 656,
+        "source_document_id": 215,
+        "source_filename": "Agent SDK reference - TypeScript - Claude Docs",
+        "chunk_index": 20,
+        "similarity": 0.3750854283469405,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#basehookinput)\n`BaseHookInput`\nBase interface that all hook input types extend.\nCopy\n```\ntype BaseHookInput = {\n  session_id: string;\n  transcript_path: string;\n  cwd: string;\n  permission_mode?: string;\n}\n\n```\n\n#### \n[\u200b](https://docs.clau",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 658,
+        "source_document_id": 215,
+        "source_filename": "Agent SDK reference - TypeScript - Claude Docs",
+        "chunk_index": 22,
+        "similarity": 0.36763557791710166,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#hookjsonoutput)\n`HookJSONOutput`\nHook return value.\nCopy\n```\ntype HookJSONOutput = AsyncHookJSONOutput | SyncHookJSONOutput;\n\n```\n\n#### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#asynchookjsonoutput)\n`AsyncHookJSONOutput`\nCop",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 657,
+        "source_document_id": 215,
+        "source_filename": "Agent SDK reference - TypeScript - Claude Docs",
+        "chunk_index": 21,
+        "similarity": 0.36743890144113145,
+        "content_preview": "#### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#subagentstophookinput)\n`SubagentStopHookInput`\nCopy\n```\ntype SubagentStopHookInput = BaseHookInput & {\n  hook_event_name: 'SubagentStop';\n  stop_hook_active: boolean;\n}\n\n```\n\n#### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#p",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 885,
+        "source_document_id": 236,
+        "source_filename": "Common workflows - Claude Docs",
+        "chunk_index": 16,
+        "similarity": 0.3581770445002893,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/common-workflows#create-custom-slash-commands)\nCreate custom slash commands\nClaude Code supports custom slash commands that you can create to quickly execute specific prompts or tasks. For more details, see the [Slash commands](https://docs.claude.",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 838,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 23,
+        "similarity": 0.35691033940973493,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/docs/claude-code/github-actions#customizing-claude%E2%80%99s-behavior)\nCustomizing Claude\u2019s behavior\nYou can configure Claude\u2019s behavior in two ways:\n  1. **CLAUDE.md** : Define coding standards, review criteria, and project-specific rules in a `CLAUDE.md` file at",
+        "relevance": null
+      }
+    ]
+  },
+  {
+    "query_id": "abbr-01",
+    "query": "MCP server setup",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 854,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 6,
+        "similarity": 0.6329311479525491,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#popular-mcp-servers)\nPopular MCP servers\nHere are some commonly used MCP servers you can connect to Claude Code:\nUse third party MCP servers at your own risk - Anthropic has not verified the correctness or security of all these servers. Make su",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 850,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.6100174552212639,
+        "content_preview": "On this page\n  * [What you can do with MCP](https://docs.claude.com/en/docs/claude-code/mcp#what-you-can-do-with-mcp)\n  * [Popular MCP servers](https://docs.claude.com/en/docs/claude-code/mcp#popular-mcp-servers)\n  * [Installing MCP servers](https://docs.claude.com/en/docs/claude-code/mcp#installing",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 851,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 3,
+        "similarity": 0.6070072416667497,
+        "content_preview": "* [Authenticate with remote MCP servers](https://docs.claude.com/en/docs/claude-code/mcp#authenticate-with-remote-mcp-servers)\n  * [Add MCP servers from JSON configuration](https://docs.claude.com/en/docs/claude-code/mcp#add-mcp-servers-from-json-configuration)\n  * [Import MCP servers from Claude De",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 860,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 12,
+        "similarity": 0.6019029380025241,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#plugin-provided-mcp-servers)\nPlugin-provided MCP servers\n[Plugins](https://docs.claude.com/en/docs/claude-code/plugins) can bundle MCP servers, automatically providing tools and integrations when the plugin is enabled. Plugin MCP servers work ",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 857,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 9,
+        "similarity": 0.5917898173206946,
+        "content_preview": "### Infrastructure & DevOps\n[**Cloudflare**](https://developers.cloudflare.com/agents/model-context-protocol/mcp-servers-for-cloudflare/)\nBuild applications, analyze traffic, monitor performance, and manage security settings through CloudflareMultiple services available. See documentation for specif",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 859,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 11,
+        "similarity": 0.5729796631920148,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#managing-your-servers)\nManaging your servers\nOnce configured, you can manage your MCP servers with these commands:\nCopy\n```\n# List all configured servers\nclaude mcp list\n# Get details for a specific server\nclaude mcp get github\n# Remove a serv",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 868,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 20,
+        "similarity": 0.5697978391942145,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#enterprise-mcp-configuration)\nEnterprise MCP configuration\nFor organizations that need centralized control over MCP servers, Claude Code supports enterprise-managed MCP configurations. This allows IT administrators to:\n  * **Control which MCP s",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 861,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 13,
+        "similarity": 0.5525766940460629,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#mcp-installation-scopes)\nMCP installation scopes\nMCP servers can be configured at three different scope levels, each serving distinct purposes for managing server accessibility and sharing. Understanding these scopes helps you determine the bes",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 853,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 5,
+        "similarity": 0.5421330332756081,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#what-you-can-do-with-mcp)\nWhat you can do with MCP\nWith MCP servers connected, you can ask Claude Code to:\n  * **Implement features from issue trackers** : \u201cAdd the feature described in JIRA issue ENG-4521 and create a PR on GitHub.\u201d\n  * **Anal",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 864,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 16,
+        "similarity": 0.5199401247447843,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#practical-examples)\nPractical examples\n### \n[\u200b](https://docs.claude.com/en/docs/claude-code/mcp#example%3A-monitor-errors-with-sentry)\nExample: Monitor errors with Sentry\nCopy\n```\n# 1. Add the Sentry MCP server\nclaude mcp add --transport http s",
+        "relevance": null
+      }
+    ]
+  },
+  {
+    "query_id": "abbr-02",
+    "query": "SDK migration",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 765,
+        "source_document_id": 222,
+        "source_filename": "Migrate to Claude Agent SDK - Claude Docs",
+        "chunk_index": 3,
+        "similarity": 0.47907578820441976,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#migration-steps)\nMigration Steps\n### \n[\u200b](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#for-typescript%2Fjavascript-projects)\nFor TypeScript/JavaScript Projects\n**1. Uninstall the old package:**\nCopy\n```\nnpm un",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 768,
+        "source_document_id": 222,
+        "source_filename": "Migrate to Claude Agent SDK - Claude Docs",
+        "chunk_index": 6,
+        "similarity": 0.39195814084757286,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#why-the-rename%3F)\nWhy the Rename?\nThe Claude Code SDK was originally designed for coding tasks, but it has evolved into a powerful framework for building all types of AI agents. The new name \u201cClaude Agent SDK\u201d better reflects i",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 766,
+        "source_document_id": 222,
+        "source_filename": "Migrate to Claude Agent SDK - Claude Docs",
+        "chunk_index": 4,
+        "similarity": 0.38885427183781496,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#breaking-changes)\nBreaking changes\nTo improve isolation and explicit configuration, Claude Agent SDK v0.1.0 introduces breaking changes for users migrating from Claude Code SDK. Review this section carefully before migrating.\n##",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 767,
+        "source_document_id": 222,
+        "source_filename": "Migrate to Claude Agent SDK - Claude Docs",
+        "chunk_index": 5,
+        "similarity": 0.3857748508453369,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#settings-sources-no-longer-loaded-by-default)\nSettings Sources No Longer Loaded by Default\n**What changed:** The SDK no longer reads from filesystem settings (CLAUDE.md, settings.json, slash commands, etc.) by default. **Migrat",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 714,
+        "source_document_id": 216,
+        "source_filename": "Agent SDK reference - Python - Claude Docs",
+        "chunk_index": 44,
+        "similarity": 0.38390235708980325,
+        "content_preview": "```",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 709,
+        "source_document_id": 216,
+        "source_filename": "Agent SDK reference - Python - Claude Docs",
+        "chunk_index": 39,
+        "similarity": 0.38390235708980325,
+        "content_preview": "```",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 706,
+        "source_document_id": 216,
+        "source_filename": "Agent SDK reference - Python - Claude Docs",
+        "chunk_index": 36,
+        "similarity": 0.38389096356088204,
+        "content_preview": "```",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 764,
+        "source_document_id": 222,
+        "source_filename": "Migrate to Claude Agent SDK - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.3776870667934418,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide#overview)\nOverview\nThe Claude Code SDK has been renamed to the **Claude Agent SDK** and its documentation has been reorganized. This change reflects the SDK\u2019s broader capabilities for building AI agents beyond just coding tasks.",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 744,
+        "source_document_id": 220,
+        "source_filename": "CLI reference - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.37224693563544253,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 770,
+        "source_document_id": 223,
+        "source_filename": "Claude Code on Amazon Bedrock - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.37224693563544253,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      }
+    ]
+  },
+  {
+    "query_id": "poor-01",
+    "query": "how make agent work",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 875,
+        "source_document_id": 236,
+        "source_filename": "Common workflows - Claude Docs",
+        "chunk_index": 6,
+        "similarity": 0.4909716259274963,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/docs/claude-code/common-workflows#refactor-code)\nRefactor code\nSuppose you need to update old code to use modern patterns and practices.\n1\nIdentify legacy code for refactoring\nCopy\n```\n> find deprecated API usage in our codebase \n\n```\n\n2\nGet refactoring recommendat",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 680,
+        "source_document_id": 216,
+        "source_filename": "Agent SDK reference - Python - Claude Docs",
+        "chunk_index": 10,
+        "similarity": 0.45610713958740234,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/python#classes)\nClasses",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 749,
+        "source_document_id": 220,
+        "source_filename": "CLI reference - Claude Docs",
+        "chunk_index": 6,
+        "similarity": 0.4540540062092604,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/docs/claude-code/cli-reference#agents-flag-format)\nAgents flag format\nThe `--agents` flag accepts a JSON object that defines one or more custom subagents. Each subagent requires a unique name (as the key) and a definition object with the following fields: Field | ",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 519,
+        "source_document_id": 200,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.4336026906967163,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#installation)\nInstallation\nTypeScript\nPython\nCopy\n```\nnpm install @anthropic-ai/claude-agent-sdk\n\n```\n\n## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#sdk-options)\nSDK Options\nThe Claude Agent SDK is available in multiple forms to s",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 499,
+        "source_document_id": 196,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.4336026906967163,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#installation)\nInstallation\nTypeScript\nPython\nCopy\n```\nnpm install @anthropic-ai/claude-agent-sdk\n\n```\n\n## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#sdk-options)\nSDK Options\nThe Claude Agent SDK is available in multiple forms to s",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 501,
+        "source_document_id": 196,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 4,
+        "similarity": 0.4222066746826969,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#system-prompts)\nSystem Prompts\nSystem prompts define your agent\u2019s role, expertise, and behavior. This is where you specify what kind of agent you\u2019re building.\n### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#tool-permissions)\nTool ",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 521,
+        "source_document_id": 200,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 4,
+        "similarity": 0.4222066746826969,
+        "content_preview": "### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#system-prompts)\nSystem Prompts\nSystem prompts define your agent\u2019s role, expertise, and behavior. This is where you specify what kind of agent you\u2019re building.\n### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#tool-permissions)\nTool ",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 643,
+        "source_document_id": 215,
+        "source_filename": "Agent SDK reference - TypeScript - Claude Docs",
+        "chunk_index": 7,
+        "similarity": 0.4069337844848633,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#installation)\nInstallation\nCopy\n```\nnpm install @anthropic-ai/claude-agent-sdk\n\n```",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 646,
+        "source_document_id": 215,
+        "source_filename": "Agent SDK reference - TypeScript - Claude Docs",
+        "chunk_index": 10,
+        "similarity": 0.3884087071906006,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/typescript#types)\nTypes",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 558,
+        "source_document_id": 204,
+        "source_filename": "Streaming Input - Claude Docs",
+        "chunk_index": 4,
+        "similarity": 0.38416238928809165,
+        "content_preview": "## Tool Integration\nFull access to all tools and custom MCP servers during the session\n## Hooks Support\nUse lifecycle hooks to customize behavior at various points\n## Real-time Feedback\nSee responses as they\u2019re generated, not just final results\n## Context Persistence\nMaintain conversation context ac",
+        "relevance": null
+      }
+    ]
+  },
+  {
+    "query_id": "tech-02",
+    "query": "differences between Claude Code and Claude Agent SDK",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 849,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6836241672263058,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 870,
+        "source_document_id": 236,
+        "source_filename": "Common workflows - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6829230203857887,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 804,
+        "source_document_id": 228,
+        "source_filename": "Claude Code on Google Vertex AI - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6829045821967581,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 770,
+        "source_document_id": 223,
+        "source_filename": "Claude Code on Amazon Bedrock - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6829045821967581,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 798,
+        "source_document_id": 227,
+        "source_filename": "Claude Code overview - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6829045821967581,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 785,
+        "source_document_id": 226,
+        "source_filename": "Troubleshooting - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6829045821967581,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 816,
+        "source_document_id": 231,
+        "source_filename": "Claude Code GitHub Actions - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6829045821967581,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 744,
+        "source_document_id": 220,
+        "source_filename": "CLI reference - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6829045821967581,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 499,
+        "source_document_id": 196,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.6643977961303129,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#installation)\nInstallation\nTypeScript\nPython\nCopy\n```\nnpm install @anthropic-ai/claude-agent-sdk\n\n```\n\n## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#sdk-options)\nSDK Options\nThe Claude Agent SDK is available in multiple forms to s",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 519,
+        "source_document_id": 200,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.6643977961303129,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#installation)\nInstallation\nTypeScript\nPython\nCopy\n```\nnpm install @anthropic-ai/claude-agent-sdk\n\n```\n\n## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#sdk-options)\nSDK Options\nThe Claude Agent SDK is available in multiple forms to s",
+        "relevance": null
+      }
+    ]
+  },
+  {
+    "query_id": "custom-01",
+    "query": "how to implement features using Claude Agent SDK",
+    "results": [
+      {
+        "rank": 1,
+        "chunk_id": 703,
+        "source_document_id": 216,
+        "source_filename": "Agent SDK reference - Python - Claude Docs",
+        "chunk_index": 33,
+        "similarity": 0.6711096171536702,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/python#advanced-features-with-claudesdkclient)\nAdvanced Features with ClaudeSDKClient",
+        "relevance": null
+      },
+      {
+        "rank": 2,
+        "chunk_id": 500,
+        "source_document_id": 196,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 3,
+        "similarity": 0.6557135767595264,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#core-concepts)\nCore Concepts\n### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#authentication)\nAuthentication\nFor basic authentication, retrieve an Claude API key from the [Claude Console](https://console.anthropic.com/) and set the ",
+        "relevance": null
+      },
+      {
+        "rank": 3,
+        "chunk_id": 520,
+        "source_document_id": 200,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 3,
+        "similarity": 0.6557135767595264,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#core-concepts)\nCore Concepts\n### \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#authentication)\nAuthentication\nFor basic authentication, retrieve an Claude API key from the [Claude Console](https://console.anthropic.com/) and set the ",
+        "relevance": null
+      },
+      {
+        "rank": 4,
+        "chunk_id": 499,
+        "source_document_id": 196,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.6414257074252204,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#installation)\nInstallation\nTypeScript\nPython\nCopy\n```\nnpm install @anthropic-ai/claude-agent-sdk\n\n```\n\n## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#sdk-options)\nSDK Options\nThe Claude Agent SDK is available in multiple forms to s",
+        "relevance": null
+      },
+      {
+        "rank": 5,
+        "chunk_id": 519,
+        "source_document_id": 200,
+        "source_filename": "Agent SDK overview - Claude Docs",
+        "chunk_index": 2,
+        "similarity": 0.6414257074252204,
+        "content_preview": "## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#installation)\nInstallation\nTypeScript\nPython\nCopy\n```\nnpm install @anthropic-ai/claude-agent-sdk\n\n```\n\n## \n[\u200b](https://docs.claude.com/en/api/agent-sdk/overview#sdk-options)\nSDK Options\nThe Claude Agent SDK is available in multiple forms to s",
+        "relevance": null
+      },
+      {
+        "rank": 6,
+        "chunk_id": 849,
+        "source_document_id": 235,
+        "source_filename": "Connect Claude Code to tools via MCP - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6141504415363347,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 7,
+        "chunk_id": 770,
+        "source_document_id": 223,
+        "source_filename": "Claude Code on Amazon Bedrock - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6133400702488558,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 8,
+        "chunk_id": 798,
+        "source_document_id": 227,
+        "source_filename": "Claude Code overview - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6133400702488558,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 9,
+        "chunk_id": 744,
+        "source_document_id": 220,
+        "source_filename": "CLI reference - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6133400702488558,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      },
+      {
+        "rank": 10,
+        "chunk_id": 785,
+        "source_document_id": 226,
+        "source_filename": "Troubleshooting - Claude Docs",
+        "chunk_index": 1,
+        "similarity": 0.6133400702488558,
+        "content_preview": "##### Claude Code SDK\n  * [Migrate to Claude Agent SDK](https://docs.claude.com/en/docs/claude-code/sdk/migration-guide)\n\n\n##### Deployment\n  * [Overview](https://docs.claude.com/en/docs/claude-code/third-party-integrations)\n  * [Amazon Bedrock](https://docs.claude.com/en/docs/claude-code/amazon-bed",
+        "relevance": null
+      }
+    ]
+  }
+]
