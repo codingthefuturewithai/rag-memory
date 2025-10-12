@@ -48,11 +48,7 @@ The RAG Memory MCP server exposes 11 tools for AI agents to manage a persistent 
 For use with Claude Desktop or other MCP clients:
 
 ```bash
-# Convenience command (recommended)
 uv run rag-mcp-stdio
-
-# Or using the general command
-uv run rag-mcp --transport stdio
 ```
 
 The server starts in stdio mode (standard input/output transport) and waits for JSON-RPC messages.
@@ -66,11 +62,7 @@ The MCP server supports three transport modes for different use cases:
 **Use case**: Claude Desktop, MCP clients
 
 ```bash
-# Convenience command (recommended)
 uv run rag-mcp-stdio
-
-# Or using the general command
-uv run rag-mcp --transport stdio
 ```
 
 **Characteristics:**
@@ -84,11 +76,7 @@ uv run rag-mcp --transport stdio
 **Use case**: MCP Inspector (browser-based testing)
 
 ```bash
-# Convenience command (recommended, port 3001)
-uv run rag-mcp-sse
-
-# Or using the general command
-uv run rag-mcp --transport sse --port 3001
+uv run rag-mcp-sse    # Runs on port 3001
 ```
 
 **Characteristics:**
@@ -102,11 +90,7 @@ uv run rag-mcp --transport sse --port 3001
 **Use case**: Web integrations, HTTP-based clients
 
 ```bash
-# Convenience command (recommended, port 3001)
-uv run rag-mcp-http
-
-# Or using the general command
-uv run rag-mcp --transport streamable-http --port 3001
+uv run rag-mcp-http    # Runs on port 3001
 ```
 
 **Characteristics:**
@@ -239,7 +223,7 @@ The inspector will show:
 
 ### Configuration
 
-**Option 1: Using uv (local development):**
+Add this to `claude_desktop_config.json`:
 
 ```json
 {
@@ -260,21 +244,6 @@ The inspector will show:
 }
 ```
 
-**Option 2: After global install** (via `pipx install .`):
-
-```json
-{
-  "mcpServers": {
-    "rag-memory": {
-      "command": "rag-mcp-stdio",
-      "env": {
-        "OPENAI_API_KEY": "sk-your-api-key-here"
-      }
-    }
-  }
-}
-```
-
 **IMPORTANT**: Update the `--directory` path to match your installation location!
 
 ### Getting Your Path
@@ -282,18 +251,6 @@ The inspector will show:
 ```bash
 cd /path/to/rag-memory
 pwd  # Copy this output
-```
-
-### Installing Globally (Optional)
-
-For the simpler Option 2 config:
-
-```bash
-# Using pipx (recommended - isolated environment)
-pipx install .
-
-# Or using pip (installs in current Python environment)
-pip install .
 ```
 
 ### Verify Configuration
