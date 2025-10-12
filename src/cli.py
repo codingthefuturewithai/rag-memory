@@ -28,6 +28,9 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
+# Suppress dotenv parsing warnings from dependencies (e.g., Crawl4AI)
+logging.getLogger("dotenv.main").setLevel(logging.ERROR)
+
 console = Console()
 
 
