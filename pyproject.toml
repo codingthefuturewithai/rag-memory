@@ -28,6 +28,9 @@ dependencies = [
     # Web Crawling
     "crawl4ai>=0.4.0",
     "playwright>=1.49.0",
+
+    # MCP Server
+    "mcp[cli]>=1.0.0",
 ]
 
 [project.optional-dependencies]

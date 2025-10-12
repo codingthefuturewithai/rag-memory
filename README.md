@@ -336,6 +336,98 @@ python --version  # Should be 3.12
 uv --version
 ```
 
+## MCP Server Usage
+
+This RAG system can be accessed by AI agents via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). The MCP server exposes **11 tools** for complete document lifecycle management.
+
+### What is MCP?
+
+MCP is Anthropic's open standard for connecting AI agents to external systems (adopted by Claude Desktop, OpenAI, and Google DeepMind). Think "USB-C for AI" - provides standardized way for agents to discover and use capabilities.
+
+### Quick Start
+
+**Start the server (stdio mode for Claude Desktop):**
+```bash
+uv run python -m src.mcp.server
+```
+
+**Test with MCP Inspector:**
+```bash
+uv run mcp dev src/mcp/server.py
+```
+
+**Multiple transport modes available:**
+```bash
+# stdio (default - for Claude Desktop)
+uv run python -m src.mcp.server --transport stdio
+
+# SSE (for browser clients)
+uv run python -m src.mcp.server --transport sse --port 3001
+
+# Streamable HTTP (for web integrations)
+uv run python -m src.mcp.server --transport streamable-http --port 3001
+```
+
+### Available Tools (11 Total)
+
+#### Core RAG (3 tools)
+1. **`search_documents`** - Semantic search with vector similarity
+2. **`list_collections`** - Discover available knowledge bases
+3. **`ingest_text`** - Add text content with auto-chunking
+
+#### Document Management (4 tools)
+4. **`list_documents`** - Browse documents with pagination
+5. **`get_document_by_id`** - Retrieve full source document
+6. **`update_document`** ⭐ - Edit existing documents
+7. **`delete_document`** ⭐ - Remove outdated content
+
+#### Advanced Ingestion (4 tools)
+8. **`get_collection_info`** - Collection stats + crawl history
+9. **`analyze_website`** ⭐ **NEW** - Sitemap analysis for planning crawls
+10. **`ingest_url`** - Crawl web pages with duplicate prevention
+11. **`ingest_file`** - Ingest text files from filesystem
+12. **`ingest_directory`** - Batch ingest from directory
+
+### Key Features
+
+- **Context window optimization**: Minimal responses by default, optional extended data
+- **Duplicate prevention**: `ingest_url` prevents accidental re-crawling
+- **Website analysis**: `analyze_website` helps agents discover site structure before crawling
+- **Crawl tracking**: `get_collection_info` shows crawl history to avoid duplicates
+- **Memory management**: `update_document` and `delete_document` keep knowledge current
+
+### Complete Documentation
+
+📚 **See [MCP_SERVER_GUIDE.md](./MCP_SERVER_GUIDE.md) for:**
+- Detailed transport mode setup
+- MCP Inspector testing instructions
+- Claude Desktop configuration
+- Tool reference with examples
+- Common workflows
+- Troubleshooting guide
+
+### Quick Claude Desktop Setup
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "uv",
+      "args": ["--directory", "/FULL/PATH/TO/rag-pgvector-poc", "run", "python", "-m", "src.mcp.server"],
+      "env": {
+        "OPENAI_API_KEY": "sk-your-key-here"
+      }
+    }
+  }
+}
+```
+
+**Replace `/FULL/PATH/TO/rag-pgvector-poc` with your actual path** (run `pwd` in project directory).
+
+---
+
 ## Development
 
 ### Running Tests

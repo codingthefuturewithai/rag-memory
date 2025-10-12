@@ -405,6 +405,94 @@ This is a **proof-of-concept**, not production code:
 - Per-query cost: negligible (~$0.00003)
 - 6.5x cheaper than text-embedding-3-large with similar performance
 
+## MCP Server (Model Context Protocol)
+
+### Overview
+
+The RAG system exposes an MCP server for AI agent integration. This enables Claude Desktop, OpenAI agents, and other MCP-compatible agents to access the RAG functionality.
+
+**Status:** ✅ Fully implemented and tested (2025-10-12)
+- 12 tools registered and functional
+- Complete CRUD operations for document management
+- All tests passing
+
+### Quick Start
+
+**Start the server:**
+```bash
+uv run python -m src.mcp.server
+```
+
+**Connect with Claude Desktop:**
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "uv",
+      "args": ["--directory", "/Users/timkitchens/projects/ai-projects/rag-pgvector-poc", "run", "python", "-m", "src.mcp.server"],
+      "env": {
+        "OPENAI_API_KEY": "your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+### Available Tools (12 total)
+
+**Core RAG Operations (3 essential):**
+1. `search_documents` - Vector similarity search
+2. `list_collections` - Discover knowledge bases
+3. `ingest_text` - Add text content with auto-chunking
+
+**Document Management (3 CRUD - ESSENTIAL for agent memory):**
+4. `list_documents` - List documents with pagination
+5. `update_document` - Edit content/metadata (triggers re-chunking/re-embedding)
+6. `delete_document` - Remove outdated documents
+
+**Enhanced Ingestion (6 advanced):**
+7. `get_document_by_id` - Retrieve full source document
+8. `get_collection_info` - Detailed collection statistics
+9. `ingest_url` - Crawl web pages (Crawl4AI integration)
+10. `ingest_file` - Ingest from file system
+11. `ingest_directory` - Batch ingest from directory
+12. `recrawl_url` - Update web documentation (delete + re-ingest)
+
+### Implementation Details
+
+**Server Name:** `rag-memory`
+**Location:** `src/mcp/server.py` (FastMCP)
+**Tool Implementations:** `src/mcp/tools.py` (all 12 tools)
+**Testing:** `test_mcp_invocation.py` - validates all tools
+
+**Key Features:**
+- Auto-initialization of RAG components on startup
+- JSON-serializable response format
+- Comprehensive error handling
+- Support for agent memory use cases (update/delete critical)
+
+**Use Cases:**
+- **Agent memory management:** Update company vision, coding standards, personal info
+- **Knowledge base construction:** Crawl docs, search, retrieve context
+- **Document lifecycle:** Create, read, update, delete with re-chunking
+
+**Testing:**
+```bash
+# Validate all tools
+uv run python test_mcp_invocation.py
+
+# List registered tools
+uv run python test_mcp_tools.py
+
+# Test with MCP Inspector
+npx @modelcontextprotocol/inspector
+```
+
+**Documentation:** See `MCP_IMPLEMENTATION_PLAN.md` for complete specifications and implementation details.
+
+---
+
 ## RAG Search Optimization Results (2025-10-11)
 
 **TL;DR: Baseline vector-only search is optimal. Both attempted optimizations decreased performance.**
