@@ -199,12 +199,17 @@ class WebsiteAnalyzer:
 
         return stats
 
-    def analyze(self) -> Dict:
+    def analyze(self, include_url_lists: bool = False, max_urls_per_pattern: int = 10) -> Dict:
         """
         Perform complete website analysis.
 
         Returns raw data about website structure for AI agent to process.
         NO recommendations or heuristics - just facts.
+
+        Args:
+            include_url_lists: If False (default), only returns pattern_stats summary.
+                              If True, includes full URL lists (may be large for sites with 1000s of URLs).
+            max_urls_per_pattern: Maximum URLs to return per pattern when include_url_lists=True (default: 10)
 
         Returns:
             Dictionary with analysis results:
@@ -212,11 +217,11 @@ class WebsiteAnalyzer:
                 "base_url": str,
                 "analysis_method": str,  # "sitemap" or "not_found"
                 "total_urls": int,
-                "url_groups": {
-                    "/pattern": ["url1", "url2", ...]
-                },
-                "pattern_stats": {
+                "pattern_stats": {  # Always included (lightweight summary)
                     "/pattern": {"count": int, "avg_depth": float, "example_urls": []}
+                },
+                "url_groups": {  # Only if include_url_lists=True (full URLs)
+                    "/pattern": ["url1", "url2", ...]  # Limited to max_urls_per_pattern
                 },
                 "notes": str  # Important context about data quality
             }
@@ -229,7 +234,6 @@ class WebsiteAnalyzer:
                 "base_url": self.base_url,
                 "analysis_method": method,
                 "total_urls": 0,
-                "url_groups": {},
                 "pattern_stats": {},
                 "notes": (
                     "No sitemap found at common locations (/sitemap.xml, /sitemap_index.xml). "
@@ -250,30 +254,48 @@ class WebsiteAnalyzer:
             reverse=True
         )
 
-        return {
+        result = {
             "base_url": self.base_url,
             "analysis_method": method,
             "total_urls": len(urls),
-            "url_groups": url_groups,
             "pattern_stats": dict(sorted_patterns),
             "notes": (
                 f"Sitemap found with {len(urls)} URLs grouped into {len(url_groups)} patterns. "
                 "Each pattern represents URLs sharing the same first path segment (e.g., /api/*, /docs/*). "
-                "Use this data to identify sections of the site and choose appropriate starting URLs for crawling."
+                "Use pattern_stats to understand site structure. Set include_url_lists=True to get full URL lists."
             ),
         }
 
+        # Optionally include full URL lists (limited per pattern to avoid overwhelming response)
+        if include_url_lists:
+            limited_url_groups = {}
+            for pattern, urls_list in url_groups.items():
+                # Limit URLs per pattern, prioritize shortest URLs (often index pages)
+                sorted_urls = sorted(urls_list, key=lambda u: len(urlparse(u).path))
+                limited_url_groups[pattern] = sorted_urls[:max_urls_per_pattern]
+            result["url_groups"] = limited_url_groups
+            result["notes"] += f" Full URL lists included (max {max_urls_per_pattern} URLs per pattern)."
 
-def analyze_website(base_url: str, timeout: int = 10) -> Dict:
+        return result
+
+
+def analyze_website(
+    base_url: str,
+    timeout: int = 10,
+    include_url_lists: bool = False,
+    max_urls_per_pattern: int = 10
+) -> Dict:
     """
     Convenience function to analyze a website.
 
     Args:
         base_url: The base URL of the website to analyze
         timeout: Request timeout in seconds
+        include_url_lists: If True, includes full URL lists (limited per pattern)
+        max_urls_per_pattern: Max URLs per pattern when include_url_lists=True
 
     Returns:
         Analysis results dictionary (see WebsiteAnalyzer.analyze())
     """
     analyzer = WebsiteAnalyzer(base_url, timeout)
-    return analyzer.analyze()
+    return analyzer.analyze(include_url_lists, max_urls_per_pattern)

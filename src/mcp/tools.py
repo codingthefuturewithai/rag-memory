@@ -269,15 +269,23 @@ def get_collection_info_impl(
         raise
 
 
-def analyze_website_impl(base_url: str, timeout: int = 10) -> Dict[str, Any]:
+def analyze_website_impl(
+    base_url: str,
+    timeout: int = 10,
+    include_url_lists: bool = False,
+    max_urls_per_pattern: int = 10
+) -> Dict[str, Any]:
     """
     Implementation of analyze_website tool.
 
     Extracts raw data about website structure (sitemap parsing, URL grouping).
     NO recommendations or heuristics - just facts for AI agent to reason about.
+
+    By default, returns only pattern_stats summary (lightweight). Agent can request
+    full URL lists if needed by setting include_url_lists=True.
     """
     try:
-        result = analyze_website(base_url, timeout)
+        result = analyze_website(base_url, timeout, include_url_lists, max_urls_per_pattern)
         return result
     except Exception as e:
         logger.error(f"analyze_website failed: {e}")

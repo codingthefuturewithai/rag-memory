@@ -314,7 +314,12 @@ def get_collection_info(collection_name: str) -> dict:
 
 
 @mcp.tool()
-def analyze_website(base_url: str, timeout: int = 10) -> dict:
+def analyze_website(
+    base_url: str,
+    timeout: int = 10,
+    include_url_lists: bool = False,
+    max_urls_per_pattern: int = 10
+) -> dict:
     """
     Analyze website structure to help plan comprehensive crawling.
 
@@ -325,26 +330,49 @@ def analyze_website(base_url: str, timeout: int = 10) -> dict:
     Returns RAW DATA only - NO recommendations or heuristics. The AI agent
     uses its LLM to interpret the URL patterns and decide what to crawl.
 
+    IMPORTANT: Must provide the website ROOT URL, not a specific page.
+    - ✓ CORRECT: "https://docs.example.com" or "https://docs.example.com/"
+    - ✗ WRONG: "https://docs.example.com/en/api/overview"
+
+    The tool looks for sitemap.xml at the root (e.g., /sitemap.xml). Providing
+    a specific page URL will fail to find the sitemap.
+
+    VOLUME CONTROL: By default, returns only pattern_stats summary (lightweight,
+    optimized for context window). For large sites with 1000s of URLs, this
+    prevents overwhelming the agent. Set include_url_lists=True only if you
+    need specific URLs from patterns.
+
     Args:
-        base_url: Website base URL (e.g., "https://docs.example.com")
+        base_url: Website ROOT URL (e.g., "https://docs.example.com")
+                 Must be the domain root, not a specific page path.
         timeout: Request timeout in seconds (default: 10)
+        include_url_lists: If True, includes full URL lists per pattern (default: False).
+                          Only use for sites with <1000 URLs or when you need specific URLs.
+        max_urls_per_pattern: Max URLs per pattern when include_url_lists=True (default: 10).
+                             Returns shortest URLs first (often index/overview pages).
 
     Returns:
+        Minimal response (default, include_url_lists=False):
         {
             "base_url": str,
             "analysis_method": str,  # "sitemap" or "not_found"
-            "total_urls": int,
-            "url_groups": {
-                "/pattern": ["url1", "url2", ...]  # URLs grouped by first path segment
-            },
-            "pattern_stats": {
+            "total_urls": int,  # Total URLs found in sitemap
+            "pattern_stats": {  # Lightweight summary - ALWAYS included
                 "/pattern": {
                     "count": int,  # Number of URLs in this pattern
                     "avg_depth": float,  # Average path depth (2.3 = ~2-3 segments deep)
-                    "example_urls": [str]  # Up to 3 shortest URLs (often index pages)
+                    "example_urls": [str]  # Up to 3 shortest URLs (often entry points)
                 }
             },
             "notes": str  # Context about data quality and completeness
+        }
+
+        Extended response (include_url_lists=True):
+        {
+            ...same as above...
+            "url_groups": {  # Full URL lists per pattern (limited by max_urls_per_pattern)
+                "/pattern": ["url1", "url2", ...]
+            }
         }
 
     Example workflow:
@@ -371,8 +399,9 @@ def analyze_website(base_url: str, timeout: int = 10) -> dict:
         - URL grouping is simple path-based (no AI inference)
         - Agent should use its LLM to identify which patterns to crawl
         - Common patterns: /api, /docs, /guides, /blog, /reference
+        - For large sites (3000+ URLs), use default settings (pattern_stats only)
     """
-    return analyze_website_impl(base_url, timeout)
+    return analyze_website_impl(base_url, timeout, include_url_lists, max_urls_per_pattern)
 
 
 @mcp.tool()
