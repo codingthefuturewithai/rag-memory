@@ -33,6 +33,8 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Initialize MCP server
+# Note: For local testing with streamable-http, auth is disabled by default
+# For production use, configure proper authentication
 mcp = FastMCP("rag-memory")
 
 # Initialize RAG components once (reused across tool calls)
@@ -822,8 +824,24 @@ def list_documents(
 
 def main():
     """Run the MCP server."""
-    logger.info("Starting RAG memory MCP server...")
-    mcp.run()
+    import sys
+    import os
+
+    # Support transport mode via command line argument
+    transport = "stdio"  # Default
+    if len(sys.argv) > 1:
+        if sys.argv[1] in ["stdio", "sse", "streamable-http"]:
+            transport = sys.argv[1]
+
+    # For streamable-http, disable auth for local testing if MCP_NO_AUTH is set
+    if transport == "streamable-http" and os.environ.get("MCP_NO_AUTH") == "1":
+        logger.warning("⚠️  Running streamable-http WITHOUT authentication (MCP_NO_AUTH=1)")
+        logger.warning("⚠️  This is INSECURE and should only be used for local testing!")
+        # Set environment variable that FastMCP checks
+        os.environ["MCP_DISABLE_AUTH"] = "1"
+
+    logger.info(f"Starting RAG memory MCP server with {transport} transport...")
+    mcp.run(transport=transport)
 
 
 if __name__ == "__main__":
