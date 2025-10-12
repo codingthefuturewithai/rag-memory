@@ -876,5 +876,26 @@ def main():
     run_cli()
 
 
+def main_stdio():
+    """Run MCP server in stdio mode (for Claude Desktop/Cursor)."""
+    import sys
+    sys.argv = ['rag-mcp-stdio', '--transport', 'stdio']
+    main()
+
+
+def main_sse():
+    """Run MCP server in SSE mode (for MCP Inspector)."""
+    import sys
+    sys.argv = ['rag-mcp-sse', '--transport', 'sse', '--port', '3001']
+    main()
+
+
+def main_http():
+    """Run MCP server in HTTP mode (for web integrations)."""
+    import sys
+    sys.argv = ['rag-mcp-http', '--transport', 'streamable-http', '--port', '3001']
+    main()
+
+
 if __name__ == "__main__":
     main()

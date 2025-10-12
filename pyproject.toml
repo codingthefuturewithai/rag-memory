@@ -46,7 +46,14 @@ jupyter = [
 ]
 
 [project.scripts]
+# CLI tool for document management
 rag = "src.cli:main"
+
+# MCP Server convenience wrappers
+rag-mcp = "src.mcp.server:main"              # General (accepts CLI args)
+rag-mcp-stdio = "src.mcp.server:main_stdio"  # For Claude Desktop/Cursor
+rag-mcp-sse = "src.mcp.server:main_sse"      # For MCP Inspector (port 3001)
+rag-mcp-http = "src.mcp.server:main_http"    # For HTTP integrations (port 3001)
 
 [build-system]
 requires = ["hatchling"]

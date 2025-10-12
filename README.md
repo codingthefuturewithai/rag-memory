@@ -346,26 +346,25 @@ MCP is Anthropic's open standard for connecting AI agents to external systems (a
 
 ### Quick Start
 
-**Start the server (stdio mode for Claude Desktop):**
+**Convenience commands (local development):**
 ```bash
-uv run python -m src.mcp.server
+uv run rag-mcp-stdio    # For Claude Desktop/Cursor
+uv run rag-mcp-sse      # For MCP Inspector (port 3001)
+uv run rag-mcp-http     # For web integrations (port 3001)
 ```
 
-**Test with MCP Inspector:**
+**Or use the general command with options:**
 ```bash
-uv run mcp dev src/mcp/server.py
+uv run rag-mcp --transport stdio
+uv run rag-mcp --transport sse --port 3001
+uv run rag-mcp --transport streamable-http --port 3001
 ```
 
-**Multiple transport modes available:**
+**After installing globally** (via `pip install .` or `pipx install .`):
 ```bash
-# stdio (default - for Claude Desktop)
-uv run python -m src.mcp.server --transport stdio
-
-# SSE (for browser clients)
-uv run python -m src.mcp.server --transport sse --port 3001
-
-# Streamable HTTP (for web integrations)
-uv run python -m src.mcp.server --transport streamable-http --port 3001
+rag-mcp-stdio    # Works without 'uv run'
+rag-mcp-sse
+rag-mcp-http
 ```
 
 ### Available Tools (11 Total)
@@ -408,14 +407,27 @@ uv run python -m src.mcp.server --transport streamable-http --port 3001
 
 ### Quick Claude Desktop Setup
 
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
+**Option 1: Using uv (local development):**
 ```json
 {
   "mcpServers": {
     "rag-memory": {
       "command": "uv",
-      "args": ["--directory", "/FULL/PATH/TO/rag-memory", "run", "python", "-m", "src.mcp.server"],
+      "args": ["--directory", "/FULL/PATH/TO/rag-memory", "run", "rag-mcp-stdio"],
+      "env": {
+        "OPENAI_API_KEY": "sk-your-key-here"
+      }
+    }
+  }
+}
+```
+
+**Option 2: After global install** (via `pipx install .`):
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "rag-mcp-stdio",
       "env": {
         "OPENAI_API_KEY": "sk-your-key-here"
       }

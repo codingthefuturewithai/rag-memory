@@ -48,7 +48,11 @@ The RAG Memory MCP server exposes 11 tools for AI agents to manage a persistent 
 For use with Claude Desktop or other MCP clients:
 
 ```bash
-uv run python -m src.mcp.server
+# Convenience command (recommended)
+uv run rag-mcp-stdio
+
+# Or using the general command
+uv run rag-mcp --transport stdio
 ```
 
 The server starts in stdio mode (standard input/output transport) and waits for JSON-RPC messages.
@@ -62,9 +66,11 @@ The MCP server supports three transport modes for different use cases:
 **Use case**: Claude Desktop, MCP clients
 
 ```bash
-uv run python -m src.mcp.server
-# or explicitly:
-uv run python -m src.mcp.server --transport stdio
+# Convenience command (recommended)
+uv run rag-mcp-stdio
+
+# Or using the general command
+uv run rag-mcp --transport stdio
 ```
 
 **Characteristics:**
@@ -78,7 +84,11 @@ uv run python -m src.mcp.server --transport stdio
 **Use case**: MCP Inspector (browser-based testing)
 
 ```bash
-uv run python -m src.mcp.server --transport sse --port 3001
+# Convenience command (recommended, port 3001)
+uv run rag-mcp-sse
+
+# Or using the general command
+uv run rag-mcp --transport sse --port 3001
 ```
 
 **Characteristics:**
@@ -92,7 +102,11 @@ uv run python -m src.mcp.server --transport sse --port 3001
 **Use case**: Web integrations, HTTP-based clients
 
 ```bash
-uv run python -m src.mcp.server --transport streamable-http --port 3001
+# Convenience command (recommended, port 3001)
+uv run rag-mcp-http
+
+# Or using the general command
+uv run rag-mcp --transport streamable-http --port 3001
 ```
 
 **Characteristics:**
@@ -225,7 +239,7 @@ The inspector will show:
 
 ### Configuration
 
-Add this to `claude_desktop_config.json`:
+**Option 1: Using uv (local development):**
 
 ```json
 {
@@ -236,10 +250,23 @@ Add this to `claude_desktop_config.json`:
         "--directory",
         "/Users/timkitchens/projects/ai-projects/rag-memory",
         "run",
-        "python",
-        "-m",
-        "src.mcp.server"
+        "rag-mcp-stdio"
       ],
+      "env": {
+        "OPENAI_API_KEY": "sk-your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**Option 2: After global install** (via `pipx install .`):
+
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "rag-mcp-stdio",
       "env": {
         "OPENAI_API_KEY": "sk-your-api-key-here"
       }
@@ -255,6 +282,18 @@ Add this to `claude_desktop_config.json`:
 ```bash
 cd /path/to/rag-memory
 pwd  # Copy this output
+```
+
+### Installing Globally (Optional)
+
+For the simpler Option 2 config:
+
+```bash
+# Using pipx (recommended - isolated environment)
+pipx install .
+
+# Or using pip (installs in current Python environment)
+pip install .
 ```
 
 ### Verify Configuration
