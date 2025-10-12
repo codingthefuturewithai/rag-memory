@@ -165,7 +165,7 @@ See [MCP Quick Start](MCP_QUICK_START.md) for AI agent configuration.
 
 ### Complete Documentation
 - [MCP Quick Start](MCP_QUICK_START.md) - MCP server setup for AI agents
-- [ENVIRONMENT_VARIABLES.md](../ENVIRONMENT_VARIABLES.md) - Config system explained
+- [docs/ENVIRONMENT_VARIABLES.md](../docs/ENVIRONMENT_VARIABLES.md) - Config system explained
 - [CLAUDE.md](../CLAUDE.md) - Complete CLI commands reference
 - [docs/MCP_SERVER_GUIDE.md](../docs/MCP_SERVER_GUIDE.md) - All 11 MCP tools detailed
 - [README.md](../README.md) - Full project documentation

@@ -41,7 +41,7 @@ Before configuring the MCP server, ensure:
    2. Project `.env` file (current directory only - for developers)
    3. Global `~/.rag-memory-env` file (lowest priority - for end users)
 
-   See [ENVIRONMENT_VARIABLES.md](../ENVIRONMENT_VARIABLES.md) for complete details.
+   See [docs/ENVIRONMENT_VARIABLES.md](../docs/ENVIRONMENT_VARIABLES.md) for complete details.
 
    **IMPORTANT:**
    - Never expose API keys to AI assistants
