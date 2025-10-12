@@ -338,21 +338,75 @@ uv --version
 
 ## MCP Server Usage
 
-This RAG system can be accessed by AI agents via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). The MCP server exposes 12 tools for complete document lifecycle management.
+This RAG system can be accessed by AI agents via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/). The MCP server exposes **11 tools** for complete document lifecycle management.
 
 ### What is MCP?
 
 MCP is Anthropic's open standard for connecting AI agents to external systems (adopted by Claude Desktop, OpenAI, and Google DeepMind). Think "USB-C for AI" - provides standardized way for agents to discover and use capabilities.
 
-### Starting the MCP Server
+### Quick Start
 
+**Start the server (stdio mode for Claude Desktop):**
 ```bash
 uv run python -m src.mcp.server
 ```
 
-The server initializes all RAG components and exposes tools via stdio transport.
+**Test with MCP Inspector:**
+```bash
+uv run mcp dev src/mcp/server.py
+```
 
-### Connecting with Claude Desktop
+**Multiple transport modes available:**
+```bash
+# stdio (default - for Claude Desktop)
+uv run python -m src.mcp.server --transport stdio
+
+# SSE (for browser clients)
+uv run python -m src.mcp.server --transport sse --port 3001
+
+# Streamable HTTP (for web integrations)
+uv run python -m src.mcp.server --transport streamable-http --port 3001
+```
+
+### Available Tools (11 Total)
+
+#### Core RAG (3 tools)
+1. **`search_documents`** - Semantic search with vector similarity
+2. **`list_collections`** - Discover available knowledge bases
+3. **`ingest_text`** - Add text content with auto-chunking
+
+#### Document Management (4 tools)
+4. **`list_documents`** - Browse documents with pagination
+5. **`get_document_by_id`** - Retrieve full source document
+6. **`update_document`** ⭐ - Edit existing documents
+7. **`delete_document`** ⭐ - Remove outdated content
+
+#### Advanced Ingestion (4 tools)
+8. **`get_collection_info`** - Collection stats + crawl history
+9. **`analyze_website`** ⭐ **NEW** - Sitemap analysis for planning crawls
+10. **`ingest_url`** - Crawl web pages with duplicate prevention
+11. **`ingest_file`** - Ingest text files from filesystem
+12. **`ingest_directory`** - Batch ingest from directory
+
+### Key Features
+
+- **Context window optimization**: Minimal responses by default, optional extended data
+- **Duplicate prevention**: `ingest_url` prevents accidental re-crawling
+- **Website analysis**: `analyze_website` helps agents discover site structure before crawling
+- **Crawl tracking**: `get_collection_info` shows crawl history to avoid duplicates
+- **Memory management**: `update_document` and `delete_document` keep knowledge current
+
+### Complete Documentation
+
+📚 **See [MCP_SERVER_GUIDE.md](./MCP_SERVER_GUIDE.md) for:**
+- Detailed transport mode setup
+- MCP Inspector testing instructions
+- Claude Desktop configuration
+- Tool reference with examples
+- Common workflows
+- Troubleshooting guide
+
+### Quick Claude Desktop Setup
 
 Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
@@ -361,103 +415,16 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "rag-memory": {
       "command": "uv",
-      "args": ["--directory", "/Users/timkitchens/projects/ai-projects/rag-pgvector-poc", "run", "python", "-m", "src.mcp.server"],
+      "args": ["--directory", "/FULL/PATH/TO/rag-pgvector-poc", "run", "python", "-m", "src.mcp.server"],
       "env": {
-        "OPENAI_API_KEY": "your-key-here"
+        "OPENAI_API_KEY": "sk-your-key-here"
       }
     }
   }
 }
 ```
 
-**Note**: Update the `--directory` path to match your installation location.
-
-### Available MCP Tools
-
-#### Core RAG Operations (3 essential tools)
-
-1. **`search_documents`** - Vector similarity search across knowledge base
-   - Query natural language questions
-   - Filter by collection, threshold, result limit
-   - Optionally include full source document content
-
-2. **`list_collections`** - Discover available knowledge bases
-   - Returns all collections with metadata
-   - Shows document counts and creation dates
-
-3. **`ingest_text`** - Add text content from agents
-   - Automatic chunking (~1000 chars with overlap)
-   - Auto-embedding with OpenAI
-   - Auto-create collections if needed
-
-#### Document Management (3 CRUD tools)
-
-4. **`list_documents`** - List available documents with pagination
-   - Filter by collection
-   - Includes chunk counts, metadata, timestamps
-   - Supports pagination for large datasets
-
-5. **`update_document`** ⭐ **ESSENTIAL** - Edit existing documents
-   - Update content (triggers automatic re-chunking & re-embedding)
-   - Update title/filename
-   - Merge metadata (preserves existing values)
-   - Critical for agent memory management (e.g., company vision updates)
-
-6. **`delete_document`** ⭐ **ESSENTIAL** - Remove outdated documents
-   - Permanent deletion with cascade to chunks
-   - Prevents retrieval of stale knowledge
-   - Provides feedback on affected collections
-
-#### Enhanced Ingestion (6 advanced tools)
-
-7. **`get_document_by_id`** - Retrieve full source document
-8. **`get_collection_info`** - Detailed collection statistics
-9. **`ingest_url`** - Crawl and ingest web pages (uses Crawl4AI)
-10. **`ingest_file`** - Ingest text files from file system
-11. **`ingest_directory`** - Batch ingest from directory
-12. **`recrawl_url`** - Update web documentation (delete old + re-ingest)
-
-### Use Cases
-
-**Agent Memory Management:**
-```
-Agent: I need to update our company vision.
-Tool: update_document(doc_id=42, content="New vision: AI-first...")
-
-Agent: What's our current Python coding standard?
-Tool: search_documents(query="Python coding standards", collection="company-docs")
-
-Agent: That coding standard is outdated. Let me remove it.
-Tool: delete_document(doc_id=15)
-```
-
-**Knowledge Base Construction:**
-```
-Tool: ingest_url("https://docs.python.org/3/", collection="python-docs", follow_links=True, max_depth=2)
-Tool: search_documents("How do I handle exceptions in Python?", collection="python-docs")
-```
-
-### MCP Inspector (Testing)
-
-Test tools without integrating with Claude Desktop:
-
-```bash
-# Install MCP Inspector
-npx @modelcontextprotocol/inspector
-
-# Connect to server and test tools interactively
-```
-
-### Implementation Details
-
-- **Server Name**: `rag-memory`
-- **Transport**: stdio (standard for MCP)
-- **Tools**: 12 total (3 essential, 9 enhanced)
-- **Auto-initialization**: RAG components initialized once on server start
-- **Error handling**: All tools wrapped with proper exception handling
-- **Response format**: JSON-serializable dicts with detailed metadata
-
-For complete MCP implementation details, see `MCP_IMPLEMENTATION_PLAN.md`.
+**Replace `/FULL/PATH/TO/rag-pgvector-poc` with your actual path** (run `pwd` in project directory).
 
 ---
 
