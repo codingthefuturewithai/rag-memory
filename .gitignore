@@ -68,3 +68,4 @@ Thumbs.db
 
 # Benchmark test results (generated data)
 test-results/
+test_mcp_server/
