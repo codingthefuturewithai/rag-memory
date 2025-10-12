@@ -434,7 +434,7 @@ def analyze_website(
 
 
 @mcp.tool()
-def ingest_url(
+async def ingest_url(
     url: str,
     collection_name: str,
     mode: str = "crawl",
@@ -525,7 +525,7 @@ def ingest_url(
     Note: Web crawling can be slow (1-5 seconds per page). Use follow_links sparingly.
     Use analyze_website() first to understand site structure and plan comprehensive crawling.
     """
-    return ingest_url_impl(
+    return await ingest_url_impl(
         doc_store, db, url, collection_name, follow_links, max_depth, mode, auto_create_collection, include_document_ids
     )
 

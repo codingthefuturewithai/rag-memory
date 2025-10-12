@@ -343,7 +343,7 @@ def check_existing_crawl(
         raise
 
 
-def ingest_url_impl(
+async def ingest_url_impl(
     doc_store: DocumentStore,
     db: Database,
     url: str,
@@ -420,9 +420,9 @@ def ingest_url_impl(
         # Crawl web pages
         if follow_links:
             crawler = WebCrawler(headless=True, verbose=False)
-            results = asyncio.run(crawler.crawl_with_depth(url, max_depth=max_depth))
+            results = await crawler.crawl_with_depth(url, max_depth=max_depth)
         else:
-            result = asyncio.run(crawl_single_page(url, headless=True, verbose=False))
+            result = await crawl_single_page(url, headless=True, verbose=False)
             results = [result] if result.success else []
 
         # Ingest each page
