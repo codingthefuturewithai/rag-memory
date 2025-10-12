@@ -164,6 +164,7 @@ def ingest_text(
     document_title: Optional[str] = None,
     metadata: Optional[dict] = None,
     auto_create_collection: bool = True,
+    include_chunk_ids: bool = False,
 ) -> dict:
     """
     Ingest text content into a collection with automatic chunking.
@@ -171,6 +172,9 @@ def ingest_text(
     This is the primary way for agents to add knowledge to the RAG system.
     Content is automatically chunked (~1000 chars with 200 char overlap),
     embedded with OpenAI, and stored for future retrieval.
+
+    By default, returns minimal response (source_document_id and num_chunks).
+    Use include_chunk_ids=True to get the list of chunk IDs (may be large).
 
     Args:
         content: Text content to ingest (any length, will be automatically chunked)
@@ -181,14 +185,24 @@ def ingest_text(
         metadata: Optional metadata dict (e.g., {"topic": "python", "author": "agent"})
         auto_create_collection: If True, creates collection if it doesn't exist (default: True).
                                If False and collection doesn't exist, raises error.
+        include_chunk_ids: If True, includes list of chunk IDs. Default: False (minimal response).
 
     Returns:
+        Minimal response (default):
         {
             "source_document_id": int,  # ID for retrieving full document later
-            "chunk_ids": list[int],  # IDs of generated chunks
             "num_chunks": int,
             "collection_name": str,
             "collection_created": bool  # True if collection was auto-created
+        }
+
+        Extended response (include_chunk_ids=True):
+        {
+            "source_document_id": int,
+            "num_chunks": int,
+            "collection_name": str,
+            "collection_created": bool,
+            "chunk_ids": list[int]  # IDs of generated chunks
         }
 
     Example:
@@ -208,6 +222,7 @@ def ingest_text(
         document_title,
         metadata,
         auto_create_collection,
+        include_chunk_ids,
     )
 
 
@@ -292,6 +307,7 @@ def ingest_url(
     follow_links: bool = False,
     max_depth: int = 1,
     auto_create_collection: bool = True,
+    include_document_ids: bool = False,
 ) -> dict:
     """
     Crawl and ingest content from a web URL.
@@ -299,19 +315,23 @@ def ingest_url(
     Uses Crawl4AI for web scraping. Supports single-page or multi-page crawling
     with link following. Automatically chunks content (~2500 chars for web pages).
 
+    By default, returns minimal response without document_ids array (may be large for multi-page crawls).
+    Use include_document_ids=True to get the list of document IDs.
+
     Args:
         url: URL to crawl and ingest (e.g., "https://docs.python.org/3/")
         collection_name: Collection to add content to
         follow_links: If True, follows internal links for multi-page crawl (default: False)
         max_depth: Maximum crawl depth when following links (default: 1, max: 3)
         auto_create_collection: Create collection if doesn't exist (default: True)
+        include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
+        Minimal response (default):
         {
             "pages_crawled": int,
             "pages_ingested": int,  # May be less if some pages failed
             "total_chunks": int,
-            "document_ids": list[int],
             "collection_name": str,
             "collection_created": bool,
             "crawl_metadata": {
@@ -321,26 +341,33 @@ def ingest_url(
             }
         }
 
+        Extended response (include_document_ids=True):
+        {
+            ...same as above...
+            "document_ids": list[int]  # IDs of ingested documents
+        }
+
     Example:
-        # Single page
+        # Single page (minimal response)
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs"
         )
 
-        # Follow links 2 levels deep
+        # Follow links with document IDs
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
             follow_links=True,
-            max_depth=2
+            max_depth=2,
+            include_document_ids=True
         )
 
     Note: Web crawling can be slow (1-5 seconds per page). Use follow_links sparingly.
     Metadata includes crawl_root_url for use with recrawl_url() later.
     """
     return ingest_url_impl(
-        doc_store, url, collection_name, follow_links, max_depth, auto_create_collection
+        doc_store, url, collection_name, follow_links, max_depth, auto_create_collection, include_document_ids
     )
 
 
@@ -350,6 +377,7 @@ def ingest_file(
     collection_name: str,
     metadata: Optional[dict] = None,
     auto_create_collection: bool = True,
+    include_chunk_ids: bool = False,
 ) -> dict:
     """
     Ingest a text-based file from the file system.
@@ -369,22 +397,32 @@ def ingest_file(
         ✗ Microsoft Office (.docx, .xlsx, .pptx)
         ✗ Images, videos, archives
 
+    By default, returns minimal response without chunk_ids array (may be large for big files).
+    Use include_chunk_ids=True to get the list of chunk IDs.
+
     Args:
         file_path: Absolute path to the file (e.g., "/path/to/document.txt")
         collection_name: Collection to add to
         metadata: Optional metadata dict
         auto_create_collection: Create collection if doesn't exist (default: True)
+        include_chunk_ids: If True, includes list of chunk IDs. Default: False (minimal response).
 
     Returns:
+        Minimal response (default):
         {
             "source_document_id": int,
-            "chunk_ids": list[int],
             "num_chunks": int,
             "filename": str,  # Extracted from path
             "file_type": str,  # Extracted from extension
             "file_size": int,  # Bytes
             "collection_name": str,
             "collection_created": bool
+        }
+
+        Extended response (include_chunk_ids=True):
+        {
+            ...same as above...
+            "chunk_ids": list[int]  # IDs of generated chunks
         }
 
     Raises:
@@ -399,7 +437,7 @@ def ingest_file(
         )
     """
     return ingest_file_impl(
-        doc_store, file_path, collection_name, metadata, auto_create_collection
+        doc_store, file_path, collection_name, metadata, auto_create_collection, include_chunk_ids
     )
 
 
@@ -410,6 +448,7 @@ def ingest_directory(
     file_extensions: Optional[list[str]] = None,
     recursive: bool = False,
     auto_create_collection: bool = True,
+    include_document_ids: bool = False,
 ) -> dict:
     """
     Ingest multiple text-based files from a directory.
@@ -420,6 +459,9 @@ def ingest_directory(
     Only processes text-based files (see ingest_file for supported types).
     Binary files and files without matching extensions are skipped.
 
+    By default, returns minimal response without document_ids array (may be large for many files).
+    Use include_document_ids=True to get the list of document IDs.
+
     Args:
         directory_path: Absolute path to directory (e.g., "/path/to/docs")
         collection_name: Collection to add all files to
@@ -427,14 +469,15 @@ def ingest_directory(
                         If None, defaults to [".txt", ".md"]
         recursive: If True, searches subdirectories (default: False)
         auto_create_collection: Create collection if doesn't exist (default: True)
+        include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
+        Minimal response (default):
         {
             "files_found": int,
             "files_ingested": int,
             "files_failed": int,
             "total_chunks": int,
-            "document_ids": list[int],
             "collection_name": str,
             "collection_created": bool,
             "failed_files": [  # Only if files_failed > 0
@@ -443,6 +486,12 @@ def ingest_directory(
                     "error": str
                 }
             ]
+        }
+
+        Extended response (include_document_ids=True):
+        {
+            ...same as above...
+            "document_ids": list[int]  # IDs of ingested documents
         }
 
     Example:
@@ -463,6 +512,7 @@ def ingest_directory(
         file_extensions,
         recursive,
         auto_create_collection,
+        include_document_ids,
     )
 
 
@@ -614,7 +664,10 @@ def delete_document(document_id: int) -> dict:
 
 @mcp.tool()
 def list_documents(
-    collection_name: Optional[str] = None, limit: int = 50, offset: int = 0
+    collection_name: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    include_details: bool = False,
 ) -> dict:
     """
     List source documents in the knowledge base.
@@ -622,24 +675,24 @@ def list_documents(
     Useful for agents to discover what documents exist before updating or
     deleting them. Can be scoped to a specific collection or list all documents.
 
+    By default, returns minimal response (id, filename, chunk_count).
+    Use include_details=True to get file_type, file_size, timestamps, collections, and metadata.
+
     Args:
         collection_name: Optional collection to filter by. If None, lists all documents.
         limit: Maximum number of documents to return (default: 50, max: 200)
         offset: Number of documents to skip for pagination (default: 0)
+        include_details: If True, includes file_type, file_size, timestamps, collections, metadata.
+                        Default: False (minimal response).
 
     Returns:
+        Minimal response (default):
         {
             "documents": [
                 {
                     "id": int,
                     "filename": str,
-                    "file_type": str,
-                    "file_size": int,
-                    "chunk_count": int,
-                    "created_at": str,  # ISO 8601
-                    "updated_at": str,  # ISO 8601
-                    "collections": list[str],  # Collections this document belongs to
-                    "metadata": dict  # Custom metadata
+                    "chunk_count": int
                 }
             ],
             "total_count": int,  # Total documents matching filter
@@ -647,11 +700,38 @@ def list_documents(
             "has_more": bool  # Whether more pages available
         }
 
+        Extended response (include_details=True):
+        {
+            "documents": [
+                {
+                    "id": int,
+                    "filename": str,
+                    "chunk_count": int,
+                    "file_type": str,
+                    "file_size": int,
+                    "created_at": str,  # ISO 8601
+                    "updated_at": str,  # ISO 8601
+                    "collections": list[str],  # Collections this document belongs to
+                    "metadata": dict  # Custom metadata
+                }
+            ],
+            "total_count": int,
+            "returned_count": int,
+            "has_more": bool
+        }
+
     Example:
-        # List all documents in collection
+        # Minimal listing (recommended for browsing)
         result = list_documents(collection_name="company-knowledge")
         for doc in result['documents']:
             print(f"{doc['id']}: {doc['filename']} ({doc['chunk_count']} chunks)")
+
+        # Detailed listing with full metadata
+        result = list_documents(collection_name="company-knowledge", include_details=True)
+        for doc in result['documents']:
+            print(f"{doc['id']}: {doc['filename']}")
+            print(f"  Collections: {doc['collections']}")
+            print(f"  Metadata: {doc['metadata']}")
 
         # Paginate through all documents
         result = list_documents(limit=50, offset=0)
@@ -659,7 +739,7 @@ def list_documents(
             # Process documents
             result = list_documents(limit=50, offset=result['returned_count'])
     """
-    return list_documents_impl(db, coll_mgr, collection_name, limit, offset)
+    return list_documents_impl(db, coll_mgr, collection_name, limit, offset, include_details)
 
 
 def main():

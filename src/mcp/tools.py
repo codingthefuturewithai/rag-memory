@@ -102,6 +102,7 @@ def ingest_text_impl(
     document_title: Optional[str],
     metadata: Optional[Dict[str, Any]],
     auto_create_collection: bool,
+    include_chunk_ids: bool,
 ) -> Dict[str, Any]:
     """Implementation of ingest_text tool."""
     try:
@@ -130,13 +131,17 @@ def ingest_text_impl(
             file_type="text",
         )
 
-        return {
+        result = {
             "source_document_id": source_id,
-            "chunk_ids": chunk_ids,
             "num_chunks": len(chunk_ids),
             "collection_name": collection_name,
             "collection_created": collection_created,
         }
+
+        if include_chunk_ids:
+            result["chunk_ids"] = chunk_ids
+
+        return result
     except Exception as e:
         logger.error(f"ingest_text failed: {e}")
         raise
@@ -240,6 +245,7 @@ def ingest_url_impl(
     follow_links: bool,
     max_depth: int,
     auto_create_collection: bool,
+    include_document_ids: bool,
 ) -> Dict[str, Any]:
     """Implementation of ingest_url tool."""
     try:
@@ -286,11 +292,10 @@ def ingest_url_impl(
             except Exception as e:
                 logger.warning(f"Failed to ingest page {result.url}: {e}")
 
-        return {
+        result = {
             "pages_crawled": len(results),
             "pages_ingested": successful_ingests,
             "total_chunks": total_chunks,
-            "document_ids": document_ids,
             "collection_name": collection_name,
             "collection_created": collection_created,
             "crawl_metadata": {
@@ -301,6 +306,11 @@ def ingest_url_impl(
                 "crawl_timestamp": datetime.now().isoformat(),
             },
         }
+
+        if include_document_ids:
+            result["document_ids"] = document_ids
+
+        return result
     except Exception as e:
         logger.error(f"ingest_url failed: {e}")
         raise
@@ -312,6 +322,7 @@ def ingest_file_impl(
     collection_name: str,
     metadata: Optional[Dict[str, Any]],
     auto_create_collection: bool,
+    include_chunk_ids: bool,
 ) -> Dict[str, Any]:
     """Implementation of ingest_file tool."""
     try:
@@ -337,9 +348,8 @@ def ingest_file_impl(
             file_path=file_path, collection_name=collection_name, metadata=metadata
         )
 
-        return {
+        result = {
             "source_document_id": source_id,
-            "chunk_ids": chunk_ids,
             "num_chunks": len(chunk_ids),
             "filename": path.name,
             "file_type": path.suffix.lstrip(".").lower() or "text",
@@ -347,6 +357,11 @@ def ingest_file_impl(
             "collection_name": collection_name,
             "collection_created": collection_created,
         }
+
+        if include_chunk_ids:
+            result["chunk_ids"] = chunk_ids
+
+        return result
     except Exception as e:
         logger.error(f"ingest_file failed: {e}")
         raise
@@ -359,6 +374,7 @@ def ingest_directory_impl(
     file_extensions: Optional[List[str]],
     recursive: bool,
     auto_create_collection: bool,
+    include_document_ids: bool,
 ) -> Dict[str, Any]:
     """Implementation of ingest_directory tool."""
     try:
@@ -413,10 +429,12 @@ def ingest_directory_impl(
             "files_ingested": len(document_ids),
             "files_failed": len(failed_files),
             "total_chunks": total_chunks,
-            "document_ids": document_ids,
             "collection_name": collection_name,
             "collection_created": collection_created,
         }
+
+        if include_document_ids:
+            result["document_ids"] = document_ids
 
         if failed_files:
             result["failed_files"] = failed_files
@@ -471,6 +489,7 @@ def recrawl_url_impl(
             follow_links,
             max_depth,
             auto_create_collection=False,
+            include_document_ids=True,  # Always include for recrawl feedback
         )
 
         return {
@@ -528,6 +547,7 @@ def list_documents_impl(
     collection_name: Optional[str],
     limit: int,
     offset: int,
+    include_details: bool,
 ) -> Dict[str, Any]:
     """Implementation of list_documents tool."""
     try:
@@ -635,19 +655,25 @@ def list_documents_impl(
                 )
                 collections = [c[0] for c in cur.fetchall()]
 
-            documents.append(
-                {
-                    "id": doc_id,
-                    "filename": filename,
+            # Minimal response by default (optimized for AI agent context windows)
+            doc_dict = {
+                "id": doc_id,
+                "filename": filename,
+                "chunk_count": chunk_count,
+            }
+
+            # Optionally include extended details
+            if include_details:
+                doc_dict.update({
                     "file_type": file_type,
                     "file_size": file_size,
-                    "chunk_count": chunk_count,
                     "created_at": created_at.isoformat(),
                     "updated_at": updated_at.isoformat(),
                     "collections": collections,
                     "metadata": metadata or {},
-                }
-            )
+                })
+
+            documents.append(doc_dict)
 
         return {
             "documents": documents,
