@@ -40,19 +40,22 @@ If missing: "Reference documentation not found. Please ensure .reference/ direct
 ### ALWAYS SAFE TO RUN (read-only checks)
 - `docker --version`, `uv --version`, `python --version`
 - `docker-compose ps` (check container status)
-- `rag status` (database connection check)
-- `rag collection list`
-- `rag document list`
 - `pwd` (get current directory path)
 - `ls`, `cat .env.example` (read non-secret files)
+- `which rag-mcp-stdio` (check if installed)
 
 ### ASK PERMISSION BEFORE RUNNING (write operations)
 - `docker-compose up -d` (starts database)
-- `rag init` (creates schema)
-- `rag collection create`
-- `rag ingest ...` (adds data)
 - Offer: "Would you like me to run this command for you?"
 - Wait for explicit "yes" or permission
+
+### NEVER RUN - USER MUST RUN THESE IN TERMINAL
+- `rag init` - triggers first-run wizard asking for API key
+- `rag status` - triggers first-run wizard asking for API key
+- `rag collection create` - triggers first-run wizard asking for API key
+- `rag ingest ...` - triggers first-run wizard asking for API key
+- ANY `rag` command if ~/.rag-memory-env doesn't exist
+- Tell user: "Run this command yourself in your terminal"
 
 ### SHOW BUT NEVER RUN (system changes)
 - Config file edits (show JSON, tell location, they edit)
@@ -236,17 +239,14 @@ docker-compose up -d
 **WAIT FOR PERMISSION**
 
 **After database starts:**
-"Initialize the schema:"
+"Initialize the schema by running this command yourself in your terminal:"
 ```bash
 rag init
 ```
 
-**Ask:** "Would you like me to run this? (yes/no)"
+**IMPORTANT: I cannot run this command because it may trigger the first-run wizard which asks for your API key.**
 
-**WAIT FOR PERMISSION**
-
-**Verify:**
-[Run: `rag status`]
+"After you run `rag init` yourself, let me know when it's done."
 
 **STOP and wait for user response**
 
@@ -257,26 +257,28 @@ rag init
 **If user chose "MCP only" → SKIP this step, go to Step 11**
 
 **Present:**
-"For CLI usage, RAG Memory has a first-run setup wizard. Let's test it now:"
+"For CLI usage, you need to configure ~/.rag-memory-env with your database URL and OpenAI API key."
 
-**Run:**
-[Run: `rag status`]
+**NEVER RUN `rag init` or `rag status` - these trigger interactive prompts for API keys!**
 
-**Expected behavior:**
-- If `~/.rag-memory-env` doesn't exist, the wizard will prompt for DATABASE_URL and OPENAI_API_KEY
-- Tell user: "The wizard will prompt you for configuration. Use these values:"
-  - DATABASE_URL: `postgresql://raguser:ragpass@localhost:54320/rag_poc`
-  - OPENAI_API_KEY: Your OpenAI API key (get from https://platform.openai.com/api-keys)
+**Instead, SHOW them:**
+"You'll need to create ~/.rag-memory-env manually with these values:"
 
-**After wizard completes:**
-"✓ Configuration saved to ~/.rag-memory-env"
-"The `rag status` command should now show database statistics."
+```
+DATABASE_URL=postgresql://raguser:ragpass@localhost:54320/rag_poc
+OPENAI_API_KEY=your-api-key-here
+```
+
+**Instructions:**
+1. Get your OpenAI API key from https://platform.openai.com/api-keys
+2. Create the file manually or run any `rag` command and follow the prompts **in your terminal**
+3. The wizard runs interactively in your terminal - I cannot help with that part
 
 **Important notes:**
 - First-run wizard only runs ONCE (when ~/.rag-memory-env doesn't exist)
-- This config is used for ALL CLI commands
-- MCP server gets config from MCP client, NOT from ~/.rag-memory-env
-- You can edit ~/.rag-memory-env manually anytime
+- The wizard is interactive and asks for keys directly in the terminal
+- I cannot and will not run commands that would expose your API keys
+- After setup, you can test with: `rag status` (run this yourself)
 
 **STOP and wait for confirmation**
 
