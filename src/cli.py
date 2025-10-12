@@ -16,6 +16,7 @@ from src.core.database import get_database
 from src.ingestion.document_store import get_document_store
 from src.core.embeddings import get_embedding_generator
 from src.retrieval.search import get_similarity_search
+from src.retrieval.hybrid_search import get_hybrid_search
 from src.ingestion.web_crawler import crawl_single_page, WebCrawler
 
 # Configure logging
@@ -560,13 +561,21 @@ def recrawl(url, collection, headless, verbose, chunk_size, chunk_overlap, follo
 @click.option("--metadata", help="Filter by metadata (JSON string)")
 @click.option("--verbose", is_flag=True, help="Show full chunk content")
 @click.option("--show-source", is_flag=True, help="Include full source document content")
-def search(query, collection, limit, threshold, metadata, verbose, show_source):
+@click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + keyword with RRF)")
+def search(query, collection, limit, threshold, metadata, verbose, show_source, hybrid):
     """Search for similar document chunks."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
-        searcher = get_similarity_search(db, embedder, coll_mgr)
+
+        # Choose search method
+        if hybrid:
+            searcher = get_hybrid_search(db, embedder, coll_mgr)
+            search_method = "hybrid (vector + keyword with RRF)"
+        else:
+            searcher = get_similarity_search(db, embedder, coll_mgr)
+            search_method = "vector-only"
 
         # Parse metadata filter if provided
         metadata_filter = None
@@ -578,12 +587,23 @@ def search(query, collection, limit, threshold, metadata, verbose, show_source):
                 sys.exit(1)
 
         console.print(f"[bold blue]Searching for: {query}[/bold blue]")
+        console.print(f"[dim]Method: {search_method}[/dim]")
         if metadata_filter:
             console.print(f"[dim]Metadata filter: {metadata_filter}[/dim]")
 
-        results = searcher.search_chunks(
-            query, limit, threshold, collection, include_source=show_source, metadata_filter=metadata_filter
-        )
+        # Execute search based on method
+        if hybrid:
+            results = searcher.hybrid_search(
+                query=query,
+                limit=limit,
+                collection_name=collection,
+                metadata_filter=metadata_filter,
+                include_source=show_source
+            )
+        else:
+            results = searcher.search_chunks(
+                query, limit, threshold, collection, include_source=show_source, metadata_filter=metadata_filter
+            )
 
         if not results:
             console.print("[yellow]No results found[/yellow]")

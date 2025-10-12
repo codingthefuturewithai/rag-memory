@@ -1,0 +1,101 @@
+# Simplified Ground Truth for RAG Optimization Testing
+# Uses document-level matching for queries where any chunk from a document is relevant
+# Created: 2025-10-11
+#
+# Relevance Levels:
+#   highly_relevant: Directly answers the query, primary/authoritative source
+#   relevant: Contains useful related information, secondary source
+#   not_relevant: Off-topic or only tangentially related
+
+queries:
+  - query_id: wf-01
+    query: "Claude Code configuration options"
+    description: "User wants to know how to configure Claude Code"
+    labeled_results:
+      - source_document_id: 216  # Agent SDK reference - Python (has ClaudeAgentOptions)
+        relevance: highly_relevant
+        reasoning: "Contains ClaudeAgentOptions dataclass - configuration reference"
+
+      - source_document_id: 215  # Agent SDK reference - TypeScript
+        relevance: highly_relevant
+        reasoning: "TypeScript configuration options"
+
+      - source_document_id: 220  # CLI reference
+        relevance: relevant
+        reasoning: "CLI flags and configuration"
+
+    summary: "Looking for configuration docs. Agent SDK references and CLI reference are key."
+
+  - query_id: wf-03
+    query: "GitHub Actions integration guide"
+    description: "User wants guide for setting up GitHub Actions with Claude Code"
+    labeled_results:
+      - source_document_id: 231  # Claude Code GitHub Actions - Claude Docs
+        relevance: highly_relevant
+        reasoning: "THE definitive guide for GitHub Actions integration"
+
+    summary: "Perfect - Doc 231 is the complete GitHub Actions guide."
+
+  - query_id: abbr-01
+    query: "MCP server setup"
+    description: "MCP = Model Context Protocol. User wants setup instructions."
+    labeled_results:
+      - source_document_id: 235  # Connect Claude Code to tools via MCP
+        relevance: highly_relevant
+        reasoning: "Complete MCP setup documentation"
+
+    summary: "Doc 235 is the MCP guide - any chunk from it is useful."
+
+  - query_id: abbr-02
+    query: "SDK migration"
+    description: "User wants info about migrating SDK (Claude Code SDK to Agent SDK)"
+    labeled_results:
+      - source_document_id: 222  # Migrate to Claude Agent SDK - Claude Docs
+        relevance: highly_relevant
+        reasoning: "THE migration guide - any chunk from this doc answers the query"
+
+    summary: "Doc 222 is the migration guide. Baseline found it, hybrid should too."
+
+  - query_id: poor-01
+    query: "how make agent work"
+    description: "Poorly worded - user probably wants basic agent setup/usage"
+    labeled_results:
+      - source_document_id: 196  # Agent SDK overview
+        relevance: highly_relevant
+        reasoning: "Getting started with Agent SDK"
+
+      - source_document_id: 200  # Agent SDK overview (duplicate?)
+        relevance: highly_relevant
+        reasoning: "Getting started content"
+
+    summary: "Agent SDK overview docs are what beginners need."
+
+  - query_id: tech-02
+    query: "differences between Claude Code and Claude Agent SDK"
+    description: "User wants to understand the distinction"
+    labeled_results:
+      - source_document_id: 222  # Migrate to Claude Agent SDK
+        relevance: highly_relevant
+        reasoning: "Migration guide explains the differences and relationship"
+
+    summary: "Migration guide is key - explains why the rename happened."
+
+  - query_id: tech-03
+    query: "implementing custom hooks for git operations"
+    description: "User wants to implement custom hooks for git operations"
+    labeled_results:
+      - source_document_id: 216  # Agent SDK reference - Python (has hook examples)
+        relevance: highly_relevant
+        reasoning: "Python hook usage examples and API"
+
+      - source_document_id: 215  # Agent SDK reference - TypeScript (has hook types)
+        relevance: highly_relevant
+        reasoning: "TypeScript hook types and examples"
+
+    summary: "Agent SDK references have hook documentation."
+
+# Summary Statistics
+summary:
+  total_queries_labeled: 7
+  approach: "Document-level matching - simpler and more robust across search methods"
+  rationale: "For broad queries like 'SDK migration', ANY chunk from the migration guide is relevant"

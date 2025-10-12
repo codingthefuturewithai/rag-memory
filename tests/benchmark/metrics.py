@@ -11,38 +11,51 @@ from pathlib import Path
 
 def load_ground_truth() -> Dict[str, Any]:
     """Load ground truth labels from YAML file."""
-    gt_file = Path(__file__).parent.parent.parent / "test-data" / "ground-truth.yaml"
+    gt_file = Path(__file__).parent.parent.parent / "test-data" / "ground-truth-simple.yaml"
     with open(gt_file, 'r') as f:
         return yaml.safe_load(f)
 
 
 def get_relevant_chunks(query_id: str, ground_truth: Dict[str, Any]) -> Dict[str, str]:
     """
-    Get relevant chunks for a query from ground truth.
+    Get relevant chunks/documents for a query from ground truth.
 
     Returns:
-        Dict mapping chunk_id to relevance level ('highly_relevant', 'relevant', 'not_relevant')
+        Tuple of (chunk_relevance_map, document_relevance_map)
+        - chunk_relevance_map: Dict mapping chunk_id to relevance level
+        - document_relevance_map: Dict mapping source_document_id to relevance level
     """
     for query in ground_truth['queries']:
         if query['query_id'] == query_id:
-            relevance_map = {}
+            chunk_relevance = {}
+            doc_relevance = {}
 
             for result in query['labeled_results']:
-                # Handle both single chunk and multiple chunks
+                relevance = result['relevance']
+
+                # Handle exact chunk ID matches
                 if 'chunk_id' in result:
-                    relevance_map[result['chunk_id']] = result['relevance']
+                    chunk_relevance[result['chunk_id']] = relevance
                 elif 'chunk_ids' in result:
                     for chunk_id in result['chunk_ids']:
-                        relevance_map[chunk_id] = result['relevance']
+                        chunk_relevance[chunk_id] = relevance
 
-            return relevance_map
+                # Handle document-level matches (any chunk from doc counts)
+                if 'source_document_id' in result:
+                    doc_relevance[result['source_document_id']] = relevance
+                elif 'source_document_ids' in result:
+                    for doc_id in result['source_document_ids']:
+                        doc_relevance[doc_id] = relevance
 
-    return {}
+            return chunk_relevance, doc_relevance
+
+    return {}, {}
 
 
 def calculate_recall_at_k(
     results: List[Dict[str, Any]],
-    ground_truth_relevance: Dict[int, str],
+    chunk_relevance: Dict[int, str],
+    doc_relevance: Dict[int, str],
     k: int = 5,
     min_relevance: str = 'relevant'
 ) -> float:
@@ -50,39 +63,50 @@ def calculate_recall_at_k(
     Calculate Recall@K: What fraction of relevant documents appear in top K results?
 
     Args:
-        results: List of search results with 'chunk_id'
-        ground_truth_relevance: Dict mapping chunk_id to relevance level
+        results: List of search results with 'chunk_id' and 'source_document_id'
+        chunk_relevance: Dict mapping chunk_id to relevance level
+        doc_relevance: Dict mapping source_document_id to relevance level
         k: Number of top results to consider
         min_relevance: Minimum relevance level to count ('relevant' or 'highly_relevant')
 
     Returns:
         Recall@K score (0.0 to 1.0)
     """
-    if not ground_truth_relevance:
+    if not chunk_relevance and not doc_relevance:
         return 0.0
 
-    # Determine which documents are relevant based on min_relevance threshold
+    # Determine which items are relevant based on min_relevance threshold
     if min_relevance == 'highly_relevant':
-        relevant_chunks = {cid for cid, rel in ground_truth_relevance.items()
-                          if rel == 'highly_relevant'}
+        relevant_chunks = {cid for cid, rel in chunk_relevance.items() if rel == 'highly_relevant'}
+        relevant_docs = {did for did, rel in doc_relevance.items() if rel == 'highly_relevant'}
     else:  # 'relevant' includes both 'relevant' and 'highly_relevant'
-        relevant_chunks = {cid for cid, rel in ground_truth_relevance.items()
-                          if rel in ['relevant', 'highly_relevant']}
+        relevant_chunks = {cid for cid, rel in chunk_relevance.items() if rel in ['relevant', 'highly_relevant']}
+        relevant_docs = {did for did, rel in doc_relevance.items() if rel in ['relevant', 'highly_relevant']}
 
-    if not relevant_chunks:
+    total_relevant = len(relevant_chunks) + len(relevant_docs)
+    if total_relevant == 0:
         return 0.0
 
-    # Check how many relevant chunks appear in top K results
-    top_k_chunks = {r['chunk_id'] for r in results[:k]}
-    found_relevant = top_k_chunks & relevant_chunks
+    # Check how many relevant items appear in top K results
+    found_relevant = 0
+    for r in results[:k]:
+        # Check if chunk matches directly
+        if r['chunk_id'] in relevant_chunks:
+            found_relevant += 1
+            relevant_chunks.discard(r['chunk_id'])  # Count each only once
+        # Check if document matches (any chunk from doc counts)
+        elif r['source_document_id'] in relevant_docs:
+            found_relevant += 1
+            relevant_docs.discard(r['source_document_id'])  # Count each doc only once
 
-    recall = len(found_relevant) / len(relevant_chunks)
+    recall = found_relevant / total_relevant
     return recall
 
 
 def calculate_precision_at_k(
     results: List[Dict[str, Any]],
-    ground_truth_relevance: Dict[int, str],
+    chunk_relevance: Dict[int, str],
+    doc_relevance: Dict[int, str],
     k: int = 5,
     min_relevance: str = 'relevant'
 ) -> float:
@@ -90,15 +114,16 @@ def calculate_precision_at_k(
     Calculate Precision@K: What fraction of top K results are relevant?
 
     Args:
-        results: List of search results with 'chunk_id'
-        ground_truth_relevance: Dict mapping chunk_id to relevance level
+        results: List of search results with 'chunk_id' and 'source_document_id'
+        chunk_relevance: Dict mapping chunk_id to relevance level
+        doc_relevance: Dict mapping source_document_id to relevance level
         k: Number of top results to consider
         min_relevance: Minimum relevance level to count
 
     Returns:
         Precision@K score (0.0 to 1.0)
     """
-    if not results or not ground_truth_relevance:
+    if not results or (not chunk_relevance and not doc_relevance):
         return 0.0
 
     top_k = results[:k]
@@ -109,7 +134,10 @@ def calculate_precision_at_k(
     relevant_in_top_k = 0
     for result in top_k:
         chunk_id = result['chunk_id']
-        relevance = ground_truth_relevance.get(chunk_id, 'not_relevant')
+        doc_id = result['source_document_id']
+
+        # Check chunk-level relevance first, then document-level
+        relevance = chunk_relevance.get(chunk_id) or doc_relevance.get(doc_id, 'not_relevant')
 
         if min_relevance == 'highly_relevant':
             if relevance == 'highly_relevant':
@@ -124,26 +152,31 @@ def calculate_precision_at_k(
 
 def calculate_mrr(
     results: List[Dict[str, Any]],
-    ground_truth_relevance: Dict[int, str],
+    chunk_relevance: Dict[int, str],
+    doc_relevance: Dict[int, str],
     min_relevance: str = 'relevant'
 ) -> float:
     """
     Calculate Mean Reciprocal Rank: 1 / rank of first relevant document.
 
     Args:
-        results: List of search results with 'chunk_id'
-        ground_truth_relevance: Dict mapping chunk_id to relevance level
+        results: List of search results with 'chunk_id' and 'source_document_id'
+        chunk_relevance: Dict mapping chunk_id to relevance level
+        doc_relevance: Dict mapping source_document_id to relevance level
         min_relevance: Minimum relevance level to count
 
     Returns:
         MRR score (0.0 to 1.0)
     """
-    if not results or not ground_truth_relevance:
+    if not results or (not chunk_relevance and not doc_relevance):
         return 0.0
 
     for rank, result in enumerate(results, start=1):
         chunk_id = result['chunk_id']
-        relevance = ground_truth_relevance.get(chunk_id, 'not_relevant')
+        doc_id = result['source_document_id']
+
+        # Check chunk-level relevance first, then document-level
+        relevance = chunk_relevance.get(chunk_id) or doc_relevance.get(doc_id, 'not_relevant')
 
         is_relevant = False
         if min_relevance == 'highly_relevant':
@@ -159,7 +192,8 @@ def calculate_mrr(
 
 def calculate_ndcg(
     results: List[Dict[str, Any]],
-    ground_truth_relevance: Dict[int, str],
+    chunk_relevance: Dict[int, str],
+    doc_relevance: Dict[int, str],
     k: int = 10
 ) -> float:
     """
@@ -171,14 +205,15 @@ def calculate_ndcg(
       - not_relevant: 0
 
     Args:
-        results: List of search results with 'chunk_id'
-        ground_truth_relevance: Dict mapping chunk_id to relevance level
+        results: List of search results with 'chunk_id' and 'source_document_id'
+        chunk_relevance: Dict mapping chunk_id to relevance level
+        doc_relevance: Dict mapping source_document_id to relevance level
         k: Number of results to consider
 
     Returns:
         nDCG@K score (0.0 to 1.0)
     """
-    if not results or not ground_truth_relevance:
+    if not results or (not chunk_relevance and not doc_relevance):
         return 0.0
 
     relevance_scores = {
@@ -188,24 +223,28 @@ def calculate_ndcg(
     }
 
     # Calculate DCG (Discounted Cumulative Gain)
+    import math
     dcg = 0.0
     for rank, result in enumerate(results[:k], start=1):
         chunk_id = result['chunk_id']
-        relevance = ground_truth_relevance.get(chunk_id, 'not_relevant')
+        doc_id = result['source_document_id']
+
+        # Check chunk-level relevance first, then document-level
+        relevance = chunk_relevance.get(chunk_id) or doc_relevance.get(doc_id, 'not_relevant')
         rel_score = relevance_scores[relevance]
 
         # DCG formula: sum(rel_i / log2(i+1))
-        import math
         dcg += rel_score / math.log2(rank + 1)
 
     # Calculate IDCG (Ideal DCG) - if results were perfectly ordered
+    # Combine all relevance values
+    all_relevances = list(chunk_relevance.values()) + list(doc_relevance.values())
     ideal_scores = sorted(
-        [relevance_scores[rel] for rel in ground_truth_relevance.values()],
+        [relevance_scores[rel] for rel in all_relevances],
         reverse=True
     )
     idcg = 0.0
     for rank, rel_score in enumerate(ideal_scores[:k], start=1):
-        import math
         idcg += rel_score / math.log2(rank + 1)
 
     if idcg == 0:
@@ -233,9 +272,9 @@ def calculate_all_metrics(
     if ground_truth is None:
         ground_truth = load_ground_truth()
 
-    relevance_map = get_relevant_chunks(query_id, ground_truth)
+    chunk_relevance, doc_relevance = get_relevant_chunks(query_id, ground_truth)
 
-    if not relevance_map:
+    if not chunk_relevance and not doc_relevance:
         # No ground truth for this query
         return {
             'has_ground_truth': False,
@@ -249,30 +288,31 @@ def calculate_all_metrics(
         'has_ground_truth': True,
 
         # Recall metrics (both thresholds)
-        'recall@5_any': calculate_recall_at_k(results, relevance_map, k=5, min_relevance='relevant'),
-        'recall@5_high': calculate_recall_at_k(results, relevance_map, k=5, min_relevance='highly_relevant'),
-        'recall@10_any': calculate_recall_at_k(results, relevance_map, k=10, min_relevance='relevant'),
+        'recall@5_any': calculate_recall_at_k(results, chunk_relevance, doc_relevance, k=5, min_relevance='relevant'),
+        'recall@5_high': calculate_recall_at_k(results, chunk_relevance, doc_relevance, k=5, min_relevance='highly_relevant'),
+        'recall@10_any': calculate_recall_at_k(results, chunk_relevance, doc_relevance, k=10, min_relevance='relevant'),
 
         # Precision metrics
-        'precision@5_any': calculate_precision_at_k(results, relevance_map, k=5, min_relevance='relevant'),
-        'precision@5_high': calculate_precision_at_k(results, relevance_map, k=5, min_relevance='highly_relevant'),
+        'precision@5_any': calculate_precision_at_k(results, chunk_relevance, doc_relevance, k=5, min_relevance='relevant'),
+        'precision@5_high': calculate_precision_at_k(results, chunk_relevance, doc_relevance, k=5, min_relevance='highly_relevant'),
 
         # MRR
-        'mrr_any': calculate_mrr(results, relevance_map, min_relevance='relevant'),
-        'mrr_high': calculate_mrr(results, relevance_map, min_relevance='highly_relevant'),
+        'mrr_any': calculate_mrr(results, chunk_relevance, doc_relevance, min_relevance='relevant'),
+        'mrr_high': calculate_mrr(results, chunk_relevance, doc_relevance, min_relevance='highly_relevant'),
 
         # nDCG
-        'ndcg@10': calculate_ndcg(results, relevance_map, k=10),
+        'ndcg@10': calculate_ndcg(results, chunk_relevance, doc_relevance, k=10),
     }
 
     # Count relevant docs in results for analysis
     metrics['highly_relevant_in_top5'] = sum(
         1 for r in results[:5]
-        if relevance_map.get(r['chunk_id']) == 'highly_relevant'
+        if chunk_relevance.get(r['chunk_id']) == 'highly_relevant' or doc_relevance.get(r['source_document_id']) == 'highly_relevant'
     )
     metrics['relevant_in_top5'] = sum(
         1 for r in results[:5]
-        if relevance_map.get(r['chunk_id']) in ['relevant', 'highly_relevant']
+        if chunk_relevance.get(r['chunk_id']) in ['relevant', 'highly_relevant']
+        or doc_relevance.get(r['source_document_id']) in ['relevant', 'highly_relevant']
     )
 
     return metrics
