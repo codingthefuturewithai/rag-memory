@@ -159,16 +159,37 @@ def collection_list():
 
 @collection.command("delete")
 @click.argument("name")
-def collection_delete(name):
-    """Delete a collection."""
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def collection_delete(name, yes):
+    """Delete a collection (admin function - requires confirmation)."""
     try:
         db = get_database()
         mgr = get_collection_manager(db)
 
-        if mgr.delete_collection(name):
-            console.print(f"[bold green]✓ Deleted collection '{name}'[/bold green]")
-        else:
+        # Get collection info for confirmation
+        collection = mgr.get_collection(name)
+        if not collection:
             console.print(f"[yellow]Collection '{name}' not found[/yellow]")
+            sys.exit(1)
+
+        # Get document count
+        doc_count = collection.get("document_count", 0)
+
+        # Show warning and prompt for confirmation
+        if not yes:
+            console.print(f"\n[bold red]⚠️  WARNING: This will permanently delete collection '{name}'[/bold red]")
+            console.print(f"  • {doc_count} documents will be removed")
+            console.print(f"  • This action cannot be undone\n")
+
+            confirm = click.confirm("Are you sure you want to proceed?", default=False)
+            if not confirm:
+                console.print("[yellow]Deletion cancelled[/yellow]")
+                return
+
+        if mgr.delete_collection(name):
+            console.print(f"[bold green]✓ Deleted collection '{name}' ({doc_count} documents)[/bold green]")
+        else:
+            console.print(f"[yellow]Failed to delete collection '{name}'[/yellow]")
 
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")

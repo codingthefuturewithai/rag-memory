@@ -16,6 +16,7 @@ from src.core.collections import CollectionManager
 from src.retrieval.search import SimilaritySearch
 from src.ingestion.document_store import DocumentStore
 from src.ingestion.web_crawler import WebCrawler, crawl_single_page
+from src.ingestion.website_analyzer import analyze_website
 
 logger = logging.getLogger(__name__)
 
@@ -225,6 +226,35 @@ def get_collection_info_impl(
             )
             sample_docs = [row[0] for row in cur.fetchall()]
 
+            # Get crawl history (web pages with crawl_root_url metadata)
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    sd.metadata->>'crawl_root_url' as crawl_url,
+                    sd.metadata->>'crawl_timestamp' as crawl_time,
+                    COUNT(DISTINCT sd.id) as page_count,
+                    COUNT(DISTINCT dc.id) as chunk_count
+                FROM source_documents sd
+                JOIN document_chunks dc ON dc.source_document_id = sd.id
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                WHERE cc.collection_id = %s
+                  AND sd.metadata->>'crawl_root_url' IS NOT NULL
+                GROUP BY sd.metadata->>'crawl_root_url', sd.metadata->>'crawl_timestamp'
+                ORDER BY sd.metadata->>'crawl_timestamp' DESC
+                LIMIT 10
+                """,
+                (collection["id"],),
+            )
+            crawled_urls = [
+                {
+                    "url": row[0],
+                    "timestamp": row[1],
+                    "page_count": row[2],
+                    "chunk_count": row[3],
+                }
+                for row in cur.fetchall()
+            ]
+
         return {
             "name": collection["name"],
             "description": collection["description"] or "",
@@ -232,23 +262,101 @@ def get_collection_info_impl(
             "chunk_count": chunk_count,
             "created_at": collection["created_at"].isoformat(),
             "sample_documents": sample_docs,
+            "crawled_urls": crawled_urls,
         }
     except Exception as e:
         logger.error(f"get_collection_info failed: {e}")
         raise
 
 
+def analyze_website_impl(base_url: str, timeout: int = 10) -> Dict[str, Any]:
+    """
+    Implementation of analyze_website tool.
+
+    Extracts raw data about website structure (sitemap parsing, URL grouping).
+    NO recommendations or heuristics - just facts for AI agent to reason about.
+    """
+    try:
+        result = analyze_website(base_url, timeout)
+        return result
+    except Exception as e:
+        logger.error(f"analyze_website failed: {e}")
+        raise
+
+
+def check_existing_crawl(
+    db: Database, url: str, collection_name: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Check if a URL has already been crawled into a collection.
+
+    Args:
+        db: Database connection
+        url: The crawl root URL to check
+        collection_name: The collection name to check
+
+    Returns:
+        Dict with crawl info if found, None otherwise
+    """
+    try:
+        conn = db.connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    sd.metadata->>'crawl_session_id' as session_id,
+                    sd.metadata->>'crawl_timestamp' as timestamp,
+                    COUNT(DISTINCT sd.id) as page_count,
+                    COUNT(DISTINCT dc.id) as chunk_count
+                FROM source_documents sd
+                JOIN document_chunks dc ON dc.source_document_id = sd.id
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                JOIN collections c ON c.id = cc.collection_id
+                WHERE sd.metadata->>'crawl_root_url' = %s
+                  AND c.name = %s
+                GROUP BY sd.metadata->>'crawl_session_id', sd.metadata->>'crawl_timestamp'
+                ORDER BY sd.metadata->>'crawl_timestamp' DESC
+                LIMIT 1
+                """,
+                (url, collection_name),
+            )
+            row = cur.fetchone()
+
+            if row:
+                return {
+                    "crawl_session_id": row[0],
+                    "crawl_timestamp": row[1],
+                    "page_count": row[2],
+                    "chunk_count": row[3],
+                }
+            return None
+    except Exception as e:
+        logger.error(f"check_existing_crawl failed: {e}")
+        raise
+
+
 def ingest_url_impl(
     doc_store: DocumentStore,
+    db: Database,
     url: str,
     collection_name: str,
     follow_links: bool,
     max_depth: int,
+    mode: str,
     auto_create_collection: bool,
     include_document_ids: bool,
 ) -> Dict[str, Any]:
-    """Implementation of ingest_url tool."""
+    """
+    Implementation of ingest_url tool with mode support.
+
+    Args:
+        mode: "crawl" (new crawl, error if exists) or "recrawl" (update existing)
+    """
     try:
+        # Validate mode
+        if mode not in ["crawl", "recrawl"]:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'crawl' or 'recrawl'")
+
         # Check collection
         collection = doc_store.collection_mgr.get_collection(collection_name)
         collection_created = False
@@ -260,6 +368,46 @@ def ingest_url_impl(
 
         if not collection:
             collection_created = True
+
+        # Check for existing crawl
+        existing_crawl = check_existing_crawl(db, url, collection_name)
+
+        if mode == "crawl" and existing_crawl:
+            raise ValueError(
+                f"URL '{url}' has already been crawled into collection '{collection_name}'.\n"
+                f"Existing crawl: {existing_crawl['page_count']} pages, "
+                f"{existing_crawl['chunk_count']} chunks, "
+                f"timestamp: {existing_crawl['crawl_timestamp']}\n"
+                f"To update existing content, use mode='recrawl'."
+            )
+
+        # If recrawl mode, delete old documents first
+        old_pages_deleted = 0
+        if mode == "recrawl" and existing_crawl:
+            conn = db.connect()
+            with conn.cursor() as cur:
+                # Find all documents with matching crawl_root_url
+                cur.execute(
+                    """
+                    SELECT id, filename
+                    FROM source_documents
+                    WHERE metadata->>'crawl_root_url' = %s
+                    """,
+                    (url,),
+                )
+                existing_docs = cur.fetchall()
+
+                old_pages_deleted = len(existing_docs)
+
+                # Delete old documents and chunks
+                for doc_id, filename in existing_docs:
+                    # Delete chunks
+                    cur.execute(
+                        "DELETE FROM document_chunks WHERE source_document_id = %s",
+                        (doc_id,),
+                    )
+                    # Delete source document
+                    cur.execute("DELETE FROM source_documents WHERE id = %s", (doc_id,))
 
         # Crawl web pages
         if follow_links:
@@ -292,7 +440,8 @@ def ingest_url_impl(
             except Exception as e:
                 logger.warning(f"Failed to ingest page {result.url}: {e}")
 
-        result = {
+        response = {
+            "mode": mode,
             "pages_crawled": len(results),
             "pages_ingested": successful_ingests,
             "total_chunks": total_chunks,
@@ -307,10 +456,13 @@ def ingest_url_impl(
             },
         }
 
-        if include_document_ids:
-            result["document_ids"] = document_ids
+        if mode == "recrawl":
+            response["old_pages_deleted"] = old_pages_deleted
 
-        return result
+        if include_document_ids:
+            response["document_ids"] = document_ids
+
+        return response
     except Exception as e:
         logger.error(f"ingest_url failed: {e}")
         raise
@@ -442,66 +594,6 @@ def ingest_directory_impl(
         return result
     except Exception as e:
         logger.error(f"ingest_directory failed: {e}")
-        raise
-
-
-def recrawl_url_impl(
-    doc_store: DocumentStore,
-    db: Database,
-    url: str,
-    collection_name: str,
-    follow_links: bool,
-    max_depth: int,
-) -> Dict[str, Any]:
-    """Implementation of recrawl_url tool."""
-    try:
-        # Find existing documents with matching crawl_root_url
-        conn = db.connect()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, filename
-                FROM source_documents
-                WHERE metadata->>'crawl_root_url' = %s
-                """,
-                (url,),
-            )
-            existing_docs = cur.fetchall()
-
-        old_pages_deleted = len(existing_docs)
-
-        # Delete old documents and chunks
-        for doc_id, filename in existing_docs:
-            with conn.cursor() as cur:
-                # Delete chunks
-                cur.execute(
-                    "DELETE FROM document_chunks WHERE source_document_id = %s",
-                    (doc_id,),
-                )
-                # Delete source document
-                cur.execute("DELETE FROM source_documents WHERE id = %s", (doc_id,))
-
-        # Re-crawl and ingest
-        ingest_result = ingest_url_impl(
-            doc_store,
-            url,
-            collection_name,
-            follow_links,
-            max_depth,
-            auto_create_collection=False,
-            include_document_ids=True,  # Always include for recrawl feedback
-        )
-
-        return {
-            "old_pages_deleted": old_pages_deleted,
-            "new_pages_crawled": ingest_result["pages_crawled"],
-            "new_pages_ingested": ingest_result["pages_ingested"],
-            "total_chunks": ingest_result["total_chunks"],
-            "document_ids": ingest_result["document_ids"],
-            "collection_name": collection_name,
-        }
-    except Exception as e:
-        logger.error(f"recrawl_url failed: {e}")
         raise
 
 

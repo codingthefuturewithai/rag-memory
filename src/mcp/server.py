@@ -20,10 +20,10 @@ from src.mcp.tools import (
     ingest_text_impl,
     get_document_by_id_impl,
     get_collection_info_impl,
+    analyze_website_impl,
     ingest_url_impl,
     ingest_file_impl,
     ingest_directory_impl,
-    recrawl_url_impl,
     update_document_impl,
     delete_document_impl,
     list_documents_impl,
@@ -276,6 +276,7 @@ def get_collection_info(collection_name: str) -> dict:
     Get detailed information about a specific collection.
 
     Helps agents understand collection scope before searching or adding content.
+    Includes crawl history to help avoid duplicate crawls.
 
     Args:
         collection_name: Name of the collection
@@ -287,7 +288,15 @@ def get_collection_info(collection_name: str) -> dict:
             "document_count": int,  # Number of source documents
             "chunk_count": int,  # Total searchable chunks
             "created_at": str,  # ISO 8601
-            "sample_documents": [str]  # First 5 document filenames
+            "sample_documents": [str],  # First 5 document filenames
+            "crawled_urls": [  # Web pages that have been crawled into this collection
+                {
+                    "url": str,  # crawl_root_url
+                    "timestamp": str,  # When crawled
+                    "page_count": int,  # Number of pages from this URL
+                    "chunk_count": int  # Number of chunks from this URL
+                }
+            ]
         }
 
     Raises:
@@ -296,24 +305,98 @@ def get_collection_info(collection_name: str) -> dict:
     Example:
         info = get_collection_info("python-docs")
         print(f"Collection has {info['chunk_count']} searchable chunks")
+
+        # Check if URL already crawled
+        for crawl in info['crawled_urls']:
+            print(f"Previously crawled: {crawl['url']} ({crawl['page_count']} pages)")
     """
     return get_collection_info_impl(db, coll_mgr, collection_name)
+
+
+@mcp.tool()
+def analyze_website(base_url: str, timeout: int = 10) -> dict:
+    """
+    Analyze website structure to help plan comprehensive crawling.
+
+    Fetches sitemap.xml and extracts URL patterns to help agents understand
+    website organization BEFORE crawling. This prevents incomplete crawls
+    by revealing all sections of a site (e.g., /api/*, /docs/*, /guides/*).
+
+    Returns RAW DATA only - NO recommendations or heuristics. The AI agent
+    uses its LLM to interpret the URL patterns and decide what to crawl.
+
+    Args:
+        base_url: Website base URL (e.g., "https://docs.example.com")
+        timeout: Request timeout in seconds (default: 10)
+
+    Returns:
+        {
+            "base_url": str,
+            "analysis_method": str,  # "sitemap" or "not_found"
+            "total_urls": int,
+            "url_groups": {
+                "/pattern": ["url1", "url2", ...]  # URLs grouped by first path segment
+            },
+            "pattern_stats": {
+                "/pattern": {
+                    "count": int,  # Number of URLs in this pattern
+                    "avg_depth": float,  # Average path depth (2.3 = ~2-3 segments deep)
+                    "example_urls": [str]  # Up to 3 shortest URLs (often index pages)
+                }
+            },
+            "notes": str  # Context about data quality and completeness
+        }
+
+    Example workflow:
+        # 1. Analyze website structure
+        analysis = analyze_website("https://docs.claude.com")
+
+        # 2. Agent interprets the patterns:
+        # - /api: 45 URLs, avg depth 2.3 → API documentation section
+        # - /docs: 120 URLs, avg depth 3.1 → User guide section
+        # - /guides: 30 URLs, avg depth 2.5 → Tutorial section
+
+        # 3. Agent decides to crawl each section separately:
+        ingest_url("https://docs.claude.com/en/api/overview",
+                   collection="claude-docs", mode="crawl",
+                   follow_links=True, max_depth=2)
+
+        ingest_url("https://docs.claude.com/en/docs/intro",
+                   collection="claude-docs", mode="crawl",
+                   follow_links=True, max_depth=2)
+
+    Notes:
+        - Requires sitemap.xml (tries /sitemap.xml, /sitemap_index.xml)
+        - If no sitemap found, returns analysis_method="not_found"
+        - URL grouping is simple path-based (no AI inference)
+        - Agent should use its LLM to identify which patterns to crawl
+        - Common patterns: /api, /docs, /guides, /blog, /reference
+    """
+    return analyze_website_impl(base_url, timeout)
 
 
 @mcp.tool()
 def ingest_url(
     url: str,
     collection_name: str,
+    mode: str = "crawl",
     follow_links: bool = False,
     max_depth: int = 1,
     auto_create_collection: bool = True,
     include_document_ids: bool = False,
 ) -> dict:
     """
-    Crawl and ingest content from a web URL.
+    Crawl and ingest content from a web URL with duplicate prevention.
 
     Uses Crawl4AI for web scraping. Supports single-page or multi-page crawling
     with link following. Automatically chunks content (~2500 chars for web pages).
+
+    IMPORTANT DUPLICATE PREVENTION:
+    - mode="crawl": New crawl. Raises error if URL already crawled into collection.
+    - mode="recrawl": Update existing crawl. Deletes old pages and re-ingests.
+
+    This prevents agents from accidentally duplicating data, which causes
+    outdated information to persist alongside new information.
 
     By default, returns minimal response without document_ids array (may be large for multi-page crawls).
     Use include_document_ids=True to get the list of document IDs.
@@ -321,14 +404,16 @@ def ingest_url(
     Args:
         url: URL to crawl and ingest (e.g., "https://docs.python.org/3/")
         collection_name: Collection to add content to
+        mode: "crawl" (new, error if exists) or "recrawl" (update existing). Default: "crawl"
         follow_links: If True, follows internal links for multi-page crawl (default: False)
         max_depth: Maximum crawl depth when following links (default: 1, max: 3)
         auto_create_collection: Create collection if doesn't exist (default: True)
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
-        Minimal response (default):
+        Minimal response (default, mode="crawl"):
         {
+            "mode": str,  # "crawl" or "recrawl"
             "pages_crawled": int,
             "pages_ingested": int,  # May be less if some pages failed
             "total_chunks": int,
@@ -341,6 +426,12 @@ def ingest_url(
             }
         }
 
+        Recrawl response (mode="recrawl"):
+        {
+            ...same as above...
+            "old_pages_deleted": int  # Pages removed before re-crawling
+        }
+
         Extended response (include_document_ids=True):
         {
             ...same as above...
@@ -348,26 +439,36 @@ def ingest_url(
         }
 
     Example:
-        # Single page (minimal response)
-        result = ingest_url(
-            url="https://example.com/docs",
-            collection_name="example-docs"
-        )
-
-        # Follow links with document IDs
+        # New crawl (will error if URL already crawled)
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
-            follow_links=True,
-            max_depth=2,
-            include_document_ids=True
+            mode="crawl"
         )
 
+        # Update existing crawl
+        result = ingest_url(
+            url="https://example.com/docs",
+            collection_name="example-docs",
+            mode="recrawl",
+            follow_links=True,
+            max_depth=2
+        )
+
+        # Check collection info to see if URL already crawled
+        info = get_collection_info("example-docs")
+        for crawl in info['crawled_urls']:
+            print(f"Already crawled: {crawl['url']}")
+
+    Raises:
+        ValueError: If mode="crawl" and URL already crawled into this collection.
+                   Error message suggests using mode="recrawl" to update.
+
     Note: Web crawling can be slow (1-5 seconds per page). Use follow_links sparingly.
-    Metadata includes crawl_root_url for use with recrawl_url() later.
+    Use analyze_website() first to understand site structure and plan comprehensive crawling.
     """
     return ingest_url_impl(
-        doc_store, url, collection_name, follow_links, max_depth, auto_create_collection, include_document_ids
+        doc_store, db, url, collection_name, follow_links, max_depth, mode, auto_create_collection, include_document_ids
     )
 
 
@@ -513,58 +614,6 @@ def ingest_directory(
         recursive,
         auto_create_collection,
         include_document_ids,
-    )
-
-
-@mcp.tool()
-def recrawl_url(
-    url: str,
-    collection_name: str,
-    follow_links: bool = False,
-    max_depth: int = 1,
-) -> dict:
-    """
-    Re-crawl a URL by deleting old pages and re-ingesting fresh content.
-
-    This is the "nuclear option" for keeping web documentation up-to-date.
-    Finds all documents where metadata.crawl_root_url matches the specified URL,
-    deletes those documents and chunks, then re-crawls and re-ingests.
-
-    Other documents in the collection (from different URLs or manual ingestion)
-    are unaffected. This allows multiple documentation sources in one collection.
-
-    Args:
-        url: URL to re-crawl (must match original crawl_root_url)
-        collection_name: Collection containing the documents
-        follow_links: If True, follows internal links (default: False)
-        max_depth: Maximum crawl depth when following links (default: 1)
-
-    Returns:
-        {
-            "old_pages_deleted": int,
-            "new_pages_crawled": int,
-            "new_pages_ingested": int,
-            "total_chunks": int,
-            "document_ids": list[int],
-            "collection_name": str
-        }
-
-    Example:
-        # Re-crawl documentation site
-        result = recrawl_url(
-            url="https://docs.example.com",
-            collection_name="example-docs",
-            follow_links=True,
-            max_depth=2
-        )
-
-        print(f"Replaced {result['old_pages_deleted']} old pages with {result['new_pages_ingested']} new pages")
-
-    Note: Only deletes documents from this specific crawl_root_url.
-    Safe for collections with multiple documentation sources.
-    """
-    return recrawl_url_impl(
-        doc_store, db, url, collection_name, follow_links, max_depth
     )
 
 
