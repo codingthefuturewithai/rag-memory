@@ -5,10 +5,11 @@ import os
 from typing import Optional
 
 import psycopg
-from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv()
+# Load environment variables using three-tier system
+from .config_loader import load_environment_variables
+
+load_environment_variables()
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +27,8 @@ class Database:
         self.connection_string = connection_string or os.getenv("DATABASE_URL")
         if not self.connection_string:
             raise ValueError(
-                "DATABASE_URL not found. Set it in .env or pass connection_string parameter."
+                "DATABASE_URL not found. Set it in environment variables, ~/.rag-memory-env, "
+                "or pass connection_string parameter."
             )
         self._connection: Optional[psycopg.Connection] = None
         logger.info("Database initialized with connection string")

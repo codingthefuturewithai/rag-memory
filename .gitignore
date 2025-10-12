@@ -69,3 +69,6 @@ Thumbs.db
 # Benchmark test results (generated data)
 test-results/
 test_mcp_server/
+
+# Claude Code local settings (user-specific overrides)
+.claude/settings.local.json

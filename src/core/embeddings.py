@@ -5,11 +5,12 @@ import os
 from typing import List
 
 import numpy as np
-from dotenv import load_dotenv
 from openai import OpenAI
 
-# Load environment variables
-load_dotenv()
+# Load environment variables using three-tier system
+from .config_loader import load_environment_variables
+
+load_environment_variables()
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +29,8 @@ class EmbeddingGenerator:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "OPENAI_API_KEY not found. Set it in .env or pass api_key parameter."
+                "OPENAI_API_KEY not found. Set it in environment variables, ~/.rag-memory-env, "
+                "or pass api_key parameter."
             )
 
         self.client = OpenAI(api_key=self.api_key)

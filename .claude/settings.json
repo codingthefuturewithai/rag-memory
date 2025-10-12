@@ -1,0 +1,57 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker *)",
+      "Bash(docker-compose *)",
+      "Bash(uv *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(which *)",
+      "Bash(pwd)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Read(.reference/**)",
+      "Read(README.md)",
+      "Read(CLAUDE.md)",
+      "Read(docs/**)",
+      "Read(.claude/commands/**)",
+      "Read(pyproject.toml)",
+      "Read(.env.example)",
+      "Glob(.reference/**)",
+      "Glob(docs/**)",
+      "Glob(*.md)"
+    ],
+    "deny": [
+      "Bash(rm *)",
+      "Bash(sudo *)",
+      "Bash(docker-compose down*)",
+      "Bash(docker rm*)",
+      "Bash(docker rmi*)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Bash(echo $OPENAI_API_KEY*)",
+      "Bash(echo $*API_KEY*)",
+      "Bash(echo $*SECRET*)",
+      "Bash(echo $*PASSWORD*)",
+      "Bash(cat .env)",
+      "Bash(cat **/.env)",
+      "Write(**)",
+      "Edit(**)",
+      "Read(.env)",
+      "Read(**/.env)",
+      "Read(**/secrets/**)",
+      "Read(**/*secret*)",
+      "Read(**/*key*)",
+      "Read(**/*password*)",
+      "Read(**/*credential*)"
+    ],
+    "ask": [
+      "Bash(docker-compose up*)",
+      "Bash(docker-compose restart*)",
+      "Bash(uv run rag init*)",
+      "Bash(uv run rag collection delete*)",
+      "Bash(uv run rag document delete*)",
+      "Bash(uv run rag recrawl*)"
+    ]
+  }
+}

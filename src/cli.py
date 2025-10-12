@@ -34,7 +34,9 @@ console = Console()
 @click.group()
 def main():
     """PostgreSQL pgvector RAG POC - Command-line interface."""
-    pass
+    # Check for first-run setup before executing any command
+    from src.core.first_run import ensure_config_or_exit
+    ensure_config_or_exit()
 
 
 @main.command()
