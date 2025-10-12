@@ -27,6 +27,7 @@ def search_documents_impl(
     limit: int,
     threshold: float,
     include_source: bool,
+    include_metadata: bool,
 ) -> List[Dict[str, Any]]:
     """Implementation of search_documents tool."""
     try:
@@ -40,21 +41,33 @@ def search_documents_impl(
         )
 
         # Convert ChunkSearchResult objects to dicts
-        return [
-            {
-                "chunk_id": r.chunk_id,
+        # Minimal response by default (optimized for AI agent context windows)
+        results_list = []
+        for r in results:
+            result = {
+                "content": r.content,
+                "similarity": float(r.similarity),
                 "source_document_id": r.source_document_id,
                 "source_filename": r.source_filename,
-                "chunk_index": r.chunk_index,
-                "similarity": float(r.similarity),
-                "content": r.content,
-                "char_start": r.char_start,
-                "char_end": r.char_end,
-                "metadata": r.metadata or {},
-                "source_content": r.source_content if include_source else None,
             }
-            for r in results
-        ]
+
+            # Optionally include extended metadata (chunk details)
+            if include_metadata:
+                result.update({
+                    "chunk_id": r.chunk_id,
+                    "chunk_index": r.chunk_index,
+                    "char_start": r.char_start,
+                    "char_end": r.char_end,
+                    "metadata": r.metadata or {},
+                })
+
+            # Optionally include full source document content
+            if include_source:
+                result["source_content"] = r.source_content
+
+            results_list.append(result)
+
+        return results_list
     except Exception as e:
         logger.error(f"search_documents failed: {e}")
         raise

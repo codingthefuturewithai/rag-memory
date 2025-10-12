@@ -56,6 +56,7 @@ def search_documents(
     limit: int = 5,
     threshold: float = 0.7,
     include_source: bool = False,
+    include_metadata: bool = False,
 ) -> list[dict]:
     """
     Search for relevant document chunks using vector similarity.
@@ -63,41 +64,69 @@ def search_documents(
     This is the primary RAG retrieval method. Uses OpenAI text-embedding-3-small
     embeddings with pgvector HNSW indexing for fast, accurate semantic search.
 
+    By default, returns minimal response optimized for AI agent context windows
+    (only content, similarity, source_document_id, and source_filename). Use
+    include_metadata=True to get extended chunk details.
+
     Args:
         query: Natural language search query (e.g., "How do I configure GitHub Actions?")
         collection_name: Optional collection to scope search. If None, searches all collections.
         limit: Maximum number of results to return (default: 5, max: 50)
         threshold: Minimum similarity score 0-1 (default: 0.7). Lower = more permissive.
         include_source: If True, includes full source document content in results
+        include_metadata: If True, includes chunk_id, chunk_index, char_start, char_end,
+                         and metadata dict. Default: False (minimal response).
 
     Returns:
-        List of matching chunks ordered by similarity (highest first):
+        List of matching chunks ordered by similarity (highest first).
+
+        Minimal response (default, include_metadata=False):
         [
             {
-                "chunk_id": int,
+                "content": str,  # Chunk content (~1000 chars)
+                "similarity": float,  # 0-1, higher is better
+                "source_document_id": int,  # For calling get_document_by_id()
+                "source_filename": str,  # Document title/filename
+                "source_content": str  # Full document (only if include_source=True)
+            }
+        ]
+
+        Extended response (include_metadata=True):
+        [
+            {
+                "content": str,
+                "similarity": float,
                 "source_document_id": int,
                 "source_filename": str,
-                "chunk_index": int,
-                "similarity": float,  # 0-1, higher is better
-                "content": str,  # Chunk content (~1000 chars)
-                "char_start": int,  # Position in source document
+                "chunk_id": int,  # Internal chunk ID
+                "chunk_index": int,  # Position in document (0-based)
+                "char_start": int,  # Character position in source
                 "char_end": int,
-                "metadata": dict,  # Custom metadata
-                "source_content": str  # Full document (if include_source=True)
+                "metadata": dict,  # Custom metadata from ingestion
+                "source_content": str  # Only if include_source=True
             }
         ]
 
     Example:
+        # Minimal response (recommended for most queries)
         results = search_documents(
             query="Python async programming",
             collection_name="tutorials",
             limit=3
         )
 
+        # Extended response with all metadata
+        results = search_documents(
+            query="Python async programming",
+            collection_name="tutorials",
+            limit=3,
+            include_metadata=True
+        )
+
     Performance: ~400-500ms per query (includes embedding generation + vector search)
     """
     return search_documents_impl(
-        searcher, query, collection_name, limit, threshold, include_source
+        searcher, query, collection_name, limit, threshold, include_source, include_metadata
     )
 
 
