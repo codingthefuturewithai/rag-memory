@@ -1,9 +1,11 @@
-"""Configuration loader for RAG Memory with three-tier priority system.
+"""Configuration loader for RAG Memory with two-tier priority system.
 
 This module provides cross-platform configuration loading that checks:
 1. Environment variables (highest priority)
-2. Project .env file (current directory only)
-3. Global user config file ~/.rag-memory-env (lowest priority)
+2. Global user config file ~/.rag-memory-env (fallback)
+
+For local development, developers should set environment variables in their shell
+or use the global config file. The CLI does not use .env files.
 """
 
 import os
@@ -129,24 +131,19 @@ def get_env_var_from_file(key: str, file_path: Optional[Path] = None) -> Optiona
 
 def load_environment_variables():
     """
-    Load environment variables using three-tier priority system.
+    Load environment variables using two-tier priority system.
 
     Priority order (highest to lowest):
     1. Environment variables (already set in shell)
-    2. Project .env file (current directory only)
-    3. Global ~/.rag-memory-env file (user-specific)
+    2. Global ~/.rag-memory-env file (user-specific)
 
-    This function is called automatically at module initialization.
+    Note: For local development, set environment variables in your shell or use
+    the global config file. The CLI should not depend on .env files in arbitrary
+    directories.
     """
     # 1. Environment variables - highest priority, already in os.environ
 
-    # 2. Project .env file - current directory only (for development)
-    current_dir_env = Path.cwd() / '.env'
-    if current_dir_env.exists():
-        # override=False means env vars take precedence
-        load_dotenv(dotenv_path=current_dir_env, override=False)
-
-    # 3. Global user config file - lowest priority
+    # 2. Global user config file - only fallback
     global_config = get_global_config_path()
     if global_config.exists():
         env_vars = load_env_file(global_config)
