@@ -123,7 +123,7 @@ If missing: "Reference documentation not found. Please ensure .reference/ direct
 
 ---
 
-#### Step 6 - Use Cases
+#### Step 5 - Use Cases
 
 [Read from .reference/OVERVIEW.md "Use Cases" section]
 
@@ -131,6 +131,26 @@ If missing: "Reference documentation not found. Please ensure .reference/ direct
 - Three main use cases (agent memory, knowledge base, documentation management)
 - 1-2 sentences per use case
 - Keep it concrete with examples
+
+**STOP and wait for user response before continuing to Step 6**
+
+---
+
+#### Step 6 - API Costs (Quick Overview)
+
+[Read from .reference/PRICING.md "Key Points" and "Realistic Usage Scenarios" sections]
+
+**Present:**
+- **Keep it brief** - Just give high-level cost estimates
+- Small knowledge base (1,000 docs): ~$0.02 one-time
+- Medium knowledge base (10,000 docs): ~$0.15 one-time
+- Large knowledge base (100,000 docs): ~$1.50 one-time
+- Emphasize: Searches are FREE (no API calls), only ingestion costs
+- Tell them: "More details in .reference/PRICING.md if you want specifics"
+
+**If they ask for more details:**
+- Read more from .reference/PRICING.md as needed
+- But keep initial presentation brief!
 
 **STOP and wait for user response before continuing to Step 7**
 
