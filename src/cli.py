@@ -7,6 +7,14 @@ import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
+# Configure logging and suppress dotenv warnings BEFORE importing dependencies
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+# Suppress dotenv parsing warnings from dependencies (e.g., Crawl4AI)
+logging.getLogger("dotenv.main").setLevel(logging.ERROR)
+
 import click
 from rich.console import Console
 from rich.table import Table
@@ -21,15 +29,6 @@ from src.retrieval.hybrid_search import get_hybrid_search
 from src.retrieval.multi_query import get_multi_query_search
 from src.ingestion.web_crawler import crawl_single_page, WebCrawler
 from src.ingestion.website_analyzer import analyze_website
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-
-# Suppress dotenv parsing warnings from dependencies (e.g., Crawl4AI)
-logging.getLogger("dotenv.main").setLevel(logging.ERROR)
 
 console = Console()
 
