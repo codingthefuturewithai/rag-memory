@@ -342,6 +342,244 @@ class DocumentStore:
 
             return chunks
 
+    def update_document(
+        self,
+        document_id: int,
+        content: Optional[str] = None,
+        filename: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        Update an existing document's content, title, or metadata.
+
+        If content is provided, the document is re-chunked and re-embedded automatically.
+        Old chunks are deleted and replaced with new ones.
+
+        Args:
+            document_id: ID of document to update
+            content: New content (if provided, triggers re-chunking/re-embedding)
+            filename: New title/filename
+            metadata: New or updated metadata (merged with existing)
+
+        Returns:
+            Dictionary with update results:
+            {
+                "document_id": int,
+                "updated_fields": list[str],
+                "old_chunk_count": int,
+                "new_chunk_count": int
+            }
+
+        Raises:
+            ValueError: If document_id doesn't exist
+        """
+        conn = self.db.connect()
+
+        # Get current document
+        doc = self.get_source_document(document_id)
+        if not doc:
+            raise ValueError(f"Document {document_id} not found")
+
+        updated_fields = []
+
+        # Update metadata if provided (merge with existing)
+        if metadata is not None:
+            merged_metadata = {**doc['metadata'], **metadata}
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE source_documents SET metadata = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (Jsonb(merged_metadata), document_id)
+                )
+            updated_fields.append("metadata")
+            logger.info(f"Updated metadata for document {document_id}")
+
+        # Update filename if provided
+        if filename is not None:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE source_documents SET filename = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (filename, document_id)
+                )
+            updated_fields.append("title")
+            logger.info(f"Updated filename for document {document_id} to '{filename}'")
+
+        # Update content if provided (requires re-chunking)
+        old_chunk_count = 0
+        new_chunk_count = 0
+
+        if content is not None:
+            # Get old chunk count and collections
+            old_chunks = self.get_document_chunks(document_id)
+            old_chunk_count = len(old_chunks)
+
+            # Get collections this document belongs to (before deleting chunks)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT c.id, c.name
+                    FROM collections c
+                    JOIN chunk_collections cc ON cc.collection_id = c.id
+                    JOIN document_chunks dc ON dc.id = cc.chunk_id
+                    WHERE dc.source_document_id = %s
+                    """,
+                    (document_id,)
+                )
+                collections = cur.fetchall()
+
+            logger.info(f"Deleting {old_chunk_count} old chunks for document {document_id}")
+
+            # Delete old chunks (cascade deletes chunk_collections entries)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM document_chunks WHERE source_document_id = %s",
+                    (document_id,)
+                )
+
+            # Update document content
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE source_documents SET content = %s, file_size = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                    (content, len(content), document_id)
+                )
+
+            logger.info(f"Re-chunking document {document_id} ({len(content)} chars)...")
+
+            # Re-chunk the document
+            chunks = self.chunker.chunk_text(content, doc['metadata'])
+
+            stats = self.chunker.get_stats(chunks)
+            logger.info(
+                f"Created {stats['num_chunks']} new chunks. "
+                f"Avg: {stats['avg_chunk_size']:.0f} chars, "
+                f"Range: {stats['min_chunk_size']}-{stats['max_chunk_size']}"
+            )
+
+            # Store new chunks with embeddings
+            new_chunk_ids = []
+            for chunk_doc in chunks:
+                # Generate embedding
+                embedding = self.embedder.generate_embedding(
+                    chunk_doc.page_content, normalize=True
+                )
+
+                embedding_array = np.array(embedding)
+
+                # Insert chunk
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO document_chunks
+                        (source_document_id, chunk_index, content,
+                         char_start, char_end, metadata, embedding)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            document_id,
+                            chunk_doc.metadata.get("chunk_index", 0),
+                            chunk_doc.page_content,
+                            chunk_doc.metadata.get("char_start", 0),
+                            chunk_doc.metadata.get("char_end", 0),
+                            Jsonb(chunk_doc.metadata),
+                            embedding_array,
+                        ),
+                    )
+                    chunk_id = cur.fetchone()[0]
+                    new_chunk_ids.append(chunk_id)
+
+                # Re-link to all collections the document belonged to
+                for coll_id, coll_name in collections:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "INSERT INTO chunk_collections (chunk_id, collection_id) VALUES (%s, %s)",
+                            (chunk_id, coll_id)
+                        )
+
+            new_chunk_count = len(new_chunk_ids)
+            updated_fields.append("content")
+            logger.info(f"✅ Updated document {document_id}: replaced {old_chunk_count} chunks with {new_chunk_count} new chunks")
+
+        return {
+            "document_id": document_id,
+            "updated_fields": updated_fields,
+            "old_chunk_count": old_chunk_count,
+            "new_chunk_count": new_chunk_count
+        }
+
+    def delete_document(self, document_id: int) -> Dict[str, Any]:
+        """
+        Delete a source document and all its chunks.
+
+        This removes:
+        - The source document
+        - All document chunks
+        - All chunk-collection links (via cascade)
+
+        The document is permanently deleted and cannot be recovered.
+
+        Args:
+            document_id: ID of document to delete
+
+        Returns:
+            Dictionary with deletion results:
+            {
+                "document_id": int,
+                "document_title": str,
+                "chunks_deleted": int,
+                "collections_affected": list[str]
+            }
+
+        Raises:
+            ValueError: If document_id doesn't exist
+        """
+        conn = self.db.connect()
+
+        # Get document info before deletion
+        doc = self.get_source_document(document_id)
+        if not doc:
+            raise ValueError(f"Document {document_id} not found")
+
+        chunks = self.get_document_chunks(document_id)
+
+        # Get affected collections
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT c.name
+                FROM collections c
+                JOIN chunk_collections cc ON cc.collection_id = c.id
+                JOIN document_chunks dc ON dc.id = cc.chunk_id
+                WHERE dc.source_document_id = %s
+                """,
+                (document_id,)
+            )
+            collections_affected = [row[0] for row in cur.fetchall()]
+
+        logger.info(f"Deleting document {document_id} ('{doc['filename']}') with {len(chunks)} chunks")
+
+        # Delete chunks (cascade will handle chunk_collections)
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM document_chunks WHERE source_document_id = %s",
+                (document_id,)
+            )
+
+        # Delete source document
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM source_documents WHERE id = %s",
+                (document_id,)
+            )
+
+        logger.info(f"✅ Deleted document {document_id} from collections: {collections_affected}")
+
+        return {
+            "document_id": document_id,
+            "document_title": doc["filename"],
+            "chunks_deleted": len(chunks),
+            "collections_affected": collections_affected
+        }
+
 
 def get_document_store(
     database: Database,

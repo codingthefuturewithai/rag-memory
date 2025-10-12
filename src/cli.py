@@ -760,5 +760,124 @@ def document_view(doc_id, show_chunks, show_content):
         sys.exit(1)
 
 
+@document.command("update")
+@click.argument("doc_id", type=int)
+@click.option("--content", help="New content (triggers re-chunking and re-embedding)")
+@click.option("--title", help="New document title/filename")
+@click.option("--metadata", help="New metadata as JSON string (merged with existing)")
+def document_update(doc_id, content, title, metadata):
+    """Update a source document's content, title, or metadata.
+
+    Examples:
+        # Update content (re-chunks and re-embeds automatically)
+        uv run poc document update 42 --content "New company vision: ..."
+
+        # Update title only
+        uv run poc document update 42 --title "Updated Title"
+
+        # Update metadata (merged with existing)
+        uv run poc document update 42 --metadata '{"status": "reviewed"}'
+
+        # Update multiple fields
+        uv run poc document update 42 --content "..." --title "New Title"
+    """
+    try:
+        if not content and not title and not metadata:
+            console.print("[bold red]Error: Must provide at least one of --content, --title, or --metadata[/bold red]")
+            sys.exit(1)
+
+        db = get_database()
+        embedder = get_embedding_generator()
+        coll_mgr = get_collection_manager(db)
+        doc_store = get_document_store(db, embedder, coll_mgr)
+
+        console.print(f"[bold blue]Updating document {doc_id}...[/bold blue]\n")
+
+        # Parse metadata if provided
+        metadata_dict = None
+        if metadata:
+            try:
+                metadata_dict = json.loads(metadata)
+            except json.JSONDecodeError as e:
+                console.print(f"[bold red]Invalid JSON in metadata: {e}[/bold red]")
+                sys.exit(1)
+
+        # Update document
+        result = doc_store.update_document(
+            document_id=doc_id,
+            content=content,
+            filename=title,
+            metadata=metadata_dict
+        )
+
+        console.print(f"[bold green]✓ Updated document {doc_id}[/bold green]")
+        console.print(f"  Updated fields: {', '.join(result['updated_fields'])}")
+
+        if "content" in result['updated_fields']:
+            console.print(f"  Replaced {result['old_chunk_count']} chunks with {result['new_chunk_count']} new chunks")
+
+    except ValueError as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
+@document.command("delete")
+@click.argument("doc_id", type=int)
+@click.option("--confirm", is_flag=True, help="Skip confirmation prompt")
+def document_delete(doc_id, confirm):
+    """Delete a source document and all its chunks.
+
+    This permanently deletes the document and cannot be undone.
+
+    Examples:
+        # Delete with confirmation prompt
+        uv run poc document delete 42
+
+        # Delete without confirmation
+        uv run poc document delete 42 --confirm
+    """
+    try:
+        db = get_database()
+        embedder = get_embedding_generator()
+        coll_mgr = get_collection_manager(db)
+        doc_store = get_document_store(db, embedder, coll_mgr)
+
+        # Get document info
+        doc = doc_store.get_source_document(doc_id)
+        if not doc:
+            console.print(f"[bold red]Document {doc_id} not found[/bold red]")
+            sys.exit(1)
+
+        # Confirmation prompt unless --confirm flag is used
+        if not confirm:
+            console.print(f"[yellow]About to delete document {doc_id}: '{doc['filename']}'[/yellow]")
+            console.print(f"[yellow]This will also delete all associated chunks.[/yellow]")
+            response = input("\nAre you sure? (yes/no): ")
+            if response.lower() not in ['yes', 'y']:
+                console.print("[dim]Deletion cancelled[/dim]")
+                return
+
+        console.print(f"[bold blue]Deleting document {doc_id}...[/bold blue]\n")
+
+        # Delete document
+        result = doc_store.delete_document(doc_id)
+
+        console.print(f"[bold green]✓ Deleted document {doc_id}[/bold green]")
+        console.print(f"  Title: {result['document_title']}")
+        console.print(f"  Chunks deleted: {result['chunks_deleted']}")
+        if result['collections_affected']:
+            console.print(f"  Collections affected: {', '.join(result['collections_affected'])}")
+
+    except ValueError as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()
