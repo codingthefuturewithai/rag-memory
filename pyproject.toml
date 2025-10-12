@@ -2,7 +2,22 @@
 name = "rag-memory"
 version = "0.1.0"
 description = "PostgreSQL pgvector-based RAG memory system with MCP server"
+readme = "README.md"
 requires-python = ">=3.12"
+license = {text = "MIT"}
+authors = [
+    {name = "Tim Kitchens"},
+]
+keywords = ["rag", "mcp", "pgvector", "postgresql", "vector-database", "embeddings", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Database",
+]
 dependencies = [
     # Core Database
     "psycopg[binary]>=3.2.0",
