@@ -1,5 +1,9 @@
 # RAG Memory
 
+[![PyPI package](https://img.shields.io/pypi/v/rag-memory?color=brightgreen&label=pypi%20package)](https://pypi.org/project/rag-memory/)
+[![Python](https://img.shields.io/pypi/pyversions/rag-memory?color=blue)](https://pypi.org/project/rag-memory/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A production-ready PostgreSQL + pgvector RAG (Retrieval-Augmented Generation) system that works as both an **MCP server for AI agents** and a **standalone CLI tool**.
 
 ## What Is This?
