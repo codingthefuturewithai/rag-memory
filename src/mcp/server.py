@@ -823,25 +823,57 @@ def list_documents(
 
 
 def main():
-    """Run the MCP server."""
+    """Run the MCP server with specified transport."""
     import sys
-    import os
+    import asyncio
+    import click
 
-    # Support transport mode via command line argument
-    transport = "stdio"  # Default
-    if len(sys.argv) > 1:
-        if sys.argv[1] in ["stdio", "sse", "streamable-http"]:
-            transport = sys.argv[1]
+    @click.command()
+    @click.option(
+        "--port",
+        default=3001,
+        help="Port to listen on for SSE or Streamable HTTP transport"
+    )
+    @click.option(
+        "--transport",
+        type=click.Choice(["stdio", "sse", "streamable-http"]),
+        default="stdio",
+        help="Transport type (stdio, sse, or streamable-http)"
+    )
+    def run_cli(port: int, transport: str):
+        """Run the RAG memory MCP server with specified transport."""
+        async def run_server():
+            """Inner async function to run the server and manage the event loop."""
+            try:
+                if transport == "stdio":
+                    logger.info("Starting server with STDIO transport")
+                    await mcp.run_stdio_async()
+                elif transport == "sse":
+                    logger.info(f"Starting server with SSE transport on port {port}")
+                    mcp.settings.port = port
+                    await mcp.run_sse_async()
+                elif transport == "streamable-http":
+                    logger.info(f"Starting server with Streamable HTTP transport on port {port}")
+                    mcp.settings.port = port
+                    mcp.settings.streamable_http_path = "/mcp"
+                    await mcp.run_streamable_http_async()
+                else:
+                    raise ValueError(f"Unknown transport: {transport}")
+            except KeyboardInterrupt:
+                logger.info("Server stopped by user")
+            except Exception as e:
+                logger.error(f"Failed to start server: {e}", exc_info=True)
+                raise
 
-    # For streamable-http, disable auth for local testing if MCP_NO_AUTH is set
-    if transport == "streamable-http" and os.environ.get("MCP_NO_AUTH") == "1":
-        logger.warning("⚠️  Running streamable-http WITHOUT authentication (MCP_NO_AUTH=1)")
-        logger.warning("⚠️  This is INSECURE and should only be used for local testing!")
-        # Set environment variable that FastMCP checks
-        os.environ["MCP_DISABLE_AUTH"] = "1"
+        try:
+            asyncio.run(run_server())
+        except KeyboardInterrupt:
+            logger.info("Server interrupted")
+        except Exception as e:
+            logger.error(f"Server error: {e}")
+            raise
 
-    logger.info(f"Starting RAG memory MCP server with {transport} transport...")
-    mcp.run(transport=transport)
+    run_cli()
 
 
 if __name__ == "__main__":
