@@ -404,3 +404,161 @@ This is a **proof-of-concept**, not production code:
 - 10K documents (~7.5M tokens): ~$0.15 total
 - Per-query cost: negligible (~$0.00003)
 - 6.5x cheaper than text-embedding-3-large with similar performance
+
+## RAG Search Optimization Results (2025-10-11)
+
+**TL;DR: Baseline vector-only search is optimal. Both attempted optimizations decreased performance.**
+
+### Test Environment
+- **Dataset:** claude-agent-sdk collection (391 documents, 2,093 chunks)
+- **Test Queries:** 20 queries across 4 categories (7 with ground truth labels)
+- **Embedding Model:** text-embedding-3-small (1536 dimensions)
+- **Evaluation Metrics:** Recall@5, Precision@5, MRR, nDCG@10
+
+### Implemented Search Methods
+
+#### ✅ Baseline (Vector-Only Search) - RECOMMENDED
+**Implementation:** `src/retrieval/search.py`
+```bash
+uv run poc search "query" --collection name --limit 10
+```
+
+**Performance:**
+- Recall@5: **81.0%** (any relevant), **78.6%** (highly relevant)
+- Precision@5: **57.1%** (any relevant), **54.3%** (highly relevant)
+- MRR: **0.679**
+- nDCG@10: **1.471**
+- Avg Latency: **413.6ms**
+
+**Why it works so well:**
+- High-quality documentation dataset with clear structure
+- text-embedding-3-small effectively captures semantic meaning
+- Proper chunking (~1000 chars, 200 overlap) with hierarchical splitting
+- HNSW indexing provides fast, accurate retrieval
+
+#### ❌ Phase 1: Hybrid Search (Vector + Keyword + RRF) - NOT RECOMMENDED
+**Implementation:** `src/retrieval/hybrid_search.py`
+```bash
+uv run poc search "query" --collection name --hybrid
+```
+
+**Components:**
+- PostgreSQL full-text search (tsvector + GIN index)
+- Vector similarity search
+- Reciprocal Rank Fusion (RRF, k=60) to merge rankings
+
+**Performance:**
+- Recall@5: 76.2% (↓ 4.8%)
+- Precision@5: 45.7% (↓ 11.4%)
+- MRR: 0.583 (↓ 14.1%)
+- nDCG@10: 1.159 (↓ 21.2%)
+- Avg Latency: 684.3ms (↑ 65%)
+
+**Why it failed:**
+- Keyword search adds noise for well-structured documentation
+- Technical terms and abbreviations don't benefit from full-text matching
+- Semantic embeddings already capture meaning better than keywords
+- Added complexity and latency without quality improvement
+
+**Database changes:**
+- Migration: `migrations/001_add_fulltext_search.sql`
+- Added `content_tsv tsvector` column to `document_chunks`
+- Created GIN index on `content_tsv` (664 KB for 391 chunks)
+
+**Status:** Code preserved but not recommended for production use.
+
+#### ❌ Phase 2: Multi-Query Retrieval (Query Expansion + RRF) - NOT RECOMMENDED
+**Implementation:** `src/retrieval/multi_query.py`
+```bash
+uv run poc search "query" --collection name --multi-query
+```
+
+**Components:**
+- Rule-based query expansion (3 variations per query)
+  - Add "documentation guide" context
+  - Rephrase as question/statement
+  - Add "setup configuration" specificity
+- Vector search for each variation (3x API calls)
+- RRF fusion of all results
+
+**Performance:**
+- Recall@5: 76.2% (↓ 4.8%)
+- Recall@5 (highly relevant): 71.4% (↓ 7.2%)
+- Precision@5: 51.4% (↓ 5.7%)
+- MRR: 0.560 (↓ 17.5%)
+- nDCG@10: 1.315 (↓ 10.6%)
+- Avg Latency: 982.5ms (↑ 138%)
+
+**Why it failed:**
+- Simple rule-based query expansion is too naive
+- Variations don't capture semantic nuances
+- 3x embedding API calls = 3x latency and cost
+- Original queries already well-formed enough for embeddings
+
+**Status:** Code preserved but not recommended for production use.
+
+#### ⏭️ Phase 3: Re-Ranking (Cross-Encoder) - SKIPPED
+**Not implemented.** Analysis of benchmark results shows re-ranking would not help:
+
+**Why we skipped re-ranking:**
+1. **MRR is already high (0.679)** - First relevant doc appears at rank ~1.5 on average
+2. **Top-5 recall is 81%** - Relevant docs are already in top positions
+3. **Re-ranking can't fix retrieval failures** - The queries that fail (0% recall) don't have relevant docs in top 20
+4. **Cost/benefit is poor** - Would add 50-200ms latency for minimal quality gain (~10% MRR improvement)
+
+**When to reconsider:**
+- If users complain that "the answer is there but not at the top" (ranking problem)
+- If expanding to much larger, noisier corpus (precision becomes critical)
+- If MRR drops significantly in production (ordering degraded)
+
+**What WOULD help instead:**
+- Better documentation structure/consolidation
+- Synthetic Q&A pairs for common questions
+- Improved metadata tagging
+- Real user feedback on failed queries
+
+### Final Recommendation
+
+**✅ Use baseline vector-only search for production.**
+
+**Comparison table:**
+
+| Metric | Baseline | Hybrid | Multi-Query | Winner |
+|--------|----------|--------|-------------|--------|
+| Recall@5 (any) | 81.0% | 76.2% | 76.2% | **Baseline** |
+| Recall@5 (high) | 78.6% | 78.6% | 71.4% | **Baseline** |
+| Precision@5 | 57.1% | 45.7% | 51.4% | **Baseline** |
+| MRR | 0.679 | 0.583 | 0.560 | **Baseline** |
+| nDCG@10 | 1.471 | 1.159 | 1.315 | **Baseline** |
+| Latency | 414ms | 684ms | 983ms | **Baseline** |
+
+**Key insights:**
+- 81% recall is excellent for this use case
+- Simple solution (vector-only) outperforms complex optimizations
+- High-quality dataset + strong embeddings = no need for advanced retrieval
+- Scientific measurement prevented wasted optimization effort
+
+**Documentation:**
+- Detailed analysis: `RAG_OPTIMIZATION_RESULTS.md`
+- Benchmark runners: `tests/benchmark/test_runner.py`, `run_phase1.py`, `run_phase2.py`
+- Ground truth labels: `test-data/ground-truth-simple.yaml`
+- Test queries: `test-data/test-queries.yaml`
+
+### Search Method Selection Guide
+
+**Use baseline (default) when:**
+- ✅ Standard documentation/knowledge base queries
+- ✅ Production deployment (best quality, lowest latency)
+- ✅ Cost-sensitive applications (1 API call vs 3)
+
+**Consider hybrid (--hybrid) when:**
+- ⚠️ Experimenting with keyword matching
+- ⚠️ Dataset has many exact-match technical terms
+- ⚠️ You're willing to sacrifice quality for keyword coverage
+
+**Consider multi-query (--multi-query) when:**
+- ⚠️ Experimenting with query expansion
+- ⚠️ Queries are extremely poorly worded
+- ⚠️ Latency and cost are not concerns
+
+**Recommendation:** Stick with baseline unless you have specific evidence it's failing in production.
