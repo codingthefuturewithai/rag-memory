@@ -1,0 +1,24 @@
+{
+  "collection_name": "claude-agent-sdk",
+  "snapshot_date": "2025-10-11T21:42:00Z",
+  "document_count": 391,
+  "created_at": "2025-10-11T22:27:02.182861",
+  "description": "Claude Code and Claude Agent SDK documentation crawled from docs.claude.com",
+  "crawl_root_url": "https://docs.claude.com/en/api/agent-sdk/overview",
+  "crawl_session_id": "7bd3f0a1-c5ed-4967-ab57-56c308ff24e4",
+  "crawl_timestamp": "2025-10-11T22:59:09.779336+00:00",
+  "note": "This collection is LOCKED for benchmark testing. Do not modify during optimization implementation phases.",
+  "stats": {
+    "total_chunks": "~2000-3000 estimated",
+    "avg_chunk_size": "~1000 chars",
+    "content_types": ["web_page"],
+    "sample_titles": [
+      "Common workflows - Claude Docs",
+      "Connect Claude Code to tools via MCP - Claude Docs",
+      "Intro to Claude - Claude Docs",
+      "Overview - Claude Docs",
+      "Model Context Protocol (MCP) - Claude Docs",
+      "Claude Code GitHub Actions - Claude Docs"
+    ]
+  }
+}

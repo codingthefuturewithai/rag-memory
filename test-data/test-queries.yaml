@@ -1,0 +1,149 @@
+# Test Query Suite for RAG Optimization Benchmarking
+# Collection: claude-agent-sdk
+# Created: 2025-10-11
+
+queries:
+  # Well-Formed Queries (baseline performance)
+  - id: wf-01
+    category: well_formed
+    query: "Claude Code configuration options"
+    expected_benefit: "baseline"
+    description: "Clear, well-structured query about configuration"
+
+  - id: wf-02
+    category: well_formed
+    query: "Model Context Protocol setup"
+    expected_benefit: "baseline"
+    description: "Technical query with proper terminology"
+
+  - id: wf-03
+    category: well_formed
+    query: "GitHub Actions integration guide"
+    expected_benefit: "baseline"
+    description: "Specific feature documentation query"
+
+  - id: wf-04
+    category: well_formed
+    query: "troubleshooting connection errors"
+    expected_benefit: "baseline"
+    description: "Problem-solving query with clear intent"
+
+  - id: wf-05
+    category: well_formed
+    query: "authentication and authorization setup"
+    expected_benefit: "baseline"
+    description: "Security-related configuration query"
+
+  # Abbreviation Queries (will benefit from hybrid search)
+  - id: abbr-01
+    category: abbreviation
+    query: "MCP server setup"
+    expected_benefit: "hybrid"
+    description: "Abbreviation - should expand to Model Context Protocol"
+
+  - id: abbr-02
+    category: abbreviation
+    query: "SDK migration"
+    expected_benefit: "hybrid"
+    description: "Abbreviation - Software Development Kit"
+
+  - id: abbr-03
+    category: abbreviation
+    query: "CI/CD integration"
+    expected_benefit: "hybrid"
+    description: "Common abbreviation in DevOps context"
+
+  - id: abbr-04
+    category: abbreviation
+    query: "API auth"
+    expected_benefit: "hybrid"
+    description: "Double abbreviation - API + auth"
+
+  - id: abbr-05
+    category: abbreviation
+    query: "MCP tool config"
+    expected_benefit: "hybrid"
+    description: "Abbreviation with additional context"
+
+  # Poorly Worded Queries (will benefit from multi-query)
+  - id: poor-01
+    category: poorly_worded
+    query: "how make agent work"
+    expected_benefit: "multi_query"
+    description: "Casual wording, poor grammar"
+
+  - id: poor-02
+    category: poorly_worded
+    query: "setup tool thing"
+    expected_benefit: "multi_query"
+    description: "Vague, unclear what 'tool thing' refers to"
+
+  - id: poor-03
+    category: poorly_worded
+    query: "fix code not working"
+    expected_benefit: "multi_query"
+    description: "Too general, no specific error mentioned"
+
+  - id: poor-04
+    category: poorly_worded
+    query: "connect stuff together"
+    expected_benefit: "multi_query"
+    description: "Very vague, unclear components"
+
+  - id: poor-05
+    category: poorly_worded
+    query: "use Claude for coding"
+    expected_benefit: "multi_query"
+    description: "Broad query needing refinement"
+
+  # Technical/Specific Queries (will benefit from re-ranking)
+  - id: tech-01
+    category: technical
+    query: "configuring IAM roles for Bedrock access"
+    expected_benefit: "reranking"
+    description: "Complex technical query with multiple concepts"
+
+  - id: tech-02
+    category: technical
+    query: "differences between Claude Code and Claude Agent SDK"
+    expected_benefit: "reranking"
+    description: "Comparison query requiring nuanced understanding"
+
+  - id: tech-03
+    category: technical
+    query: "implementing custom hooks for git operations"
+    expected_benefit: "reranking"
+    description: "Advanced feature implementation"
+
+  - id: tech-04
+    category: technical
+    query: "subagent configuration and task delegation"
+    expected_benefit: "reranking"
+    description: "Complex architectural concept"
+
+  - id: tech-05
+    category: technical
+    query: "deploying Claude Code on Google Vertex AI with authentication"
+    expected_benefit: "reranking"
+    description: "Multi-part technical query with platform specifics"
+
+# Summary Statistics
+stats:
+  total_queries: 20
+  categories:
+    well_formed: 5
+    abbreviation: 5
+    poorly_worded: 5
+    technical: 5
+
+# Expected Improvements by Phase
+expected_improvements:
+  phase1_hybrid:
+    - "abbreviation queries: +30-50% recall"
+    - "well_formed queries: stable baseline"
+  phase2_multiquery:
+    - "poorly_worded queries: +25-40% recall"
+    - "all queries: +15-25% average improvement"
+  phase3_reranking:
+    - "technical queries: +15-25% precision"
+    - "all queries: better result ordering"
