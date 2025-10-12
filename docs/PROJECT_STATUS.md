@@ -1,4 +1,4 @@
-# PostgreSQL pgvector RAG POC - Project Status
+# RAG Memory - Project Status
 
 **Status**: ✅ **COMPLETE** (October 2025)
 **Branch**: `main`
@@ -8,7 +8,7 @@
 
 ## Project Overview
 
-A proof-of-concept demonstrating PostgreSQL with pgvector extension as a superior replacement for ChromaDB in RAG (Retrieval-Augmented Generation) systems.
+A PostgreSQL pgvector-based RAG (Retrieval-Augmented Generation) memory system with MCP (Model Context Protocol) server for AI agents.
 
 **Key Achievement**: Vector normalization + HNSW indexing = **0.73 similarity** for near-identical content (vs ChromaDB's 0.3)
 
@@ -52,43 +52,43 @@ A proof-of-concept demonstrating PostgreSQL with pgvector extension as a superio
 
 ### Database Management
 ```bash
-uv run poc init              # Initialize database schema
-uv run poc status            # Check connection + stats
+uv run rag init              # Initialize database schema
+uv run rag status            # Check connection + stats
 ```
 
 ### Collection Management
 ```bash
-uv run poc collection create <name> [--description TEXT]
-uv run poc collection list
-uv run poc collection delete <name>
+uv run rag collection create <name> [--description TEXT]
+uv run rag collection list
+uv run rag collection delete <name>
 ```
 
 ### Document Ingestion
 ```bash
 # Files and directories
-uv run poc ingest file <path> --collection <name>
-uv run poc ingest directory <path> --collection <name> --extensions .txt,.md --recursive
+uv run rag ingest file <path> --collection <name>
+uv run rag ingest directory <path> --collection <name> --extensions .txt,.md --recursive
 
 # Web pages (single)
-uv run poc ingest url <url> --collection <name>
+uv run rag ingest url <url> --collection <name>
 
 # Web pages (follow links)
-uv run poc ingest url <url> --collection <name> --follow-links --max-depth 2
+uv run rag ingest url <url> --collection <name> --follow-links --max-depth 2
 
 # Re-crawl for updates
-uv run poc recrawl <url> --collection <name> --follow-links --max-depth 2
+uv run rag recrawl <url> --collection <name> --follow-links --max-depth 2
 ```
 
 ### Document Management
 ```bash
-uv run poc document list [--collection NAME]
-uv run poc document view <ID> [--show-chunks] [--show-content]
+uv run rag document list [--collection NAME]
+uv run rag document view <ID> [--show-chunks] [--show-content]
 ```
 
 ### Search
 ```bash
-uv run poc search "query" [--collection NAME] [--limit N] [--threshold FLOAT]
-uv run poc search "query" --show-source  # Include full source documents
+uv run rag search "query" [--collection NAME] [--limit N] [--threshold FLOAT]
+uv run rag search "query" --show-source  # Include full source documents
 ```
 
 ## Test Coverage

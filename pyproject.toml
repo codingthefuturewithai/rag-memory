@@ -1,7 +1,7 @@
 [project]
-name = "pgvector-rag-poc"
+name = "rag-memory"
 version = "0.1.0"
-description = "POC for PostgreSQL pgvector RAG system"
+description = "PostgreSQL pgvector-based RAG memory system with MCP server"
 requires-python = ">=3.12"
 dependencies = [
     # Core Database
@@ -46,7 +46,7 @@ jupyter = [
 ]
 
 [project.scripts]
-poc = "src.cli:main"
+rag = "src.cli:main"
 
 [build-system]
 requires = ["hatchling"]

@@ -26,49 +26,49 @@ cp .env.example .env
 docker-compose up -d
 
 # Initialize database
-uv run poc init
+uv run rag init
 ```
 
 ### Common Commands
 
 **Running the CLI:**
 ```bash
-# All commands use: uv run poc <command>
-uv run poc status              # Check database connection
-uv run poc test-similarity     # Validate similarity scores (key test!)
-uv run poc benchmark          # Performance benchmarks
+# All commands use: uv run rag <command>
+uv run rag status              # Check database connection
+uv run rag test-similarity     # Validate similarity scores (key test!)
+uv run rag benchmark          # Performance benchmarks
 
 # Collection management
-uv run poc collection create <name> [--description TEXT]
-uv run poc collection list
-uv run poc collection delete <name>
+uv run rag collection create <name> [--description TEXT]
+uv run rag collection list
+uv run rag collection delete <name>
 
 # Document ingestion (with automatic chunking by default)
-uv run poc ingest text "content" --collection <name> [--metadata JSON]
-uv run poc ingest file <path> --collection <name>  # Auto-chunks documents
-uv run poc ingest file <path> --collection <name> --no-chunking  # Store whole document
-uv run poc ingest directory <path> --collection <name> --extensions .txt,.md
-uv run poc ingest directory <path> --collection <name> --recursive
+uv run rag ingest text "content" --collection <name> [--metadata JSON]
+uv run rag ingest file <path> --collection <name>  # Auto-chunks documents
+uv run rag ingest file <path> --collection <name> --no-chunking  # Store whole document
+uv run rag ingest directory <path> --collection <name> --extensions .txt,.md
+uv run rag ingest directory <path> --collection <name> --recursive
 
 # Web page ingestion (uses Crawl4AI for web scraping)
-uv run poc ingest url <url> --collection <name>  # Crawl single page
-uv run poc ingest url <url> --collection <name> --follow-links  # Follow internal links (depth=1)
-uv run poc ingest url <url> --collection <name> --follow-links --max-depth 2  # Follow links 2 levels deep
-uv run poc ingest url <url> --collection <name> --chunk-size 2500 --chunk-overlap 300  # Custom chunking
+uv run rag ingest url <url> --collection <name>  # Crawl single page
+uv run rag ingest url <url> --collection <name> --follow-links  # Follow internal links (depth=1)
+uv run rag ingest url <url> --collection <name> --follow-links --max-depth 2  # Follow links 2 levels deep
+uv run rag ingest url <url> --collection <name> --chunk-size 2500 --chunk-overlap 300  # Custom chunking
 
 # Re-crawl web pages (delete old, re-ingest new)
 # Only deletes pages matching crawl_root_url - other documents in collection unaffected
-uv run poc recrawl <url> --collection <name>  # Re-crawl single page
-uv run poc recrawl <url> --collection <name> --follow-links --max-depth 2  # Re-crawl with link following
+uv run rag recrawl <url> --collection <name>  # Re-crawl single page
+uv run rag recrawl <url> --collection <name> --follow-links --max-depth 2  # Re-crawl with link following
 
 # Document management
-uv run poc document list [--collection NAME]  # List all source documents
-uv run poc document view <ID> [--show-chunks] [--show-content]  # View document details
+uv run rag document list [--collection NAME]  # List all source documents
+uv run rag document view <ID> [--show-chunks] [--show-content]  # View document details
 
 # Search (now supports both whole documents and chunks)
-uv run poc search "query" [--collection NAME] [--limit N] [--threshold FLOAT] [--verbose]
-uv run poc search "query" --chunks  # Search document chunks (recommended for chunked docs)
-uv run poc search "query" --chunks --show-source  # Include full source document info
+uv run rag search "query" [--collection NAME] [--limit N] [--threshold FLOAT] [--verbose]
+uv run rag search "query" --chunks  # Search document chunks (recommended for chunked docs)
+uv run rag search "query" --chunks --show-source  # Include full source document info
 ```
 
 **Testing:**
@@ -289,7 +289,7 @@ results = searcher.search_chunks(
 
 1. **Collections** (like ChromaDB): High-level grouping
    - Create separate collections per topic
-   - Search scoped to collection: `uv run poc search "query" --collection tech-docs`
+   - Search scoped to collection: `uv run rag search "query" --collection tech-docs`
 
 2. **Metadata** (JSONB): Fine-grained attributes
    - Add during ingestion: `--metadata '{"topic":"postgres","version":"2.0"}'`
@@ -326,13 +326,13 @@ The `recrawl` command implements a "nuclear option" strategy:
 **Example workflow:**
 ```bash
 # Initial crawl of docs site (depth=2)
-uv run poc ingest url https://docs.example.com --collection api-docs --follow-links --max-depth 2
+uv run rag ingest url https://docs.example.com --collection api-docs --follow-links --max-depth 2
 
 # Later, re-crawl to update content
-uv run poc recrawl https://docs.example.com --collection api-docs --follow-links --max-depth 2
+uv run rag recrawl https://docs.example.com --collection api-docs --follow-links --max-depth 2
 
 # Add different docs to same collection (unaffected by recrawl above)
-uv run poc ingest url https://guides.example.com --collection api-docs --follow-links
+uv run rag ingest url https://guides.example.com --collection api-docs --follow-links
 ```
 
 ### Metadata Filtering
@@ -430,7 +430,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "rag-memory": {
       "command": "uv",
-      "args": ["--directory", "/Users/timkitchens/projects/ai-projects/rag-pgvector-poc", "run", "python", "-m", "src.mcp.server"],
+      "args": ["--directory", "/Users/timkitchens/projects/ai-projects/rag-memory", "run", "python", "-m", "src.mcp.server"],
       "env": {
         "OPENAI_API_KEY": "your-api-key-here"
       }
@@ -508,7 +508,7 @@ npx @modelcontextprotocol/inspector
 #### ✅ Baseline (Vector-Only Search) - RECOMMENDED
 **Implementation:** `src/retrieval/search.py`
 ```bash
-uv run poc search "query" --collection name --limit 10
+uv run rag search "query" --collection name --limit 10
 ```
 
 **Performance:**
@@ -527,7 +527,7 @@ uv run poc search "query" --collection name --limit 10
 #### ❌ Phase 1: Hybrid Search (Vector + Keyword + RRF) - NOT RECOMMENDED
 **Implementation:** `src/retrieval/hybrid_search.py`
 ```bash
-uv run poc search "query" --collection name --hybrid
+uv run rag search "query" --collection name --hybrid
 ```
 
 **Components:**
@@ -558,7 +558,7 @@ uv run poc search "query" --collection name --hybrid
 #### ❌ Phase 2: Multi-Query Retrieval (Query Expansion + RRF) - NOT RECOMMENDED
 **Implementation:** `src/retrieval/multi_query.py`
 ```bash
-uv run poc search "query" --collection name --multi-query
+uv run rag search "query" --collection name --multi-query
 ```
 
 **Components:**

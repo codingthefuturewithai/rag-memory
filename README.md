@@ -1,6 +1,6 @@
-# PostgreSQL pgvector RAG POC
+# RAG Memory
 
-A proof-of-concept demonstrating PostgreSQL with pgvector extension for Retrieval-Augmented Generation (RAG) systems, addressing low similarity scores experienced with ChromaDB.
+A PostgreSQL pgvector-based RAG (Retrieval-Augmented Generation) memory system with MCP (Model Context Protocol) server for AI agents.
 
 ## Overview
 
@@ -56,7 +56,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 1. Clone and Setup
 
 ```bash
-cd /Users/timkitchens/projects/ai-projects/rag-pgvector-poc
+cd /Users/timkitchens/projects/ai-projects/rag-memory
 
 # Install dependencies with uv (super fast!)
 uv sync
@@ -89,10 +89,10 @@ docker-compose logs -f
 
 ```bash
 # Initialize and test connection
-uv run poc init
+uv run rag init
 
 # Check status
-uv run poc status
+uv run rag status
 ```
 
 ### 5. Run Similarity Tests
@@ -100,7 +100,7 @@ uv run poc status
 ```bash
 # This is the key validation step!
 # Tests high, medium, and low similarity scenarios
-uv run poc test-similarity
+uv run rag test-similarity
 ```
 
 Expected output:
@@ -120,70 +120,70 @@ Expected output:
 
 ```bash
 # Create a collection
-uv run poc collection create my-docs --description "My document collection"
+uv run rag collection create my-docs --description "My document collection"
 
 # List all collections
-uv run poc collection list
+uv run rag collection list
 
 # Delete a collection
-uv run poc collection delete my-docs
+uv run rag collection delete my-docs
 ```
 
 ### Document Ingestion
 
 ```bash
 # Ingest a single text
-uv run poc ingest text "PostgreSQL is a powerful database" --collection tech-docs
+uv run rag ingest text "PostgreSQL is a powerful database" --collection tech-docs
 
 # Ingest a file
-uv run poc ingest file document.txt --collection tech-docs
+uv run rag ingest file document.txt --collection tech-docs
 
 # Ingest a directory
-uv run poc ingest directory ./docs --collection tech-docs --extensions .txt,.md
+uv run rag ingest directory ./docs --collection tech-docs --extensions .txt,.md
 
 # With metadata
-uv run poc ingest text "Python tutorial" --collection tutorials --metadata '{"author":"John","topic":"python"}'
+uv run rag ingest text "Python tutorial" --collection tutorials --metadata '{"author":"John","topic":"python"}'
 ```
 
 ### Search
 
 ```bash
 # Basic search (searches document chunks)
-uv run poc search "What is PostgreSQL?"
+uv run rag search "What is PostgreSQL?"
 
 # Search within a collection
-uv run poc search "database performance" --collection tech-docs
+uv run rag search "database performance" --collection tech-docs
 
 # Limit results
-uv run poc search "machine learning" --limit 5
+uv run rag search "machine learning" --limit 5
 
 # Filter by similarity threshold
-uv run poc search "RAG systems" --threshold 0.7
+uv run rag search "RAG systems" --threshold 0.7
 
 # Filter by metadata (JSONB containment)
-uv run poc search "python tutorial" --metadata '{"language":"python","level":"beginner"}'
+uv run rag search "python tutorial" --metadata '{"language":"python","level":"beginner"}'
 
 # Combine collection and metadata filters
-uv run poc search "programming guide" --collection tutorials --metadata '{"language":"python"}'
+uv run rag search "programming guide" --collection tutorials --metadata '{"language":"python"}'
 
 # Verbose output (show full chunk content)
-uv run poc search "vector embeddings" --verbose
+uv run rag search "vector embeddings" --verbose
 
 # Include full source document content
-uv run poc search "embeddings" --show-source
+uv run rag search "embeddings" --show-source
 ```
 
 ### Testing & Benchmarking
 
 ```bash
 # Test similarity scores (validation)
-uv run poc test-similarity
+uv run rag test-similarity
 
 # Run performance benchmarks
-uv run poc benchmark
+uv run rag benchmark
 
 # Check database status
-uv run poc status
+uv run rag status
 ```
 
 ## Usage Examples
@@ -192,25 +192,25 @@ uv run poc status
 
 ```bash
 # Create collection
-uv run poc collection create knowledge-base
+uv run rag collection create knowledge-base
 
 # Ingest documents
-uv run poc ingest directory ./documentation --collection knowledge-base --extensions .md,.txt
+uv run rag ingest directory ./documentation --collection knowledge-base --extensions .md,.txt
 
 # Search
-uv run poc search "How do I configure authentication?" --collection knowledge-base --limit 5
+uv run rag search "How do I configure authentication?" --collection knowledge-base --limit 5
 ```
 
 ### Example 2: Compare Similarity Scores
 
 ```bash
 # Ingest related documents
-uv run poc ingest text "PostgreSQL is a relational database" --collection db-test
-uv run poc ingest text "MySQL is also a relational database" --collection db-test
-uv run poc ingest text "The weather is sunny today" --collection db-test
+uv run rag ingest text "PostgreSQL is a relational database" --collection db-test
+uv run rag ingest text "MySQL is also a relational database" --collection db-test
+uv run rag ingest text "The weather is sunny today" --collection db-test
 
 # Search and compare
-uv run poc search "Tell me about databases" --collection db-test --verbose
+uv run rag search "Tell me about databases" --collection db-test --verbose
 ```
 
 You should see:
@@ -298,13 +298,13 @@ docker-compose up -d
 
 If you're seeing low scores (< 0.5 for similar content):
 
-1. **Check normalization**: Run `uv run poc test-similarity`
+1. **Check normalization**: Run `uv run rag test-similarity`
 2. **Verify embeddings**: Check that embeddings have unit length
 3. **Check HNSW index**: Ensure index was created properly
 
 ```sql
 # Connect to database
-docker exec -it pgvector-rag-poc psql -U raguser -d rag_poc
+docker exec -it rag-memory psql -U raguser -d rag_poc
 
 # Check index
 \d documents
@@ -320,7 +320,7 @@ echo $OPENAI_API_KEY
 cat .env
 
 # Test with a simple command
-uv run poc ingest text "test" --collection test-col
+uv run rag ingest text "test" --collection test-col
 ```
 
 ### Import Errors
@@ -398,7 +398,7 @@ uv run python -m src.mcp.server --transport streamable-http --port 3001
 
 ### Complete Documentation
 
-📚 **See [MCP_SERVER_GUIDE.md](./MCP_SERVER_GUIDE.md) for:**
+📚 **See [docs/MCP_SERVER_GUIDE.md](./docs/MCP_SERVER_GUIDE.md) for:**
 - Detailed transport mode setup
 - MCP Inspector testing instructions
 - Claude Desktop configuration
@@ -415,7 +415,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "rag-memory": {
       "command": "uv",
-      "args": ["--directory", "/FULL/PATH/TO/rag-pgvector-poc", "run", "python", "-m", "src.mcp.server"],
+      "args": ["--directory", "/FULL/PATH/TO/rag-memory", "run", "python", "-m", "src.mcp.server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-key-here"
       }
@@ -424,7 +424,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-**Replace `/FULL/PATH/TO/rag-pgvector-poc` with your actual path** (run `pwd` in project directory).
+**Replace `/FULL/PATH/TO/rag-memory` with your actual path** (run `pwd` in project directory).
 
 ---
 
@@ -456,7 +456,7 @@ uv run ruff check src/ tests/
 ## Project Structure
 
 ```
-pgvector-rag-poc/
+rag-memory/
 ├── .env                    # Environment variables (create from .env.example)
 ├── .env.example           # Environment template
 ├── .gitignore             # Git ignore patterns
@@ -541,8 +541,8 @@ This is a proof-of-concept project for internal evaluation.
 For issues or questions:
 - Check the Troubleshooting section above
 - Review Docker logs: `docker-compose logs -f`
-- Verify environment setup: `uv run poc status`
-- Run validation tests: `uv run poc test-similarity`
+- Verify environment setup: `uv run rag status`
+- Run validation tests: `uv run rag test-similarity`
 
 ---
 

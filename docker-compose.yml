@@ -1,9 +1,7 @@
-version: '3.8'
-
 services:
   postgres:
     image: pgvector/pgvector:pg17
-    container_name: pgvector-rag-poc
+    container_name: rag-memory
     environment:
       POSTGRES_USER: raguser
       POSTGRES_PASSWORD: ragpassword

@@ -234,7 +234,7 @@ Add this to `claude_desktop_config.json`:
       "command": "uv",
       "args": [
         "--directory",
-        "/Users/timkitchens/projects/ai-projects/rag-pgvector-poc",
+        "/Users/timkitchens/projects/ai-projects/rag-memory",
         "run",
         "python",
         "-m",
@@ -253,7 +253,7 @@ Add this to `claude_desktop_config.json`:
 ### Getting Your Path
 
 ```bash
-cd /path/to/rag-pgvector-poc
+cd /path/to/rag-memory
 pwd  # Copy this output
 ```
 
@@ -277,7 +277,7 @@ pwd  # Copy this output
 - Try testing with MCP Inspector first
 
 **Tools not working:**
-- Check database connection: `uv run poc status`
+- Check database connection: `uv run rag status`
 - Verify OpenAI API key is valid
 - Look at Claude's error messages (hover over failed tool calls)
 
@@ -463,23 +463,23 @@ uv run python -c "import mcp; print('MCP installed')"
 **Inspector shows 0 tools**
 - Server initialization failed
 - Check server logs for errors
-- Verify database connection works: `uv run poc status`
+- Verify database connection works: `uv run rag status`
 
 ### Tool Call Errors
 
 **Error: Collection not found**
 ```bash
 # List existing collections
-uv run poc collection list
+uv run rag collection list
 
 # Create collection first
-uv run poc collection create my-collection
+uv run rag collection create my-collection
 ```
 
 **Error: Document not found**
 ```bash
 # List documents to find valid IDs
-uv run poc document list --collection my-collection
+uv run rag document list --collection my-collection
 ```
 
 **Error: URL already crawled**
@@ -495,7 +495,7 @@ uv run poc document list --collection my-collection
 - Consider caching for development
 
 **Slow search queries**
-- Check HNSW index exists: `uv run poc status`
+- Check HNSW index exists: `uv run rag status`
 - Verify database has resources (not memory constrained)
 - Reduce result limit if fetching too many
 
@@ -558,7 +558,7 @@ You can run multiple instances with different configs:
 1. **Test with MCP Inspector first** - Verify tools work before integrating
 2. **Use `mcp dev` for quick iteration** - Automatic reload on code changes
 3. **Check server logs** - All tool calls are logged with INFO level
-4. **Monitor database size** - Run `uv run poc status` regularly
+4. **Monitor database size** - Run `uv run rag status` regularly
 
 ### For Production
 
@@ -578,7 +578,7 @@ You can run multiple instances with different configs:
 
 **Issues?**
 1. Check this guide's Troubleshooting section
-2. Verify database: `uv run poc status`
+2. Verify database: `uv run rag status`
 3. Test with MCP Inspector first
 4. Check server logs for detailed errors
 5. Review `CLAUDE.md` for development guidance
