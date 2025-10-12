@@ -1,4 +1,4 @@
-"""Command-line interface for the pgvector RAG POC."""
+"""Command-line interface for RAG Memory."""
 
 import asyncio
 import json
@@ -43,7 +43,7 @@ def get_version():
 @click.group()
 @click.version_option(version=get_version(), prog_name="rag")
 def main():
-    """PostgreSQL pgvector RAG POC - Command-line interface."""
+    """RAG Memory - Command-line interface for semantic document storage and retrieval."""
     # Check for first-run setup before executing any command
     from src.core.first_run import ensure_config_or_exit
     ensure_config_or_exit()
@@ -529,13 +529,13 @@ def ingest_url(url, collection, headless, verbose, chunk_size, chunk_overlap, fo
 
     Examples:
         # Single page only
-        uv run poc ingest url https://example.com --collection docs
+        rag ingest url https://example.com --collection docs
 
         # Follow direct links (depth=1)
-        uv run poc ingest url https://example.com --collection docs --follow-links
+        rag ingest url https://example.com --collection docs --follow-links
 
         # Follow links 2 levels deep
-        uv run poc ingest url https://example.com --collection docs --follow-links --max-depth 2
+        rag ingest url https://example.com --collection docs --follow-links --max-depth 2
     """
     try:
         # Create custom chunker for web pages (larger chunks)
@@ -651,10 +651,10 @@ def recrawl(url, collection, headless, verbose, chunk_size, chunk_overlap, follo
 
     Examples:
         # Re-crawl single page
-        uv run poc recrawl https://example.com --collection docs
+        rag recrawl https://example.com --collection docs
 
         # Re-crawl with link following
-        uv run poc recrawl https://example.com --collection docs --follow-links --max-depth 2
+        rag recrawl https://example.com --collection docs --follow-links --max-depth 2
     """
     try:
         # Create custom chunker for web pages (larger chunks)
@@ -1021,16 +1021,16 @@ def document_update(doc_id, content, title, metadata):
 
     Examples:
         # Update content (re-chunks and re-embeds automatically)
-        uv run poc document update 42 --content "New company vision: ..."
+        rag document update 42 --content "New company vision: ..."
 
         # Update title only
-        uv run poc document update 42 --title "Updated Title"
+        rag document update 42 --title "Updated Title"
 
         # Update metadata (merged with existing)
-        uv run poc document update 42 --metadata '{"status": "reviewed"}'
+        rag document update 42 --metadata '{"status": "reviewed"}'
 
         # Update multiple fields
-        uv run poc document update 42 --content "..." --title "New Title"
+        rag document update 42 --content "..." --title "New Title"
     """
     try:
         if not content and not title and not metadata:
@@ -1085,10 +1085,10 @@ def document_delete(doc_id, confirm):
 
     Examples:
         # Delete with confirmation prompt
-        uv run poc document delete 42
+        rag document delete 42
 
         # Delete without confirmation
-        uv run poc document delete 42 --confirm
+        rag document delete 42 --confirm
     """
     try:
         db = get_database()

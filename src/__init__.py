@@ -1,4 +1,4 @@
-"""PostgreSQL pgvector RAG POC - Core package."""
+"""RAG Memory - Core package for semantic document storage and retrieval."""
 
 __version__ = "0.1.0"
 

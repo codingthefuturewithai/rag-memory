@@ -1,1 +1,1 @@
-"""Test suite for pgvector RAG POC."""
+"""Test suite for RAG Memory."""

@@ -1,5 +1,5 @@
 """
-MCP Server for RAG pgvector POC.
+MCP Server for RAG Memory.
 
 Exposes RAG functionality via Model Context Protocol for AI agents.
 """
