@@ -288,34 +288,56 @@ OPENAI_API_KEY=your-api-key-here
 
 **If user chose "CLI only" → SKIP this step, go to Step 12**
 
-[Read from .reference/MCP_QUICK_START.md]
-
 **Ask:** "Which MCP client are you using?"
-1. Claude Desktop
-2. Claude Code
-3. Cursor
+1. Claude Code (use `claude mcp add-json` command)
+2. Claude Desktop (manual JSON config file)
+3. Cursor (manual JSON config file)
 4. Custom agent
-5. Show me all options
 
 **WAIT FOR RESPONSE**
 
-**Based on choice:**
+**For Claude Code:**
+"Run this command in your terminal to add the RAG Memory MCP server:"
+
+```bash
+claude mcp add-json rag-memory '{"type":"stdio","command":"rag-mcp-stdio","args":[],"env":{"OPENAI_API_KEY":"sk-your-api-key-here","DATABASE_URL":"postgresql://raguser:ragpass@localhost:54320/rag_poc"}}'
+```
+
+**IMPORTANT:**
+1. Replace `sk-your-api-key-here` with your actual OpenAI API key
+2. Run this command yourself in your terminal - I cannot do this for you
+3. After running, restart Claude Code
+
+**For Claude Desktop:**
 [Read appropriate section from .reference/MCP_QUICK_START.md]
 
-**Show:**
-1. Config file location
-2. JSON config with BOTH environment variables:
-   - `OPENAI_API_KEY`: User's API key
-   - `DATABASE_URL`: `postgresql://raguser:ragpass@localhost:54320/rag_poc`
-3. Explain that DATABASE_URL is for the default Docker setup (port 54320)
-4. Instructions to save the config
+Config file location: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
-**NEVER edit their config files - only show what to add**
+Add this JSON (edit the file manually):
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "rag-mcp-stdio",
+      "args": [],
+      "env": {
+        "OPENAI_API_KEY": "sk-your-api-key-here",
+        "DATABASE_URL": "postgresql://raguser:ragpass@localhost:54320/rag_poc"
+      }
+    }
+  }
+}
+```
+
+**For Cursor or Custom:**
+[Read appropriate section from .reference/MCP_QUICK_START.md]
+
+**NEVER edit their config files or run the add-json command - only show what to do**
 
 **Important reminder:**
 "The MCP server needs BOTH the OpenAI API key AND the database URL to function."
 
-**STOP and wait for user to edit config**
+**STOP and wait for user to configure**
 
 ---
 
