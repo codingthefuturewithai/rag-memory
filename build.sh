@@ -91,13 +91,14 @@ if [[ "$response" == "yes" || "$response" == "y" ]]; then
         if [[ "$tag_response" == "yes" || "$tag_response" == "y" ]]; then
             git tag "v${VERSION}"
             echo "✅ Tagged as v${VERSION}"
-            
+
             # Check if we have a remote
             if git remote get-url origin &> /dev/null; then
-                read -p "Do you want to push the tag to GitHub? (yes/no): " push_response
+                read -p "Do you want to push commits and tags to GitHub? (yes/no): " push_response
                 if [[ "$push_response" == "yes" || "$push_response" == "y" ]]; then
+                    git push origin main
                     git push origin "v${VERSION}"
-                    echo "✅ Tag pushed to GitHub!"
+                    echo "✅ Commits and tag pushed to GitHub!"
                 fi
             else
                 echo "⚠️  No git remote configured. Skipping push."
