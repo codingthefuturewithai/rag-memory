@@ -5,6 +5,7 @@ import json
 import logging
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 import click
 from rich.console import Console
@@ -19,6 +20,7 @@ from src.retrieval.search import get_similarity_search
 from src.retrieval.hybrid_search import get_hybrid_search
 from src.retrieval.multi_query import get_multi_query_search
 from src.ingestion.web_crawler import crawl_single_page, WebCrawler
+from src.ingestion.website_analyzer import analyze_website
 
 # Configure logging
 logging.basicConfig(
@@ -95,6 +97,95 @@ def status():
         sys.exit(1)
 
 
+@main.command()
+@click.argument("url")
+@click.option("--include-urls", is_flag=True, help="Include full URL lists per pattern")
+@click.option("--max-urls", type=int, default=10, help="Max URLs per pattern when --include-urls (default: 10)")
+@click.option("--timeout", type=int, default=10, help="Request timeout in seconds (default: 10)")
+def analyze(url, include_urls, max_urls, timeout):
+    """Analyze a website's structure by parsing its sitemap.
+    
+    This command fetches and parses the sitemap.xml from a website, then groups
+    URLs by pattern (e.g., /api/*, /docs/*, /blog/*) to help you understand
+    the site structure and plan comprehensive crawls.
+    
+    Examples:
+        # Quick analysis (pattern statistics only)
+        uv run rag analyze https://docs.python.org
+        
+        # Include sample URLs for each pattern
+        uv run rag analyze https://docs.python.org --include-urls
+        
+        # Show more URLs per pattern
+        uv run rag analyze https://docs.python.org --include-urls --max-urls 20
+    """
+    try:
+        console.print(f"[bold blue]Analyzing website: {url}[/bold blue]\n")
+        
+        # Perform analysis
+        result = analyze_website(url, timeout, include_urls, max_urls)
+        
+        # Show results
+        if result["total_urls"] == 0:
+            console.print(f"[yellow]⚠ {result['notes']}[/yellow]")
+            return
+        
+        console.print(f"[green]✓ Found sitemap with {result['total_urls']:,} URLs[/green]")
+        console.print(f"[dim]Method: {result['analysis_method']}[/dim]")
+        
+        # Show domains if multiple
+        if "domains" in result and len(result["domains"]) > 1:
+            console.print(f"[yellow]⚠ Sitemap contains URLs from {len(result['domains'])} domains:[/yellow]")
+            for domain in result["domains"]:
+                console.print(f"  • {domain}")
+        elif "domains" in result and len(result["domains"]) == 1:
+            console.print(f"[dim]Domain: {result['domains'][0]}[/dim]")
+        
+        console.print()
+        
+        # Display pattern statistics table
+        if result["pattern_stats"]:
+            table = Table(title="URL Pattern Statistics")
+            table.add_column("Pattern", style="cyan", no_wrap=True)
+            table.add_column("Count", style="green", justify="right")
+            table.add_column("Avg Depth", style="blue", justify="right")
+            table.add_column("Example URLs", style="white")
+            
+            for pattern, stats in result["pattern_stats"].items():
+                # Format example URLs (show just paths, truncate if needed)
+                examples = stats["example_urls"][:3]
+                example_text = "\n".join([
+                    urlparse(url).path[:50] + ("..." if len(urlparse(url).path) > 50 else "")
+                    for url in examples
+                ])
+                
+                table.add_row(
+                    pattern,
+                    str(stats["count"]),
+                    str(stats["avg_depth"]),
+                    example_text
+                )
+            
+            console.print(table)
+        
+        # Show full URL lists if requested
+        if include_urls and "url_groups" in result:
+            console.print(f"\n[bold cyan]URL Lists (max {max_urls} per pattern):[/bold cyan]\n")
+            for pattern, urls in result["url_groups"].items():
+                console.print(f"[bold]{pattern}[/bold] ({len(urls)} URLs):")
+                for url in urls:
+                    console.print(f"  • {url}")
+                console.print()
+        
+        console.print(f"\n[dim]{result['notes']}[/dim]")
+        
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 @main.group()
 def collection():
     """Manage collections."""
@@ -152,6 +243,133 @@ def collection_list():
 
         console.print(table)
 
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
+@collection.command("info")
+@click.argument("name")
+def collection_info(name):
+    """Show detailed information about a collection including crawl history.
+    
+    Displays collection statistics, sample documents, and a history of all
+    web pages that have been crawled into this collection. Useful for
+    understanding what content is already stored and avoiding duplicate crawls.
+    
+    Examples:
+        uv run rag collection info python-docs
+        uv run rag collection info my-knowledge-base
+    """
+    try:
+        db = get_database()
+        coll_mgr = get_collection_manager(db)
+        
+        console.print(f"[bold blue]Collection: {name}[/bold blue]\n")
+        
+        # Get collection basic info
+        collection = coll_mgr.get_collection(name)
+        if not collection:
+            console.print(f"[yellow]Collection '{name}' not found[/yellow]")
+            sys.exit(1)
+        
+        # Display basic info
+        console.print(f"[cyan]Description:[/cyan] {collection['description'] or '(none)'}")
+        console.print(f"[cyan]Created:[/cyan] {collection['created_at']}\n")
+        
+        # Get detailed statistics
+        conn = db.connect()
+        with conn.cursor() as cur:
+            # Get chunk count
+            cur.execute(
+                """
+                SELECT COUNT(DISTINCT dc.id)
+                FROM document_chunks dc
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                WHERE cc.collection_id = %s
+                """,
+                (collection["id"],),
+            )
+            chunk_count = cur.fetchone()[0]
+            
+            # Display statistics table
+            stats_table = Table(title="Statistics")
+            stats_table.add_column("Metric", style="cyan")
+            stats_table.add_column("Value", style="green", justify="right")
+            
+            stats_table.add_row("Documents", str(collection.get("document_count", 0)))
+            stats_table.add_row("Chunks", str(chunk_count))
+            
+            console.print(stats_table)
+            console.print()
+            
+            # Get sample documents
+            cur.execute(
+                """
+                SELECT DISTINCT sd.id, sd.filename, sd.file_type, sd.created_at
+                FROM source_documents sd
+                JOIN document_chunks dc ON dc.source_document_id = sd.id
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                WHERE cc.collection_id = %s
+                ORDER BY sd.created_at DESC
+                LIMIT 5
+                """,
+                (collection["id"],),
+            )
+            sample_docs = cur.fetchall()
+            
+            if sample_docs:
+                console.print("[bold cyan]Sample Documents:[/bold cyan]")
+                for doc_id, filename, file_type, _ in sample_docs:
+                    type_badge = f"[dim]({file_type})[/dim]" if file_type else ""
+                    console.print(f"  • {filename} {type_badge} [dim](ID: {doc_id})[/dim]")
+                console.print()
+            
+            # Get crawl history (web pages with crawl_root_url metadata)
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    sd.metadata->>'crawl_root_url' as crawl_url,
+                    sd.metadata->>'crawl_timestamp' as crawl_time,
+                    COUNT(DISTINCT sd.id) as page_count,
+                    COUNT(DISTINCT dc.id) as chunk_count
+                FROM source_documents sd
+                JOIN document_chunks dc ON dc.source_document_id = sd.id
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                WHERE cc.collection_id = %s
+                  AND sd.metadata->>'crawl_root_url' IS NOT NULL
+                GROUP BY sd.metadata->>'crawl_root_url', sd.metadata->>'crawl_timestamp'
+                ORDER BY sd.metadata->>'crawl_timestamp' DESC
+                LIMIT 20
+                """,
+                (collection["id"],),
+            )
+            crawl_history = cur.fetchall()
+            
+            if crawl_history:
+                console.print("[bold cyan]Crawl History:[/bold cyan]")
+                crawl_table = Table()
+                crawl_table.add_column("Root URL", style="white", no_wrap=False)
+                crawl_table.add_column("Pages", style="green", justify="right")
+                crawl_table.add_column("Chunks", style="blue", justify="right")
+                crawl_table.add_column("Timestamp", style="dim")
+                
+                for crawl_url, crawl_time, page_count, chunk_count in crawl_history:
+                    # Format timestamp (remove microseconds if present)
+                    timestamp = crawl_time.split('.')[0] if crawl_time else "N/A"
+                    
+                    crawl_table.add_row(
+                        crawl_url,
+                        str(page_count),
+                        str(chunk_count),
+                        timestamp
+                    )
+                
+                console.print(crawl_table)
+                console.print(f"\n[dim]Total crawl sessions: {len(crawl_history)}[/dim]")
+            else:
+                console.print("[dim]No web crawls found in this collection[/dim]")
+        
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")
         sys.exit(1)

@@ -121,6 +121,9 @@ class WebsiteAnalyzer:
 
         Simple path-based grouping with NO HEURISTICS. Just groups URLs
         that share the same first path segment.
+        
+        Note: Trusts all URLs from sitemap regardless of domain (sitemaps often
+        include related domains or redirect to different domains).
 
         Args:
             urls: List of URLs to group
@@ -137,10 +140,6 @@ class WebsiteAnalyzer:
 
         for url in urls:
             parsed = urlparse(url)
-
-            # Only group URLs from the same domain
-            if parsed.netloc != self.parsed_base.netloc:
-                continue
 
             # Extract first path segment
             path = parsed.path.rstrip('/')
@@ -253,17 +252,28 @@ class WebsiteAnalyzer:
             key=lambda x: x[1]["count"],
             reverse=True
         )
+        
+        # Detect domains in sitemap
+        domains = set()
+        for url in urls:
+            parsed = urlparse(url)
+            if parsed.netloc:
+                domains.add(parsed.netloc)
+        
+        # Build notes with domain info
+        notes = f"Sitemap found with {len(urls)} URLs grouped into {len(url_groups)} patterns. "
+        if len(domains) > 1:
+            notes += f"Note: Sitemap contains URLs from {len(domains)} domains ({', '.join(sorted(domains)[:3])}{'...' if len(domains) > 3 else ''}). "
+        notes += "Each pattern represents URLs sharing the same first path segment (e.g., /api/*, /docs/*). "
+        notes += "Use pattern_stats to understand site structure. Set include_url_lists=True to get full URL lists."
 
         result = {
             "base_url": self.base_url,
             "analysis_method": method,
             "total_urls": len(urls),
+            "domains": sorted(list(domains)),
             "pattern_stats": dict(sorted_patterns),
-            "notes": (
-                f"Sitemap found with {len(urls)} URLs grouped into {len(url_groups)} patterns. "
-                "Each pattern represents URLs sharing the same first path segment (e.g., /api/*, /docs/*). "
-                "Use pattern_stats to understand site structure. Set include_url_lists=True to get full URL lists."
-            ),
+            "notes": notes,
         }
 
         # Optionally include full URL lists (limited per pattern to avoid overwhelming response)
