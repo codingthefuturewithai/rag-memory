@@ -31,7 +31,17 @@ logging.basicConfig(
 console = Console()
 
 
+def get_version():
+    """Get package version from installed metadata."""
+    try:
+        from importlib.metadata import version
+        return version("rag-memory")
+    except Exception:
+        return "unknown"
+
+
 @click.group()
+@click.version_option(version=get_version(), prog_name="rag")
 def main():
     """PostgreSQL pgvector RAG POC - Command-line interface."""
     # Check for first-run setup before executing any command
