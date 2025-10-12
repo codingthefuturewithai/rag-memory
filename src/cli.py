@@ -17,6 +17,7 @@ from src.ingestion.document_store import get_document_store
 from src.core.embeddings import get_embedding_generator
 from src.retrieval.search import get_similarity_search
 from src.retrieval.hybrid_search import get_hybrid_search
+from src.retrieval.multi_query import get_multi_query_search
 from src.ingestion.web_crawler import crawl_single_page, WebCrawler
 
 # Configure logging
@@ -562,15 +563,24 @@ def recrawl(url, collection, headless, verbose, chunk_size, chunk_overlap, follo
 @click.option("--verbose", is_flag=True, help="Show full chunk content")
 @click.option("--show-source", is_flag=True, help="Include full source document content")
 @click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + keyword with RRF)")
-def search(query, collection, limit, threshold, metadata, verbose, show_source, hybrid):
+@click.option("--multi-query", is_flag=True, help="Use multi-query retrieval (query expansion + RRF)")
+def search(query, collection, limit, threshold, metadata, verbose, show_source, hybrid, multi_query):
     """Search for similar document chunks."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
 
+        # Check for conflicting flags
+        if hybrid and multi_query:
+            console.print("[bold red]Error: Cannot use both --hybrid and --multi-query flags[/bold red]")
+            sys.exit(1)
+
         # Choose search method
-        if hybrid:
+        if multi_query:
+            searcher = get_multi_query_search(db, embedder, coll_mgr)
+            search_method = "multi-query (query expansion + RRF)"
+        elif hybrid:
             searcher = get_hybrid_search(db, embedder, coll_mgr)
             search_method = "hybrid (vector + keyword with RRF)"
         else:
@@ -592,7 +602,15 @@ def search(query, collection, limit, threshold, metadata, verbose, show_source, 
             console.print(f"[dim]Metadata filter: {metadata_filter}[/dim]")
 
         # Execute search based on method
-        if hybrid:
+        if multi_query:
+            results = searcher.multi_query_search(
+                query=query,
+                limit=limit,
+                collection_name=collection,
+                metadata_filter=metadata_filter,
+                include_source=show_source
+            )
+        elif hybrid:
             results = searcher.hybrid_search(
                 query=query,
                 limit=limit,
