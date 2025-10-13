@@ -1,0 +1,1417 @@
+# Supabase Migration Guide
+
+Complete guide to migrate RAG Memory from Docker Compose (local) to Supabase (cloud).
+
+## Table of Contents
+
+1. [Why Supabase?](#why-supabase)
+2. [Multi-Environment Usage](#multi-environment-usage)
+3. [Prerequisites](#prerequisites)
+4. [Phase 1: Supabase Project Setup](#phase-1-supabase-project-setup)
+5. [Phase 2: Database Migration](#phase-2-database-migration)
+6. [Phase 3: Schema Migrations with Alembic](#phase-3-schema-migrations-with-alembic)
+7. [Phase 4: Testing & Validation](#phase-4-testing--validation)
+8. [Phase 5: MCP Server Configuration](#phase-5-mcp-server-configuration)
+9. [Phase 6: Data Sync (Supabase → Local)](#phase-6-data-sync-supabase--local)
+10. [Phase 7: Row Level Security (Optional)](#phase-7-row-level-security-optional)
+11. [Rollback Plan](#rollback-plan)
+12. [Cost Monitoring](#cost-monitoring)
+13. [Troubleshooting](#troubleshooting)
+
+---
+
+## Why Supabase?
+
+**Key benefits:**
+- ✅ **Access anywhere**: No more localhost-only database
+- ✅ **Zero maintenance**: Automated backups, updates, monitoring
+- ✅ **Free tier**: 500MB database, perfect for personal use
+- ✅ **pgvector built-in**: No manual extension installation
+- ✅ **Row Level Security**: Per-user collection isolation (optional)
+- ✅ **Simple migration**: Just update connection string
+
+**Cost:**
+- Personal use: **FREE** (500MB limit)
+- With backups: **$25/month** (Pro plan, up to 8GB comfortably)
+- Small team: **$25-50/month** depending on data size
+
+---
+
+## Multi-Environment Usage
+
+This guide supports **running both Docker and Supabase** and switching between them as needed.
+
+### Use Case: Local Dev + Remote Production
+
+**Common workflow:**
+- **Docker (Local)** - Fast development, testing, disposable data
+- **Supabase (Remote)** - Production knowledge base, accessible anywhere
+
+**Switching is simple:**
+1. Edit `DATABASE_URL` in your config file (`~/.rag-memory-env` or `.env`)
+2. Restart your CLI tool or MCP server
+3. That's it - now connected to the other database
+
+### Example: Switching Environments
+
+**Using Docker (Local):**
+```bash
+# Edit ~/.rag-memory-env
+DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory
+
+# Restart and use
+uv run rag status              # Uses Docker
+uv run rag search "query"      # Searches Docker database
+```
+
+**Switch to Supabase (Remote):**
+```bash
+# Edit ~/.rag-memory-env
+DATABASE_URL=postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+
+# Restart and use
+uv run rag status              # Now uses Supabase
+uv run rag search "query"      # Searches Supabase database
+```
+
+**For MCP Server:**
+- Edit the `DATABASE_URL` in your Claude Desktop config's `env` section
+- Restart Claude Desktop
+- MCP server now connects to the other database
+
+### Key Points
+
+✅ **Both databases stay independent** - No automatic sync
+✅ **Schema must match** - Use Alembic migrations on both (see Phase 3)
+✅ **You can sync data manually** - Supabase → Docker when needed (see Phase 6)
+✅ **No code changes required** - Just update DATABASE_URL and restart
+
+---
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- [ ] Active Docker Compose setup with data you want to migrate
+- [ ] Supabase account (sign up at https://supabase.com - free)
+- [ ] Your current DATABASE_URL from `.env` file
+- [ ] `psql` CLI installed (for migration)
+  ```bash
+  # macOS
+  brew install postgresql
+
+  # Ubuntu/Debian
+  sudo apt-get install postgresql-client
+  ```
+
+---
+
+## Phase 1: Supabase Project Setup
+
+### Step 1.1: Create Supabase Project
+
+1. **Go to https://supabase.com and sign up** (free, no credit card required)
+
+2. **Click "New Project"**
+   - Organization: Create new or use existing
+   - Project name: `rag-memory` (or any name you prefer)
+   - Database password: **SAVE THIS!** (e.g., use 1Password to generate strong password)
+   - Region: Choose closest to you (e.g., `us-east-1` for East Coast US)
+   - Pricing plan: **Free** (start here, upgrade later if needed)
+
+3. **Wait for project creation** (~2 minutes)
+   - You'll see "Setting up project..." progress indicator
+   - When done, you'll land on the project dashboard
+
+### Step 1.2: Get Connection Strings
+
+1. **Navigate to Project Settings** (gear icon in left sidebar)
+
+2. **Go to "Database" section**
+
+3. **Copy Connection Strings** - You'll need these:
+
+   **Session Mode (Recommended for RAG Memory):**
+   ```
+   postgresql://postgres.[project-ref]:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+   ```
+
+   **Transaction Mode (Alternative if you have connection issues):**
+   ```
+   postgresql://postgres.[project-ref]:[password]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+   ```
+
+   **Direct Connection (For pg_dump/restore only):**
+   ```
+   postgresql://postgres.[project-ref]:[password]@db.[project-ref].supabase.co:5432/postgres
+   ```
+
+   **Notes:**
+   - Use **Session mode** for RAG Memory (port 5432) - best for persistent connections
+   - Use **Transaction mode** (port 6543) if you hit connection limits
+   - Use **Direct connection** only for `pg_dump` and `pg_restore` operations
+   - Replace `[password]` with your actual database password
+
+### Step 1.3: Verify pgvector is Installed
+
+1. **Go to SQL Editor** (in left sidebar)
+
+2. **Run this query:**
+   ```sql
+   SELECT * FROM pg_extension WHERE extname = 'vector';
+   ```
+
+3. **If pgvector is NOT installed** (empty result), run:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+
+   ✅ **Good news**: Supabase usually has pgvector pre-installed!
+
+---
+
+## Phase 2: Database Migration
+
+### Strategy Overview
+
+We'll use a **blue-green migration** approach:
+1. Keep Docker running (blue/old)
+2. Set up Supabase (green/new)
+3. Migrate data
+4. Test Supabase
+5. Switch connection string
+6. Optionally shut down Docker
+
+### Step 2.1: Backup Current Docker Database
+
+**CRITICAL: Always backup before migration!**
+
+```bash
+# Navigate to your project
+cd /Users/timkitchens/projects/ai-projects/rag-memory
+
+# Create backups directory
+mkdir -p backups
+
+# Export full database
+docker exec rag-memory-postgres-1 pg_dump -U postgres rag_memory > backups/rag_memory_$(date +%Y%m%d_%H%M%S).sql
+
+# Verify backup file exists and has content
+ls -lh backups/
+head -20 backups/rag_memory_*.sql
+```
+
+✅ **Success indicator**: You should see SQL CREATE TABLE statements in the backup file
+
+### Step 2.2: Initialize Supabase Database Schema
+
+**Use Alembic migrations. This is the only supported method.**
+
+See **[SUPABASE_SCHEMA_SETUP.md](./SUPABASE_SCHEMA_SETUP.md)** for complete tested instructions.
+
+**Quick version:**
+
+1. Get Session Pooler connection string from Supabase Dashboard
+2. `psql "$SUPABASE_DB_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"`
+3. `export DATABASE_URL="$SUPABASE_DB_URL"`
+4. `uv run alembic upgrade head`
+5. Verify: `psql "$SUPABASE_DB_URL" -c "\dt"`
+
+---
+
+### Step 2.3: Migrating Existing Data (Optional)
+
+This is the cleanest approach and keeps your schema versioned.
+
+**Step 2.2.1: Get your Supabase connection string**
+
+1. Go to **Supabase Dashboard** → **Settings** → **Database**
+2. Find the **"Connection string"** section
+3. Copy the **Direct Connection** string (for schema operations):
+   ```
+   postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres
+   ```
+4. Replace `[YOUR-PASSWORD]` with your actual database password
+
+**Step 2.2.2: Verify pgvector is installed**
+
+```bash
+# Set connection string
+export SUPABASE_DB_URL="postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres"
+
+# Check pgvector
+psql "$SUPABASE_DB_URL" -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
+```
+
+**Expected output:**
+```
+ extname | extversion
+---------+------------
+ vector  | 0.7.0
+(1 row)
+```
+
+If pgvector is NOT installed (usually it is by default):
+```sql
+psql "$SUPABASE_DB_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
+```
+
+**Step 2.2.3: Run Alembic migrations**
+
+```bash
+# Point Alembic to Supabase
+export DATABASE_URL="$SUPABASE_DB_URL"
+
+# Apply all migrations (creates tables, indexes, constraints)
+uv run alembic upgrade head
+
+# Verify migration succeeded
+uv run alembic current
+```
+
+**Expected output:**
+```
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 8050f9547e64, baseline_schema
+INFO  [alembic.runtime.migration] Running upgrade 8050f9547e64 -> 555255565f74, require_collection_description
+555255565f74 (head)
+```
+
+**Step 2.2.4: Verify tables were created**
+
+```bash
+# List all tables
+psql "$SUPABASE_DB_URL" -c "\dt"
+```
+
+**Expected output:**
+```
+              List of relations
+ Schema |        Name         | Type  |  Owner
+--------+---------------------+-------+----------
+ public | alembic_version     | table | postgres
+ public | chunk_collections   | table | postgres
+ public | collections         | table | postgres
+ public | document_chunks     | table | postgres
+ public | source_documents    | table | postgres
+(5 rows)
+```
+
+**Step 2.2.5: Verify indexes were created (CRITICAL for performance)**
+
+```bash
+# List all indexes
+psql "$SUPABASE_DB_URL" -c "\di"
+```
+
+**Expected output (look for these critical indexes):**
+```
+ public | document_chunks_embedding_idx | index | postgres | document_chunks | hnsw (embedding vector_cosine_ops)
+ public | document_chunks_metadata_idx  | index | postgres | document_chunks | gin (metadata)
+ public | document_chunks_source_idx    | index | postgres | document_chunks | btree (source_document_id)
+```
+
+**Step 2.2.6: Verify schema with test query**
+
+```bash
+# Check table structure
+psql "$SUPABASE_DB_URL" -c "\d document_chunks"
+```
+
+**Expected output (partial):**
+```
+Table "public.document_chunks"
+      Column        |          Type           | ...
+--------------------+-------------------------+-----
+ id                 | integer                 | ...
+ source_document_id | integer                 | ...
+ chunk_index        | integer                 | ...
+ content            | text                    | ...
+ embedding          | vector(1536)            | ...  <- IMPORTANT: vector type
+ metadata           | jsonb                   | ...
+ ...
+```
+
+✅ **Success! Your Supabase database now has the RAG Memory schema.**
+
+---
+
+#### **Approach 2: Using `rag init` command (Simple but manual)**
+
+**When to use:** Fresh start with no existing data, prefer CLI commands over Alembic.
+
+**Step 2.2.1: Temporarily point CLI to Supabase**
+
+```bash
+# Backup your current .env
+cp .env .env.backup
+
+# Edit .env to point to Supabase
+nano .env
+```
+
+**Change this line in .env:**
+```bash
+# FROM (Docker):
+DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory
+
+# TO (Supabase - use Session Mode):
+DATABASE_URL=postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+```
+
+**Step 2.2.2: Run initialization**
+
+```bash
+# This creates tables, indexes, installs pgvector
+uv run rag init
+```
+
+**Expected output:**
+```
+✓ Database connection successful
+✓ pgvector extension installed (version 0.7.0)
+✓ Tables created (collections, source_documents, document_chunks, chunk_collections)
+✓ HNSW indexes created
+✓ Database initialized successfully!
+```
+
+**Step 2.2.3: Verify in Supabase Dashboard**
+
+1. Go to **Supabase Dashboard** → **Table Editor**
+2. You should see these tables:
+   - `collections`
+   - `source_documents`
+   - `document_chunks`
+   - `chunk_collections`
+
+**Step 2.2.4: Mark Alembic baseline (IMPORTANT)**
+
+If you used `rag init` instead of Alembic, you need to tell Alembic that the schema already exists:
+
+```bash
+# Set DATABASE_URL to Supabase
+export DATABASE_URL="postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres"
+
+# Mark current schema version
+uv run alembic stamp head
+
+# Verify
+uv run alembic current
+```
+
+**Expected output:**
+```
+555255565f74 (head)
+```
+
+**Step 2.2.5: Restore .env**
+
+```bash
+# Switch back to Docker (or keep Supabase, your choice)
+cp .env.backup .env
+```
+
+✅ **Success! Schema created with `rag init`.**
+
+---
+
+#### **Approach 3: Restore from Docker backup (For migrating existing data)**
+
+**When to use:** You have existing data in Docker that you want to migrate to Supabase.
+
+**Step 2.2.1: Verify you have a backup**
+
+```bash
+# Check your backups directory
+ls -lh backups/
+
+# You should see a file like: rag_memory_20251013_142035.sql
+```
+
+**Step 2.2.2: Set Supabase connection (DIRECT connection for pg_restore)**
+
+```bash
+export SUPABASE_DB_URL="postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres"
+```
+
+**Step 2.2.3: Restore the backup**
+
+```bash
+# Import the backup file
+psql "$SUPABASE_DB_URL" < backups/rag_memory_20251013_142035.sql
+```
+
+**Expected output (with some warnings - this is normal):**
+```
+SET
+SET
+...
+CREATE EXTENSION
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE TABLE
+CREATE INDEX
+CREATE INDEX
+...
+```
+
+**Common warnings (SAFE TO IGNORE):**
+```
+ERROR:  role "postgres" already exists   <- IGNORE
+ERROR:  extension "vector" already exists   <- IGNORE
+```
+
+**Step 2.2.4: Verify restoration succeeded**
+
+```bash
+# Check table row counts
+psql "$SUPABASE_DB_URL" -c "SELECT COUNT(*) FROM collections;"
+psql "$SUPABASE_DB_URL" -c "SELECT COUNT(*) FROM source_documents;"
+psql "$SUPABASE_DB_URL" -c "SELECT COUNT(*) FROM document_chunks;"
+```
+
+**Expected:** Row counts should match your Docker database.
+
+**Step 2.2.5: Verify sample data**
+
+```bash
+# Check that data looks correct
+psql "$SUPABASE_DB_URL" -c "SELECT id, name, description FROM collections LIMIT 3;"
+psql "$SUPABASE_DB_URL" -c "SELECT id, filename, file_type FROM source_documents LIMIT 3;"
+```
+
+**Expected:** You should see your actual collection names and document filenames.
+
+**Step 2.2.6: Mark Alembic version**
+
+```bash
+# Tell Alembic the current schema version
+export DATABASE_URL="$SUPABASE_DB_URL"
+uv run alembic stamp head
+uv run alembic current
+```
+
+**Expected output:**
+```
+555255565f74 (head)
+```
+
+✅ **Success! Your Docker data is now in Supabase.**
+
+---
+
+### Which Approach Should You Use?
+
+| Scenario | Recommended Approach | Why |
+|----------|---------------------|-----|
+| **Fresh start, no data** | Approach 1 (Alembic) | Clean, versioned schema |
+| **Prefer CLI over Alembic** | Approach 2 (`rag init`) | Simple command |
+| **Migrating existing data from Docker** | Approach 3 (Restore backup) | Preserves all data |
+| **Team development** | Approach 1 (Alembic) | Everyone stays in sync |
+
+---
+
+### Step 2.3: Verify Migration Success
+
+Run these checks to ensure everything migrated correctly:
+
+```bash
+# Check table exists and has data
+psql "$SUPABASE_DB_URL" -c "SELECT COUNT(*) FROM collections;"
+psql "$SUPABASE_DB_URL" -c "SELECT COUNT(*) FROM source_documents;"
+psql "$SUPABASE_DB_URL" -c "SELECT COUNT(*) FROM document_chunks;"
+
+# Check indexes exist (CRITICAL for performance!)
+psql "$SUPABASE_DB_URL" -c "\di"  # List all indexes
+
+# Verify pgvector extension
+psql "$SUPABASE_DB_URL" -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
+
+# Check sample data
+psql "$SUPABASE_DB_URL" -c "SELECT id, filename, file_type FROM source_documents LIMIT 5;"
+```
+
+**Expected results:**
+- Row counts should match your Docker database
+- You should see HNSW indexes on `embedding` columns
+- pgvector version should be 0.7.0 or higher
+- Sample documents should display correctly
+
+---
+
+## Phase 3: Schema Migrations with Alembic
+
+### Why Alembic Matters
+
+RAG Memory uses Alembic for database schema management. When you make schema changes (add columns, create indexes, etc.), you must apply those migrations to **both** Docker and Supabase to keep them in sync.
+
+### Initial Schema Setup on Supabase
+
+**Use Alembic migrations (RECOMMENDED):**
+
+```bash
+# Temporarily point to Supabase
+export DATABASE_URL="postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres"
+
+# Apply all migrations
+uv run alembic upgrade head
+
+# Verify migration succeeded
+uv run alembic current
+```
+
+**Expected output:**
+```
+555255565f74 (head)
+```
+
+This creates all tables, indexes, and constraints on Supabase matching your local Docker setup.
+
+### Workflow: Applying Future Migrations
+
+When you develop new features that require schema changes:
+
+**1. Develop migration against Docker first:**
+```bash
+# Make sure DATABASE_URL points to Docker
+export DATABASE_URL="postgresql://raguser:ragpassword@localhost:54320/rag_memory"
+
+# Create migration
+uv run alembic revision --autogenerate -m "add feature X"
+
+# Apply to Docker
+uv run alembic upgrade head
+
+# Test your feature locally
+uv run rag status  # Should work with new schema
+```
+
+**2. Apply same migration to Supabase:**
+```bash
+# Switch to Supabase
+export DATABASE_URL="postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres"
+
+# Apply migration
+uv run alembic upgrade head
+
+# Verify
+uv run alembic current
+```
+
+**3. Verify both databases match:**
+```bash
+# Check Docker version
+DATABASE_URL="postgresql://raguser:ragpassword@localhost:54320/rag_memory" uv run alembic current
+
+# Check Supabase version
+DATABASE_URL="postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres" uv run alembic current
+
+# Both should show the same revision ID
+```
+
+### Troubleshooting Migration Issues
+
+**Issue: "Can't locate revision identified by 'XXX'"**
+- **Cause**: Supabase doesn't have the alembic_version table yet
+- **Solution**: Run `uv run alembic upgrade head` to initialize
+
+**Issue: Alembic tries to recreate existing tables**
+- **Cause**: Used `rag init` instead of Alembic migrations
+- **Solution**: Stamp current version: `uv run alembic stamp head`
+
+**Issue: Migration fails on Supabase but works on Docker**
+- **Cause**: Permission differences or Supabase-specific constraints
+- **Solution**: Check Supabase logs in Dashboard → Database → Logs
+
+### Helper Script for Checking Versions
+
+Use the `scripts/check-migration-versions.sh` script (see Phase 6) to quickly compare migration status across both databases.
+
+---
+
+## Phase 4: Testing & Validation
+
+### Step 4.1: Update Environment Variables
+
+```bash
+# Edit .env file
+nano .env
+
+# Change DATABASE_URL to Supabase (Session Mode recommended)
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+
+# Keep OPENAI_API_KEY unchanged
+OPENAI_API_KEY=your-existing-key
+```
+
+### Step 4.2: Test RAG Memory Functionality
+
+Run comprehensive tests to ensure everything works:
+
+```bash
+# 1. Test database connection
+uv run rag status
+
+# Expected output:
+# ✅ Database connection successful
+# ✅ pgvector extension installed (version X.X.X)
+# Statistics: X collections, Y documents, Z chunks
+
+# 2. Test similarity search (if you have data)
+uv run rag search "test query" --collection your-collection-name --chunks --limit 3
+
+# Expected: Returns relevant chunks with similarity scores
+
+# 3. Test ingestion (create test collection)
+uv run rag collection create test-supabase-migration --description "Testing Supabase migration"
+uv run rag ingest text "Supabase migration test document" --collection test-supabase-migration
+
+# Expected: Document ingested successfully
+
+# 4. Test MCP server (if using)
+uv run python -m src.mcp.server
+
+# Expected: Server starts without connection errors
+```
+
+### Step 4.3: Verify MCP Server Integration
+
+If you use the MCP server with Claude Desktop/agents:
+
+```bash
+# Start MCP server
+uv run python -m src.mcp.server
+
+# In another terminal, test with MCP Inspector (if installed)
+npx @modelcontextprotocol/inspector
+
+# Or test directly with Claude Desktop
+# Your agents should be able to search/ingest without errors
+```
+
+### Step 4.4: Performance Validation
+
+Test query performance to ensure indexes are working:
+
+```bash
+# Run a vector search and check timing
+time uv run rag search "your test query" --collection your-collection --chunks --limit 5
+
+# Expected timing:
+# - First query: ~500-800ms (cold start, includes embedding generation)
+# - Subsequent queries: ~300-500ms
+# - If slower than 1s, check indexes: psql $DATABASE_URL -c "\di"
+```
+
+---
+
+## Phase 5: MCP Server Configuration
+
+### Overview
+
+The MCP (Model Context Protocol) server allows Claude Desktop and other AI agents to access your RAG Memory database. You can configure it to use either Docker (local) or Supabase (remote) by changing the `DATABASE_URL` environment variable.
+
+### How MCP Server Reads Database Configuration
+
+The MCP server (`src/mcp/server.py`) initializes the database connection at startup using environment variables. It reads `DATABASE_URL` from:
+1. Environment variables passed by the MCP client (Claude Desktop)
+2. Or fallback to `~/.rag-memory-env` global config file
+
+**No code changes needed** - just update the environment variable and restart.
+
+### Option 1: Configure in Claude Desktop (Recommended)
+
+Edit your Claude Desktop MCP configuration file:
+
+**File location:**
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux: `~/.config/Claude/claude_desktop_config.json`
+
+**Configuration for Docker (Local):**
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/timkitchens/projects/ai-projects/rag-memory",
+        "run",
+        "python",
+        "-m",
+        "src.mcp.server"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://raguser:ragpassword@localhost:54320/rag_memory",
+        "OPENAI_API_KEY": "sk-your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**Configuration for Supabase (Remote):**
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/timkitchens/projects/ai-projects/rag-memory",
+        "run",
+        "python",
+        "-m",
+        "src.mcp.server"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres",
+        "OPENAI_API_KEY": "sk-your-api-key-here"
+      }
+    }
+  }
+}
+```
+
+**To switch between environments:**
+1. Edit the `DATABASE_URL` value in the config file
+2. Quit Claude Desktop completely
+3. Restart Claude Desktop
+4. The MCP server now connects to the other database
+
+### Option 2: Use Global Config File
+
+If you prefer not to hard-code credentials in Claude Desktop config:
+
+**1. Edit `~/.rag-memory-env`:**
+```bash
+# For Docker
+DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory
+
+# Or for Supabase
+DATABASE_URL=postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@aws-0-us-east-1.pooler.supabase.com:5432/postgres
+
+OPENAI_API_KEY=sk-your-api-key-here
+```
+
+**2. Simplify Claude Desktop config (remove env section):**
+```json
+{
+  "mcpServers": {
+    "rag-memory": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/Users/timkitchens/projects/ai-projects/rag-memory",
+        "run",
+        "python",
+        "-m",
+        "src.mcp.server"
+      ]
+    }
+  }
+}
+```
+
+**3. To switch:** Edit `~/.rag-memory-env` and restart Claude Desktop.
+
+### Security Considerations
+
+⚠️ **Important Security Notes:**
+
+1. **Plaintext Credentials:**
+   - Both Claude Desktop config and `~/.rag-memory-env` store credentials in plaintext
+   - These files should have restrictive permissions (600 on Unix systems)
+   - Do NOT commit these files to version control
+
+2. **File Permissions (macOS/Linux):**
+```bash
+# Protect Claude Desktop config
+chmod 600 ~/Library/Application\ Support/Claude/claude_desktop_config.json
+
+# Protect global config
+chmod 600 ~/.rag-memory-env
+```
+
+3. **Separate API Keys (Recommended):**
+   - Use different OpenAI API keys for local vs remote
+   - Set spending limits on each key
+   - Monitor usage separately
+
+4. **Separate Supabase Projects (Optional):**
+   - Dev project: Free tier, test data
+   - Prod project: Pro plan, real data, different password
+
+### Verifying MCP Server Connection
+
+**1. Check Claude Code MCP status:**
+```bash
+# Run Claude Code
+claude
+
+# Type:
+/mcp
+```
+
+You should see `rag-memory` in the list of connected servers.
+
+**2. Test a query in Claude Desktop:**
+Ask Claude: "Search my RAG memory for [some topic]"
+
+If it returns results, the MCP server is working!
+
+**3. Check which database it's using:**
+Ask Claude: "What database are you connected to?"
+
+The MCP server will show the connection string (with password masked).
+
+### Troubleshooting
+
+**Issue: MCP server not appearing in Claude Desktop**
+- **Solution**: Check Claude Desktop logs for errors
+- **Location**: `~/Library/Logs/Claude/mcp*.log` (macOS)
+
+**Issue: "Database connection failed" error**
+- **Solution**: Verify DATABASE_URL is correct
+- **Test**: Run `uv run rag status` with the same DATABASE_URL
+
+**Issue: MCP server uses wrong database after config change**
+- **Solution**: Fully quit and restart Claude Desktop (not just close window)
+
+---
+
+## Phase 6: Data Sync (Supabase → Local)
+
+### When You Need Data Sync
+
+**Common scenarios:**
+- Testing new features locally with production data
+- Debugging issues that only appear with real data
+- Developing offline while traveling
+- Performance testing with realistic dataset
+
+**Direction: One-way only (Supabase → Docker)**
+- Export from Supabase (your production/real data)
+- Import to Docker (your local dev environment)
+- **Never sync Docker → Supabase** (avoid polluting production)
+
+### Manual Sync Process
+
+**Step 1: Export from Supabase**
+```bash
+# Set Supabase connection (use DIRECT connection for pg_dump)
+export SUPABASE_DB_URL="postgresql://postgres.yjokksbyqpzjoumjdyuu:[YOUR-PASSWORD]@db.yjokksbyqpzjoumjdyuu.supabase.co:5432/postgres"
+
+# Create backups directory
+mkdir -p backups
+
+# Export database
+pg_dump "$SUPABASE_DB_URL" > backups/supabase_sync_$(date +%Y%m%d_%H%M%S).sql
+
+# Verify backup
+ls -lh backups/
+```
+
+**Step 2: Import to Docker**
+```bash
+# Make sure Docker is running
+docker-compose ps
+
+# Drop existing local database (WARNING: destroys local data!)
+docker exec rag-memory psql -U raguser -d postgres -c "DROP DATABASE IF EXISTS rag_memory;"
+docker exec rag-memory psql -U raguser -d postgres -c "CREATE DATABASE rag_memory;"
+
+# Restore from Supabase backup
+docker exec -i rag-memory psql -U raguser rag_memory < backups/supabase_sync_*.sql
+
+# Verify import
+uv run rag status
+```
+
+**Step 3: Test Locally**
+```bash
+# Make sure DATABASE_URL points to Docker
+export DATABASE_URL="postgresql://raguser:ragpassword@localhost:54320/rag_memory"
+
+# Test
+uv run rag search "test query" --chunks
+```
+
+### Automated Sync Script
+
+Use the helper script `scripts/sync-from-supabase.sh` for automated sync:
+
+```bash
+# Run the sync script
+./scripts/sync-from-supabase.sh
+
+# It will:
+# 1. Prompt for Supabase password
+# 2. Export from Supabase
+# 3. Drop local database
+# 4. Import to Docker
+# 5. Verify success
+```
+
+**Script output:**
+```
+🔄 Syncing Supabase → Docker...
+📤 Exporting from Supabase...
+✅ Export complete: backups/supabase_sync_20251013_143022.sql
+🗑️  Dropping local database...
+📥 Importing to Docker...
+✅ Import complete!
+📊 Verification:
+   Collections: 5
+   Documents: 120
+   Chunks: 1,543
+```
+
+### Important Warnings
+
+⚠️ **Data Loss Warning:**
+- Syncing **destroys all local Docker data**
+- Always backup local data first if it contains anything important
+- This is a **destructive operation** - no undo!
+
+⚠️ **Schema Compatibility:**
+- Ensure both databases are at the same Alembic migration version
+- Run `scripts/check-migration-versions.sh` first
+- If versions don't match, apply migrations before syncing
+
+⚠️ **Large Databases:**
+- Sync can take several minutes for databases >100MB
+- Network speed affects download time from Supabase
+- Disk space required: 2x database size (backup + import)
+
+### Sync Frequency Recommendations
+
+**How often to sync:**
+- **Never** for most dev work (use test data instead)
+- **Weekly** if actively debugging production issues
+- **As needed** when you need to test with real data
+
+**Alternative: Subset Sync**
+If full sync is too large, export only what you need:
+```bash
+# Export only specific collections
+pg_dump "$SUPABASE_DB_URL" \
+  --table=collections \
+  --table=source_documents \
+  --table=document_chunks \
+  --table=chunk_collections \
+  > backups/subset.sql
+```
+
+---
+
+## Phase 7: Row Level Security (Optional)
+
+**When to use RLS:**
+- ✅ You want to share RAG Memory with multiple users
+- ✅ Each user should only see their own collections/documents
+- ✅ You plan to build a multi-tenant application
+
+**When to skip RLS:**
+- Personal use only (just you)
+- All users in your team should see all data
+- You're using RAG Memory locally (not exposing to network)
+
+### Step 7.1: Add User ID Column to Tables
+
+```sql
+-- Run in Supabase SQL Editor
+-- Add user_id column to collections table
+ALTER TABLE collections
+ADD COLUMN user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+
+-- Add user_id column to source_documents table
+ALTER TABLE source_documents
+ADD COLUMN user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+
+-- Create indexes for performance
+CREATE INDEX idx_collections_user_id ON collections(user_id);
+CREATE INDEX idx_source_documents_user_id ON source_documents(user_id);
+```
+
+### Step 7.2: Enable RLS on Tables
+
+```sql
+-- Enable Row Level Security
+ALTER TABLE collections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE source_documents ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_chunks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chunk_collections ENABLE ROW LEVEL SECURITY;
+```
+
+### Step 7.3: Create RLS Policies
+
+**Policy for Collections (users can only see their own):**
+
+```sql
+-- SELECT policy: Users can read their own collections
+CREATE POLICY "Users can view own collections"
+ON collections FOR SELECT
+USING (auth.uid() = user_id);
+
+-- INSERT policy: Users can create collections with their own user_id
+CREATE POLICY "Users can create own collections"
+ON collections FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+-- UPDATE policy: Users can update their own collections
+CREATE POLICY "Users can update own collections"
+ON collections FOR UPDATE
+USING (auth.uid() = user_id);
+
+-- DELETE policy: Users can delete their own collections
+CREATE POLICY "Users can delete own collections"
+ON collections FOR DELETE
+USING (auth.uid() = user_id);
+```
+
+**Policy for Source Documents:**
+
+```sql
+-- SELECT policy: Users can read their own documents
+CREATE POLICY "Users can view own documents"
+ON source_documents FOR SELECT
+USING (auth.uid() = user_id);
+
+-- INSERT policy: Users can create documents with their own user_id
+CREATE POLICY "Users can create own documents"
+ON source_documents FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+-- UPDATE policy: Users can update their own documents
+CREATE POLICY "Users can update own documents"
+ON source_documents FOR UPDATE
+USING (auth.uid() = user_id);
+
+-- DELETE policy: Users can delete their own documents
+CREATE POLICY "Users can delete own documents"
+ON source_documents FOR DELETE
+USING (auth.uid() = user_id);
+```
+
+**Policy for Document Chunks (inherit from source_documents):**
+
+```sql
+-- SELECT policy: Users can read chunks from their own documents
+CREATE POLICY "Users can view chunks from own documents"
+ON document_chunks FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM source_documents
+    WHERE source_documents.id = document_chunks.source_document_id
+    AND source_documents.user_id = auth.uid()
+  )
+);
+
+-- INSERT policy: Users can create chunks for their own documents
+CREATE POLICY "Users can create chunks for own documents"
+ON document_chunks FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM source_documents
+    WHERE source_documents.id = document_chunks.source_document_id
+    AND source_documents.user_id = auth.uid()
+  )
+);
+
+-- DELETE policy: Users can delete chunks from their own documents
+CREATE POLICY "Users can delete chunks from own documents"
+ON document_chunks FOR DELETE
+USING (
+  EXISTS (
+    SELECT 1 FROM source_documents
+    WHERE source_documents.id = document_chunks.source_document_id
+    AND source_documents.user_id = auth.uid()
+  )
+);
+```
+
+**Policy for Chunk Collections (junction table):**
+
+```sql
+-- SELECT policy: Users can view chunk-collection relationships for their own collections
+CREATE POLICY "Users can view chunk_collections for own collections"
+ON chunk_collections FOR SELECT
+USING (
+  EXISTS (
+    SELECT 1 FROM collections
+    WHERE collections.id = chunk_collections.collection_id
+    AND collections.user_id = auth.uid()
+  )
+);
+
+-- INSERT policy: Users can link chunks to their own collections
+CREATE POLICY "Users can add chunk_collections for own collections"
+ON chunk_collections FOR INSERT
+WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM collections
+    WHERE collections.id = chunk_collections.collection_id
+    AND collections.user_id = auth.uid()
+  )
+);
+
+-- DELETE policy: Users can remove chunk-collection relationships for their own collections
+CREATE POLICY "Users can delete chunk_collections for own collections"
+ON chunk_collections FOR DELETE
+USING (
+  EXISTS (
+    SELECT 1 FROM collections
+    WHERE collections.id = chunk_collections.collection_id
+    AND collections.user_id = auth.uid()
+  )
+);
+```
+
+### Step 7.4: Test RLS Policies
+
+```sql
+-- Test as authenticated user (replace 'test-user-uuid' with real user ID)
+SET request.jwt.claims = '{"sub": "test-user-uuid"}';
+
+-- Try to select collections (should only see user's own collections)
+SELECT * FROM collections;
+
+-- Try to select documents (should only see user's own documents)
+SELECT * FROM source_documents;
+
+-- Test vector search (should only return user's chunks)
+SELECT dc.content, dc.embedding <=> '[...]'::vector AS similarity
+FROM document_chunks dc
+JOIN chunk_collections cc ON cc.chunk_id = dc.id
+JOIN collections c ON c.id = cc.collection_id
+WHERE c.user_id = auth.uid()
+ORDER BY similarity LIMIT 5;
+```
+
+### Step 7.5: Update Application Code for RLS
+
+**For personal use (single user), set a default user_id:**
+
+```python
+# Add to src/core/database.py or environment
+import os
+
+# Set a default user UUID for personal use
+DEFAULT_USER_ID = os.getenv("RAG_USER_ID", "00000000-0000-0000-0000-000000000001")
+
+# When creating collections/documents, include user_id:
+# In src/core/collections.py:
+def create_collection(self, name: str, description: str = None, user_id: str = None):
+    user_id = user_id or DEFAULT_USER_ID
+    # ... rest of code, include user_id in INSERT
+```
+
+**For multi-user applications:**
+- Use Supabase Auth for user authentication
+- Pass authenticated user's ID from JWT to queries
+- Use service role key for admin operations
+
+---
+
+## Rollback Plan
+
+If something goes wrong, you can easily roll back:
+
+### Option 1: Switch Back to Docker
+
+```bash
+# Restore .env from backup
+cp .env.backup .env
+
+# Verify Docker is still running
+docker-compose ps
+
+# Test connection
+uv run rag status
+```
+
+### Option 2: Restore Supabase from Backup
+
+```bash
+# Drop all tables in Supabase
+psql "$SUPABASE_DB_URL" -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
+# Restore from backup
+psql "$SUPABASE_DB_URL" < backups/rag_memory_YYYYMMDD_HHMMSS.sql
+```
+
+---
+
+## Cost Monitoring
+
+### Free Tier Limits (What you get for $0/month)
+
+- **Database size**: 500MB
+- **Projects**: 2
+- **Bandwidth**: 5GB egress
+- **API requests**: Unlimited (but rate limited)
+
+**How to monitor usage:**
+
+1. **Go to Supabase Dashboard** → Settings → Usage
+
+2. **Check metrics:**
+   - Database size: Should stay under 500MB for free tier
+   - Bandwidth: Monitor if using MCP server frequently
+   - API requests: Track if you're hitting rate limits
+
+3. **Set up alerts** (optional):
+   - Go to Settings → Billing
+   - Set up email alerts for 80% usage
+
+### When to Upgrade to Pro ($25/mo)
+
+Upgrade when you hit any of these:
+- ✅ Database size > 450MB (stay safe, upgrade at 90%)
+- ✅ Need automated backups (daily snapshots)
+- ✅ Want better performance (more resources)
+- ✅ Need more than 2 projects
+- ✅ Higher bandwidth needs
+
+**Pro plan includes:**
+- 8GB database (16x more than free)
+- $10 compute credits/month
+- Daily automated backups with 7-day retention
+- Better performance (dedicated resources)
+
+---
+
+## Troubleshooting
+
+### Issue: "Too many connections" error
+
+**Cause**: Connection pool exhausted
+
+**Solution 1**: Use Transaction Mode (port 6543) instead of Session Mode
+```bash
+# In .env, change port 5432 to 6543
+DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-us-east-1.pooler.supabase.com:6543/postgres
+```
+
+**Solution 2**: Close connections properly in code
+```python
+# Ensure database connections are closed after use
+# RAG Memory already does this, but verify in custom code
+```
+
+### Issue: "Extension 'vector' does not exist"
+
+**Cause**: pgvector not installed
+
+**Solution**:
+```sql
+-- Run in Supabase SQL Editor
+CREATE EXTENSION IF NOT EXISTS vector;
+```
+
+### Issue: Slow queries (>1s for vector search)
+
+**Cause**: Missing HNSW indexes
+
+**Solution**:
+```sql
+-- Check if indexes exist
+\di
+
+-- If missing, create HNSW indexes
+CREATE INDEX IF NOT EXISTS idx_chunks_embedding
+ON document_chunks USING hnsw (embedding vector_cosine_ops)
+WITH (m = 16, ef_construction = 64);
+```
+
+### Issue: Migration fails with "permission denied"
+
+**Cause**: Using wrong connection string or insufficient privileges
+
+**Solution**:
+- Use **Direct Connection** for `pg_dump`/`pg_restore`:
+  ```
+  postgresql://postgres.[project-ref]:[password]@db.[project-ref].supabase.co:5432/postgres
+  ```
+- Verify password is correct
+- Check Supabase dashboard for connection string
+
+### Issue: RLS policies blocking legitimate queries
+
+**Cause**: User ID not set correctly or policies too restrictive
+
+**Solution 1**: Check current user context
+```sql
+SELECT auth.uid();  -- Should return your user UUID
+```
+
+**Solution 2**: Temporarily disable RLS for testing
+```sql
+ALTER TABLE collections DISABLE ROW LEVEL SECURITY;
+-- Run your test
+ALTER TABLE collections ENABLE ROW LEVEL SECURITY;
+```
+
+**Solution 3**: Use service role for admin queries
+```bash
+# Use service_role key from Supabase dashboard
+# Settings → API → service_role key (secret!)
+```
+
+### Issue: "FATAL: password authentication failed"
+
+**Cause**: Wrong password in connection string
+
+**Solution**:
+1. Go to Supabase Dashboard → Settings → Database
+2. Click "Reset Database Password"
+3. Update `.env` with new password
+4. Update connection string
+
+### Issue: High latency (>500ms queries)
+
+**Cause**: Region mismatch or network issues
+
+**Solution**:
+1. Check your Supabase project region (Settings → General)
+2. If far from your location, consider creating new project in closer region
+3. Use `ping` to test latency:
+   ```bash
+   ping db.[project-ref].supabase.co
+   ```
+
+---
+
+## Next Steps After Migration
+
+1. ✅ **Test everything thoroughly** (run full test suite)
+2. ✅ **Monitor costs** (check usage weekly for first month)
+3. ✅ **Set up backups** (upgrade to Pro if you need automated backups)
+4. ✅ **Update documentation** for your team
+5. ✅ **Shut down Docker** (once confident Supabase is working):
+   ```bash
+   docker-compose down
+   # Keep docker-compose.yml for local dev if needed
+   ```
+
+6. ✅ **Share with users** (if applicable):
+   - Provide connection instructions
+   - Document RLS setup if multi-tenant
+   - Share cost expectations
+
+---
+
+## Support Resources
+
+- **Supabase Documentation**: https://supabase.com/docs
+- **RAG with Permissions Guide**: https://supabase.com/docs/guides/ai/rag-with-permissions
+- **Supabase Discord**: https://discord.supabase.com
+- **RAG Memory Issues**: https://github.com/your-repo/issues (replace with actual repo)
+
+---
+
+**Congratulations!** 🎉 You've successfully migrated RAG Memory to Supabase. Your vector database is now accessible from anywhere, automatically backed up, and ready to scale.

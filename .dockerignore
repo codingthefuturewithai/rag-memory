@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+test-results/
+*.coverage
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation (not needed at runtime)
+docs/
+.reference/
+*.md
+!README.md
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Environment files (secrets come from Fly.io)
+.env
+.env.example
+.env.local
+
+# Test data
+test-data/
+backups/
+
+# Mac
+.DS_Store
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Migration archives
+migrations/archive/
+
+# Scripts (development only)
+scripts/
+build.sh
+
+# Deployment docs (not needed in container)
+DEPLOYMENT_READY.md

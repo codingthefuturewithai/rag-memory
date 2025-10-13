@@ -77,6 +77,43 @@ async def lifespan(app: FastMCP):
 mcp = FastMCP("rag-memory", lifespan=lifespan)
 
 
+# Health check endpoint for Fly.io and container orchestration
+@mcp.get("/health")
+async def health_check():
+    """
+    Health check endpoint for container orchestration (Fly.io, Docker, etc).
+
+    Returns:
+        200: Server is healthy and database is accessible
+        503: Server is unhealthy or database is unreachable
+    """
+    from datetime import datetime, timezone
+
+    try:
+        # Check database connection
+        if db:
+            with db.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1")
+                    cur.fetchone()
+
+        return {
+            "status": "healthy",
+            "database": "connected",
+            "server": "rag-memory-mcp",
+            "version": "0.6.0",
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }, 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {
+            "status": "unhealthy",
+            "database": "disconnected",
+            "error": str(e),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }, 503
+
+
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)
 
 
