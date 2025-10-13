@@ -987,7 +987,9 @@ def main():
                     await mcp.run_stdio_async()
                 elif transport == "sse":
                     logger.info(f"Starting server with SSE transport on port {port}")
-                    await mcp.run_sse_async(host="0.0.0.0", port=port)
+                    mcp.settings.host = "0.0.0.0"
+                    mcp.settings.port = port
+                    await mcp.run_sse_async()
                 elif transport == "streamable-http":
                     logger.info(f"Starting server with Streamable HTTP transport on port {port}")
                     mcp.settings.port = port
