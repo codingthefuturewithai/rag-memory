@@ -102,7 +102,24 @@ uv run python -m src.mcp.server --transport streamable-http --port 3001
 
 ### Claude Code
 
-Claude Code uses the same MCP configuration as Claude Desktop. Follow the Claude Desktop instructions above.
+Claude Code has its own CLI command for adding MCP servers. **CRITICAL: Use `--scope user` flag to make the server available globally.**
+
+**Run this command in your terminal:**
+
+```bash
+claude mcp add-json --scope user rag-memory '{"type":"stdio","command":"rag-mcp-stdio","args":[],"env":{"OPENAI_API_KEY":"sk-your-api-key-here","DATABASE_URL":"postgresql://raguser:ragpass@localhost:54320/rag_poc"}}'
+```
+
+**Why `--scope user` is REQUIRED:**
+- ❌ Without `--scope user`: Server only works in current directory (local scope)
+- ✅ With `--scope user`: Server available globally across all projects
+- This ensures the MCP server works everywhere, not tied to any specific repo
+
+**Steps:**
+1. Replace `sk-your-api-key-here` with your actual OpenAI API key
+2. Run the command in your terminal
+3. Restart Claude Code (quit and reopen)
+4. Test by asking: "List available RAG collections"
 
 ### Cursor
 

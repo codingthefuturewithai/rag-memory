@@ -297,11 +297,16 @@ OPENAI_API_KEY=your-api-key-here
 **WAIT FOR RESPONSE**
 
 **For Claude Code:**
-"Run this command in your terminal to add the RAG Memory MCP server:"
+"Run this command in your terminal to add the RAG Memory MCP server GLOBALLY (accessible from any directory):"
 
 ```bash
-claude mcp add-json rag-memory '{"type":"stdio","command":"rag-mcp-stdio","args":[],"env":{"OPENAI_API_KEY":"sk-your-api-key-here","DATABASE_URL":"postgresql://raguser:ragpass@localhost:54320/rag_poc"}}'
+claude mcp add-json --scope user rag-memory '{"type":"stdio","command":"rag-mcp-stdio","args":[],"env":{"OPENAI_API_KEY":"sk-your-api-key-here","DATABASE_URL":"postgresql://raguser:ragpass@localhost:54320/rag_poc"}}'
 ```
+
+**CRITICAL - The `--scope user` flag is REQUIRED:**
+- Without it, the server only works in the current directory
+- With `--scope user`, the server is available globally across all projects
+- This ensures the MCP server works everywhere, not tied to any specific repo
 
 **IMPORTANT:**
 1. Replace `sk-your-api-key-here` with your actual OpenAI API key
