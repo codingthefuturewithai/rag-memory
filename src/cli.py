@@ -112,6 +112,57 @@ def status():
 
 
 @main.command()
+@click.option("--show-sql", is_flag=True, help="Print SQL statements being executed")
+def migrate(show_sql):
+    """Run database migrations using Alembic.
+
+    Applies all pending migrations to bring the database schema up to date.
+
+    Examples:
+        # Run all pending migrations
+        uv run rag migrate
+
+        # Run migrations with SQL output
+        uv run rag migrate --show-sql
+    """
+    try:
+        import subprocess
+
+        console.print("[bold blue]Running database migrations...[/bold blue]\n")
+
+        # Build alembic command
+        cmd = ["uv", "run", "alembic", "upgrade", "head"]
+
+        if show_sql:
+            cmd.append("--sql")
+
+        # Run alembic upgrade
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=Path(__file__).parent.parent
+        )
+
+        # Display output
+        if result.stdout:
+            console.print(result.stdout)
+
+        if result.stderr:
+            console.print(result.stderr)
+
+        if result.returncode == 0:
+            console.print("[bold green]✓ Migrations completed successfully[/bold green]")
+        else:
+            console.print("[bold red]✗ Migration failed[/bold red]")
+            sys.exit(1)
+
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
+@main.command()
 @click.argument("url")
 @click.option("--include-urls", is_flag=True, help="Include full URL lists per pattern")
 @click.option("--max-urls", type=int, default=10, help="Max URLs per pattern when --include-urls (default: 10)")
@@ -384,6 +435,42 @@ def collection_info(name):
             else:
                 console.print("[dim]No web crawls found in this collection[/dim]")
         
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
+@collection.command("update")
+@click.argument("name")
+@click.option("--description", required=True, help="New collection description")
+def collection_update(name, description):
+    """Update a collection's description.
+
+    Examples:
+        uv run rag collection update my-docs --description "Updated documentation collection"
+    """
+    try:
+        db = get_database()
+        mgr = get_collection_manager(db)
+
+        # Get collection to verify it exists
+        collection = mgr.get_collection(name)
+        if not collection:
+            console.print(f"[yellow]Collection '{name}' not found[/yellow]")
+            sys.exit(1)
+
+        # Update the description
+        conn = db.connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE collections SET description = %s WHERE name = %s",
+                (description, name)
+            )
+            conn.commit()
+
+        console.print(f"[bold green]✓ Updated collection '{name}'[/bold green]")
+        console.print(f"  New description: {description}")
+
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")
         sys.exit(1)

@@ -1,6 +1,6 @@
 [project]
 name = "rag-memory"
-version = "0.5.3"
+version = "0.6.0"
 description = "PostgreSQL pgvector-based RAG memory system with MCP server"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -25,7 +25,6 @@ dependencies = [
     "psycopg[binary]>=3.2.0",
     "pgvector>=0.3.0",
     "numpy>=2.0.0",
-
     # LangChain (October 2025 stable versions)
     "langchain>=0.3.0,<0.4.0",
     "langchain-postgres>=0.0.12",
@@ -33,21 +32,18 @@ dependencies = [
     "langchain-community>=0.3.0",
     "langchain-core>=0.3.0",
     "langchain-text-splitters>=0.3.0",
-
     # OpenAI
     "openai>=1.50.0",
-
     # CLI
     "click>=8.1.0",
     "rich>=13.9.0",
     "python-dotenv>=1.0.0",
-
     # Web Crawling
     "crawl4ai>=0.4.0",
     "playwright>=1.49.0",
-
     # MCP Server
     "mcp[cli]>=1.0.0",
+    "alembic>=1.17.0",
 ]
 
 [project.optional-dependencies]

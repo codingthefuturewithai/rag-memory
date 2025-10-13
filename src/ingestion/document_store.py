@@ -88,12 +88,13 @@ class DocumentStore:
             )
             source_id = cur.fetchone()[0]
 
-        # 2. Get or create collection
+        # 2. Verify collection exists
         collection = self.collection_mgr.get_collection(collection_name)
         if not collection:
-            logger.info(f"Creating collection '{collection_name}'")
-            self.collection_mgr.create_collection(collection_name)
-            collection = self.collection_mgr.get_collection(collection_name)
+            raise ValueError(
+                f"Collection '{collection_name}' does not exist. "
+                f"Collections must be created explicitly with a description before ingesting documents."
+            )
 
         # 3. Chunk the document
         logger.info(f"Chunking document ({len(content)} chars)...")

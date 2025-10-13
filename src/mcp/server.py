@@ -18,6 +18,8 @@ from src.ingestion.document_store import get_document_store
 from src.mcp.tools import (
     search_documents_impl,
     list_collections_impl,
+    create_collection_impl,
+    update_collection_description_impl,
     ingest_text_impl,
     get_document_by_id_impl,
     get_collection_info_impl,
@@ -115,10 +117,11 @@ def search_documents(
     include_metadata=True to get extended chunk details.
 
     Args:
-        query: Natural language search query - use complete sentences, not keywords!
+        query: (REQUIRED) Natural language search query - use complete sentences, not keywords!
         collection_name: Optional collection to scope search. If None, searches all collections.
         limit: Maximum number of results to return (default: 5, max: 50)
         threshold: Minimum similarity score 0-1 (default: 0.65). Lower = more permissive.
+                  Typical ranges: 0.7-0.9 (high confidence), 0.5-0.7 (medium), <0.5 (exploratory)
         include_source: If True, includes full source document content in results
         include_metadata: If True, includes chunk_id, chunk_index, char_start, char_end,
                          and metadata dict. Default: False (minimal response).
@@ -204,12 +207,75 @@ def list_collections() -> list[dict]:
 
 
 @mcp.tool()
+def create_collection(name: str, description: str) -> dict:
+    """
+    Create a new collection for organizing documents.
+
+    Collections are required before ingesting documents. Each collection must
+    have a meaningful description to help users understand its purpose.
+
+    Args:
+        name: (REQUIRED) Collection identifier (unique, lowercase recommended)
+        description: (REQUIRED) Human-readable description of the collection's purpose.
+                    Collections without descriptions are not allowed.
+
+    Returns:
+        {
+            "collection_id": int,
+            "name": str,
+            "description": str,
+            "created": bool  # Always True on success
+        }
+
+    Raises:
+        ValueError: If collection with this name already exists
+
+    Example:
+        result = create_collection(
+            name="python-docs",
+            description="Official Python documentation and tutorials"
+        )
+    """
+    return create_collection_impl(coll_mgr, name, description)
+
+
+@mcp.tool()
+def update_collection_description(name: str, description: str) -> dict:
+    """
+    Update the description of an existing collection.
+
+    Useful when collection purpose changes or needs clarification.
+
+    Args:
+        name: (REQUIRED) Collection name to update
+        description: (REQUIRED) New description for the collection.
+                    Cannot be empty or None.
+
+    Returns:
+        {
+            "name": str,
+            "description": str,
+            "updated": bool  # Always True on success
+        }
+
+    Raises:
+        ValueError: If collection doesn't exist
+
+    Example:
+        result = update_collection_description(
+            name="python-docs",
+            description="Python 3.12+ documentation with examples"
+        )
+    """
+    return update_collection_description_impl(coll_mgr, name, description)
+
+
+@mcp.tool()
 def ingest_text(
     content: str,
     collection_name: str,
     document_title: Optional[str] = None,
     metadata: Optional[dict] = None,
-    auto_create_collection: bool = True,
     include_chunk_ids: bool = False,
 ) -> dict:
     """
@@ -219,18 +285,18 @@ def ingest_text(
     Content is automatically chunked (~1000 chars with 200 char overlap),
     embedded with OpenAI, and stored for future retrieval.
 
+    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
+
     By default, returns minimal response (source_document_id and num_chunks).
     Use include_chunk_ids=True to get the list of chunk IDs (may be large).
 
     Args:
-        content: Text content to ingest (any length, will be automatically chunked)
-        collection_name: Collection to add content to
+        content: (REQUIRED) Text content to ingest (any length, will be automatically chunked)
+        collection_name: (REQUIRED) Collection to add content to (must already exist)
         document_title: Optional human-readable title for this document.
                        If not provided, auto-generates from timestamp.
                        Appears in search results as "Source: {document_title}"
         metadata: Optional metadata dict (e.g., {"topic": "python", "author": "agent"})
-        auto_create_collection: If True, creates collection if it doesn't exist (default: True).
-                               If False and collection doesn't exist, raises error.
         include_chunk_ids: If True, includes list of chunk IDs. Default: False (minimal response).
 
     Returns:
@@ -238,8 +304,7 @@ def ingest_text(
         {
             "source_document_id": int,  # ID for retrieving full document later
             "num_chunks": int,
-            "collection_name": str,
-            "collection_created": bool  # True if collection was auto-created
+            "collection_name": str
         }
 
         Extended response (include_chunk_ids=True):
@@ -247,11 +312,17 @@ def ingest_text(
             "source_document_id": int,
             "num_chunks": int,
             "collection_name": str,
-            "collection_created": bool,
             "chunk_ids": list[int]  # IDs of generated chunks
         }
 
+    Raises:
+        ValueError: If collection doesn't exist
+
     Example:
+        # First, create collection
+        create_collection("programming-tutorials", "Python programming examples")
+
+        # Then ingest content
         result = ingest_text(
             content="Python is a high-level programming language...",
             collection_name="programming-tutorials",
@@ -267,7 +338,6 @@ def ingest_text(
         collection_name,
         document_title,
         metadata,
-        auto_create_collection,
         include_chunk_ids,
     )
 
@@ -281,7 +351,7 @@ def get_document_by_id(document_id: int, include_chunks: bool = False) -> dict:
     Document IDs come from search_documents() results (source_document_id field).
 
     Args:
-        document_id: Source document ID (from search results)
+        document_id: (REQUIRED) Source document ID (from search results)
         include_chunks: If True, includes list of all chunks with details
 
     Returns:
@@ -325,7 +395,7 @@ def get_collection_info(collection_name: str) -> dict:
     Includes crawl history to help avoid duplicate crawls.
 
     Args:
-        collection_name: Name of the collection
+        collection_name: (REQUIRED) Name of the collection
 
     Returns:
         {
@@ -389,7 +459,7 @@ def analyze_website(
     need specific URLs from patterns.
 
     Args:
-        base_url: Website ROOT URL (e.g., "https://docs.example.com")
+        base_url: (REQUIRED) Website ROOT URL (e.g., "https://docs.example.com")
                  Must be the domain root, not a specific page path.
         timeout: Request timeout in seconds (default: 10)
         include_url_lists: If True, includes full URL lists per pattern (default: False).
@@ -457,7 +527,6 @@ async def ingest_url(
     mode: str = "crawl",
     follow_links: bool = False,
     max_depth: int = 1,
-    auto_create_collection: bool = True,
     include_document_ids: bool = False,
 ) -> dict:
     """
@@ -465,6 +534,8 @@ async def ingest_url(
 
     Uses Crawl4AI for web scraping. Supports single-page or multi-page crawling
     with link following. Automatically chunks content (~2500 chars for web pages).
+
+    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
 
     IMPORTANT DUPLICATE PREVENTION:
     - mode="crawl": New crawl. Raises error if URL already crawled into collection.
@@ -477,12 +548,13 @@ async def ingest_url(
     Use include_document_ids=True to get the list of document IDs.
 
     Args:
-        url: URL to crawl and ingest (e.g., "https://docs.python.org/3/")
-        collection_name: Collection to add content to
-        mode: "crawl" (new, error if exists) or "recrawl" (update existing). Default: "crawl"
+        url: (REQUIRED) URL to crawl and ingest (e.g., "https://docs.python.org/3/")
+        collection_name: (REQUIRED) Collection to add content to (must already exist)
+        mode: Crawl mode - "crawl" or "recrawl" (default: "crawl").
+              - "crawl": New crawl. ERROR if this exact URL already crawled into this collection.
+              - "recrawl": Update existing. Deletes old pages from this URL and re-ingests fresh content.
         follow_links: If True, follows internal links for multi-page crawl (default: False)
         max_depth: Maximum crawl depth when following links (default: 1, max: 3)
-        auto_create_collection: Create collection if doesn't exist (default: True)
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
@@ -493,7 +565,6 @@ async def ingest_url(
             "pages_ingested": int,  # May be less if some pages failed
             "total_chunks": int,
             "collection_name": str,
-            "collection_created": bool,
             "crawl_metadata": {
                 "crawl_root_url": str,  # Starting URL
                 "crawl_session_id": str,  # UUID for this crawl session
@@ -513,7 +584,15 @@ async def ingest_url(
             "document_ids": list[int]  # IDs of ingested documents
         }
 
+    Raises:
+        ValueError: If collection doesn't exist, or if mode="crawl" and URL already
+                   crawled into this collection. Error message suggests using
+                   mode="recrawl" to update.
+
     Example:
+        # First, create collection
+        create_collection("example-docs", "Example.com documentation")
+
         # New crawl (will error if URL already crawled)
         result = ingest_url(
             url="https://example.com/docs",
@@ -535,15 +614,11 @@ async def ingest_url(
         for crawl in info['crawled_urls']:
             print(f"Already crawled: {crawl['url']}")
 
-    Raises:
-        ValueError: If mode="crawl" and URL already crawled into this collection.
-                   Error message suggests using mode="recrawl" to update.
-
     Note: Web crawling can be slow (1-5 seconds per page). Use follow_links sparingly.
     Use analyze_website() first to understand site structure and plan comprehensive crawling.
     """
     return await ingest_url_impl(
-        doc_store, db, url, collection_name, follow_links, max_depth, mode, auto_create_collection, include_document_ids
+        doc_store, db, url, collection_name, follow_links, max_depth, mode, include_document_ids
     )
 
 
@@ -552,7 +627,6 @@ def ingest_file(
     file_path: str,
     collection_name: str,
     metadata: Optional[dict] = None,
-    auto_create_collection: bool = True,
     include_chunk_ids: bool = False,
 ) -> dict:
     """
@@ -560,6 +634,8 @@ def ingest_file(
 
     IMPORTANT: Requires file system access. Most MCP agents should use
     ingest_text() or ingest_url() instead unless they have local file access.
+
+    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
 
     Supported file types (text-based only):
         ✓ Plain text (.txt, .md, .rst)
@@ -577,10 +653,9 @@ def ingest_file(
     Use include_chunk_ids=True to get the list of chunk IDs.
 
     Args:
-        file_path: Absolute path to the file (e.g., "/path/to/document.txt")
-        collection_name: Collection to add to
+        file_path: (REQUIRED) Absolute path to the file (e.g., "/path/to/document.txt")
+        collection_name: (REQUIRED) Collection to add to (must already exist)
         metadata: Optional metadata dict
-        auto_create_collection: Create collection if doesn't exist (default: True)
         include_chunk_ids: If True, includes list of chunk IDs. Default: False (minimal response).
 
     Returns:
@@ -591,8 +666,7 @@ def ingest_file(
             "filename": str,  # Extracted from path
             "file_type": str,  # Extracted from extension
             "file_size": int,  # Bytes
-            "collection_name": str,
-            "collection_created": bool
+            "collection_name": str
         }
 
         Extended response (include_chunk_ids=True):
@@ -604,8 +678,13 @@ def ingest_file(
     Raises:
         FileNotFoundError: If file doesn't exist
         UnicodeDecodeError: If file is binary/not text
+        ValueError: If collection doesn't exist
 
     Example:
+        # First, create collection
+        create_collection("reports", "Engineering reports and documentation")
+
+        # Then ingest file
         result = ingest_file(
             file_path="/Users/agent/documents/report.txt",
             collection_name="reports",
@@ -613,7 +692,7 @@ def ingest_file(
         )
     """
     return ingest_file_impl(
-        doc_store, file_path, collection_name, metadata, auto_create_collection, include_chunk_ids
+        doc_store, file_path, collection_name, metadata, include_chunk_ids
     )
 
 
@@ -623,7 +702,6 @@ def ingest_directory(
     collection_name: str,
     file_extensions: Optional[list[str]] = None,
     recursive: bool = False,
-    auto_create_collection: bool = True,
     include_document_ids: bool = False,
 ) -> dict:
     """
@@ -632,6 +710,8 @@ def ingest_directory(
     IMPORTANT: Requires file system access. Most MCP agents should use
     ingest_text() or ingest_url() instead unless they have local file access.
 
+    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
+
     Only processes text-based files (see ingest_file for supported types).
     Binary files and files without matching extensions are skipped.
 
@@ -639,12 +719,11 @@ def ingest_directory(
     Use include_document_ids=True to get the list of document IDs.
 
     Args:
-        directory_path: Absolute path to directory (e.g., "/path/to/docs")
-        collection_name: Collection to add all files to
+        directory_path: (REQUIRED) Absolute path to directory (e.g., "/path/to/docs")
+        collection_name: (REQUIRED) Collection to add all files to (must already exist)
         file_extensions: List of extensions to process (e.g., [".txt", ".md"]).
                         If None, defaults to [".txt", ".md"]
         recursive: If True, searches subdirectories (default: False)
-        auto_create_collection: Create collection if doesn't exist (default: True)
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
@@ -655,7 +734,6 @@ def ingest_directory(
             "files_failed": int,
             "total_chunks": int,
             "collection_name": str,
-            "collection_created": bool,
             "failed_files": [  # Only if files_failed > 0
                 {
                     "filename": str,
@@ -670,7 +748,13 @@ def ingest_directory(
             "document_ids": list[int]  # IDs of ingested documents
         }
 
+    Raises:
+        ValueError: If collection doesn't exist
+
     Example:
+        # First, create collection
+        create_collection("kb", "Knowledge base articles and documentation")
+
         # Ingest all markdown files in directory
         result = ingest_directory(
             directory_path="/Users/agent/knowledge-base",
@@ -687,7 +771,6 @@ def ingest_directory(
         collection_name,
         file_extensions,
         recursive,
-        auto_create_collection,
         include_document_ids,
     )
 
@@ -711,10 +794,12 @@ def update_document(
     Collection membership is preserved across updates.
 
     Args:
-        document_id: ID of document to update (from search results or list_documents)
+        document_id: (REQUIRED) ID of document to update (from search results or list_documents)
         content: New content (optional). Triggers full re-chunking and re-embedding.
         title: New title/filename (optional)
         metadata: New metadata (optional). Merged with existing metadata, not replaced.
+
+        **IMPORTANT: At least one of content, title, or metadata MUST be provided.**
 
     Returns:
         {
@@ -761,7 +846,7 @@ def delete_document(document_id: int) -> dict:
     in the same collections are unaffected.
 
     Args:
-        document_id: ID of document to delete (from search results or list_documents)
+        document_id: (REQUIRED) ID of document to delete (from search results or list_documents)
 
     Returns:
         {
@@ -858,10 +943,12 @@ def list_documents(
             print(f"  Metadata: {doc['metadata']}")
 
         # Paginate through all documents
-        result = list_documents(limit=50, offset=0)
+        offset = 0
+        result = list_documents(limit=50, offset=offset)
         while result['has_more']:
             # Process documents
-            result = list_documents(limit=50, offset=result['returned_count'])
+            offset += result['returned_count']
+            result = list_documents(limit=50, offset=offset)
     """
     return list_documents_impl(db, coll_mgr, collection_name, limit, offset, include_details)
 

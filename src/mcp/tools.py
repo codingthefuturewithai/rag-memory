@@ -96,13 +96,70 @@ def list_collections_impl(coll_mgr: CollectionManager) -> List[Dict[str, Any]]:
         raise
 
 
+def create_collection_impl(
+    coll_mgr: CollectionManager, name: str, description: str
+) -> Dict[str, Any]:
+    """Implementation of create_collection tool."""
+    try:
+        collection_id = coll_mgr.create_collection(name, description)
+
+        return {
+            "collection_id": collection_id,
+            "name": name,
+            "description": description,
+            "created": True
+        }
+    except ValueError as e:
+        # Collection already exists
+        logger.warning(f"create_collection failed: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"create_collection failed: {e}")
+        raise
+
+
+def update_collection_description_impl(
+    coll_mgr: CollectionManager, name: str, description: str
+) -> Dict[str, Any]:
+    """Implementation of update_collection_description tool."""
+    try:
+        # Check if collection exists
+        collection = coll_mgr.get_collection(name)
+        if not collection:
+            raise ValueError(f"Collection '{name}' not found")
+
+        # Update description using direct SQL since CollectionManager doesn't have update method yet
+        from src.core.database import get_database
+        db = get_database()
+        conn = db.connect()
+
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE collections SET description = %s WHERE name = %s",
+                (description, name)
+            )
+
+        logger.info(f"Updated description for collection '{name}'")
+
+        return {
+            "name": name,
+            "description": description,
+            "updated": True
+        }
+    except ValueError as e:
+        logger.warning(f"update_collection_description failed: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"update_collection_description failed: {e}")
+        raise
+
+
 def ingest_text_impl(
     doc_store: DocumentStore,
     content: str,
     collection_name: str,
     document_title: Optional[str],
     metadata: Optional[Dict[str, Any]],
-    auto_create_collection: bool,
     include_chunk_ids: bool,
 ) -> Dict[str, Any]:
     """Implementation of ingest_text tool."""
@@ -113,17 +170,14 @@ def ingest_text_impl(
 
         # Check if collection exists
         collection = doc_store.collection_mgr.get_collection(collection_name)
-        collection_created = False
-
-        if not collection and not auto_create_collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist and auto_create_collection=False"
-            )
 
         if not collection:
-            collection_created = True
+            raise ValueError(
+                f"Collection '{collection_name}' does not exist. "
+                f"Create it first using create_collection('{collection_name}', 'description')."
+            )
 
-        # Ingest document (auto-creates collection if needed)
+        # Ingest document
         source_id, chunk_ids = doc_store.ingest_document(
             content=content,
             filename=document_title,
@@ -136,7 +190,6 @@ def ingest_text_impl(
             "source_document_id": source_id,
             "num_chunks": len(chunk_ids),
             "collection_name": collection_name,
-            "collection_created": collection_created,
         }
 
         if include_chunk_ids:
@@ -351,7 +404,6 @@ async def ingest_url_impl(
     follow_links: bool,
     max_depth: int,
     mode: str,
-    auto_create_collection: bool,
     include_document_ids: bool,
 ) -> Dict[str, Any]:
     """
@@ -365,17 +417,14 @@ async def ingest_url_impl(
         if mode not in ["crawl", "recrawl"]:
             raise ValueError(f"Invalid mode '{mode}'. Must be 'crawl' or 'recrawl'")
 
-        # Check collection
+        # Check collection exists
         collection = doc_store.collection_mgr.get_collection(collection_name)
-        collection_created = False
-
-        if not collection and not auto_create_collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist and auto_create_collection=False"
-            )
 
         if not collection:
-            collection_created = True
+            raise ValueError(
+                f"Collection '{collection_name}' does not exist. "
+                f"Create it first using create_collection('{collection_name}', 'description')."
+            )
 
         # Check for existing crawl
         existing_crawl = check_existing_crawl(db, url, collection_name)
@@ -454,7 +503,6 @@ async def ingest_url_impl(
             "pages_ingested": successful_ingests,
             "total_chunks": total_chunks,
             "collection_name": collection_name,
-            "collection_created": collection_created,
             "crawl_metadata": {
                 "crawl_root_url": url,
                 "crawl_session_id": (
@@ -481,7 +529,6 @@ def ingest_file_impl(
     file_path: str,
     collection_name: str,
     metadata: Optional[Dict[str, Any]],
-    auto_create_collection: bool,
     include_chunk_ids: bool,
 ) -> Dict[str, Any]:
     """Implementation of ingest_file tool."""
@@ -491,17 +538,14 @@ def ingest_file_impl(
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        # Check collection
+        # Check collection exists
         collection = doc_store.collection_mgr.get_collection(collection_name)
-        collection_created = False
-
-        if not collection and not auto_create_collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist and auto_create_collection=False"
-            )
 
         if not collection:
-            collection_created = True
+            raise ValueError(
+                f"Collection '{collection_name}' does not exist. "
+                f"Create it first using create_collection('{collection_name}', 'description')."
+            )
 
         # Ingest file
         source_id, chunk_ids = doc_store.ingest_file(
@@ -515,7 +559,6 @@ def ingest_file_impl(
             "file_type": path.suffix.lstrip(".").lower() or "text",
             "file_size": path.stat().st_size,
             "collection_name": collection_name,
-            "collection_created": collection_created,
         }
 
         if include_chunk_ids:
@@ -533,7 +576,6 @@ def ingest_directory_impl(
     collection_name: str,
     file_extensions: Optional[List[str]],
     recursive: bool,
-    auto_create_collection: bool,
     include_document_ids: bool,
 ) -> Dict[str, Any]:
     """Implementation of ingest_directory tool."""
@@ -543,17 +585,14 @@ def ingest_directory_impl(
         if not path.exists() or not path.is_dir():
             raise ValueError(f"Directory not found: {directory_path}")
 
-        # Check collection
+        # Check collection exists
         collection = doc_store.collection_mgr.get_collection(collection_name)
-        collection_created = False
-
-        if not collection and not auto_create_collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist and auto_create_collection=False"
-            )
 
         if not collection:
-            collection_created = True
+            raise ValueError(
+                f"Collection '{collection_name}' does not exist. "
+                f"Create it first using create_collection('{collection_name}', 'description')."
+            )
 
         # Default extensions
         if not file_extensions:
@@ -590,7 +629,6 @@ def ingest_directory_impl(
             "files_failed": len(failed_files),
             "total_chunks": total_chunks,
             "collection_name": collection_name,
-            "collection_created": collection_created,
         }
 
         if include_document_ids:
