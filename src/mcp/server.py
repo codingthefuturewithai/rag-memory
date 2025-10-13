@@ -85,7 +85,7 @@ def search_documents(
     query: str,
     collection_name: Optional[str] = None,
     limit: int = 5,
-    threshold: float = 0.65,
+    threshold: float = 0.35,
     include_source: bool = False,
     include_metadata: bool = False,
 ) -> list[dict]:
@@ -120,8 +120,14 @@ def search_documents(
         query: (REQUIRED) Natural language search query - use complete sentences, not keywords!
         collection_name: Optional collection to scope search. If None, searches all collections.
         limit: Maximum number of results to return (default: 5, max: 50)
-        threshold: Minimum similarity score 0-1 (default: 0.65). Lower = more permissive.
-                  Typical ranges: 0.7-0.9 (high confidence), 0.5-0.7 (medium), <0.5 (exploratory)
+        threshold: Minimum similarity score 0-1 (default: 0.35). Lower = more permissive.
+                  Score interpretation for text-embedding-3-small:
+                  - 0.60+: Excellent match (highly relevant)
+                  - 0.40-0.60: Good match (semantically related)
+                  - 0.25-0.40: Moderate match (may be relevant)
+                  - <0.25: Weak match (likely not relevant)
+                  Results are always sorted by similarity (best first).
+                  Set threshold=None to return all results ranked by relevance.
         include_source: If True, includes full source document content in results
         include_metadata: If True, includes chunk_id, chunk_index, char_start, char_end,
                          and metadata dict. Default: False (minimal response).
