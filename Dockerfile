@@ -44,9 +44,8 @@ ENV PYTHONUNBUFFERED=1
 # Expose port
 EXPOSE 8000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD curl -f http://localhost:8000/health || exit 1
+# Note: Health checks are handled by Fly.io TCP checks in fly.toml
+# FastMCP does not support HTTP health endpoints
 
 # Run MCP server with SSE transport on port 8000
 CMD ["python", "-m", "src.mcp.server", "--transport", "sse", "--port", "8000"]
