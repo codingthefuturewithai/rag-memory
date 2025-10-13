@@ -83,7 +83,7 @@ def search_documents(
     query: str,
     collection_name: Optional[str] = None,
     limit: int = 5,
-    threshold: float = 0.7,
+    threshold: float = 0.65,
     include_source: bool = False,
     include_metadata: bool = False,
 ) -> list[dict]:
@@ -93,15 +93,32 @@ def search_documents(
     This is the primary RAG retrieval method. Uses OpenAI text-embedding-3-small
     embeddings with pgvector HNSW indexing for fast, accurate semantic search.
 
+    **IMPORTANT - Query Format:**
+    This tool uses SEMANTIC SEARCH with vector embeddings, NOT keyword search.
+    You MUST use natural language queries (complete sentences/questions), not keywords.
+
+    ✅ GOOD QUERIES (natural language):
+        - "How do I create custom tools in the Agent SDK?"
+        - "What's the best way to handle errors in my code?"
+        - "Show me examples of parallel subagent execution"
+
+    ❌ BAD QUERIES (keywords - these will fail):
+        - "custom tools register createTool implementation"
+        - "error handling exceptions try catch"
+        - "subagent parallel concurrent execution"
+
+    TIP: Ask questions as if talking to a person. The system understands meaning,
+    not just matching words.
+
     By default, returns minimal response optimized for AI agent context windows
     (only content, similarity, source_document_id, and source_filename). Use
     include_metadata=True to get extended chunk details.
 
     Args:
-        query: Natural language search query (e.g., "How do I configure GitHub Actions?")
+        query: Natural language search query - use complete sentences, not keywords!
         collection_name: Optional collection to scope search. If None, searches all collections.
         limit: Maximum number of results to return (default: 5, max: 50)
-        threshold: Minimum similarity score 0-1 (default: 0.7). Lower = more permissive.
+        threshold: Minimum similarity score 0-1 (default: 0.65). Lower = more permissive.
         include_source: If True, includes full source document content in results
         include_metadata: If True, includes chunk_id, chunk_index, char_start, char_end,
                          and metadata dict. Default: False (minimal response).
