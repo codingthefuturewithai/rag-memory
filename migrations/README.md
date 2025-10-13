@@ -9,7 +9,7 @@ As of October 13, 2025, this project uses **Alembic** for database migrations.
 - **Migration location:** `alembic/versions/`
 - **Configuration:** `alembic.ini` and `alembic/env.py`
 - **Apply migrations:** `uv run rag migrate`
-- **Documentation:** See `DATABASE_MIGRATION_GUIDE.md` in the project root
+- **Documentation:** See `docs/DATABASE_MIGRATION_GUIDE.md`
 
 ## Archive
 

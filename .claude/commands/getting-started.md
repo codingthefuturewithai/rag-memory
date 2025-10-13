@@ -107,18 +107,18 @@ If missing: "Reference documentation not found. Please ensure .reference/ direct
 **Present:**
 - What MCP is (1 sentence)
 - Which AI agents are supported (list)
-- Mention there are 11 tools available (don't list them all yet)
+- Mention there are 14 tools available (don't list them all yet)
 
 **STOP and wait for user response before continuing to Step 4**
 
 ---
 
-#### Step 4 - The 11 MCP Tools
+#### Step 4 - The 14 MCP Tools
 
 [Read from .reference/OVERVIEW.md "Why MCP Server?" section - tools list]
 
 **Present:**
-- Show the 11 tools grouped by category
+- Show the 14 tools grouped by category
 - Brief description for each (tool name + one phrase)
 - Keep it scannable, not wordy
 
@@ -352,9 +352,10 @@ Add this JSON (edit the file manually):
 
 **When yes:**
 
-**Option A:** "Ask your AI agent: 'List available RAG collections'"
+**For MCP users:**
+"Ask your AI agent: 'List available RAG collections'"
 
-**Option B:** "Or I can test via CLI:"
+**For CLI users:**
 [Run: `rag collection list`]
 
 **Ask:** "Which test would you like? (agent/CLI/both)"
@@ -373,8 +374,8 @@ Add this JSON (edit the file manually):
 "Let's add test data:"
 
 ```bash
-rag collection create test-collection
-rag ingest text "PostgreSQL with pgvector enables semantic search for AI agents. RAG Memory provides 11 MCP tools for document management." --collection test-collection
+rag collection create test-collection --description "Test collection"
+rag ingest text "PostgreSQL with pgvector enables semantic search for AI agents. RAG Memory provides 14 MCP tools for document management." --collection test-collection
 rag search "semantic search" --collection test-collection
 ```
 
@@ -397,7 +398,7 @@ rag search "semantic search" --collection test-collection
 "✅ Your RAG Memory setup is complete! What would you like to explore next?"
 
 **Adapt based on their usage choice:**
-- MCP server users: "Your AI agent can now use all 11 RAG tools!"
+- MCP server users: "Your AI agent can now use all 14 RAG tools!"
 - CLI users: "You can now use all CLI commands!"
 - Both: "You have both MCP and CLI access!"
 

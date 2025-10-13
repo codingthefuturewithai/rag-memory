@@ -11,7 +11,7 @@ A production-ready PostgreSQL + pgvector RAG (Retrieval-Augmented Generation) sy
 RAG Memory gives AI agents and developers a powerful memory system for storing and retrieving documents semantically. It combines vector search with full document retrieval, allowing you to find the right information and get the complete context.
 
 **Two ways to use it:**
-1. **MCP Server** - Connect AI agents (Claude Desktop, Claude Code, Cursor) with 11 tools
+1. **MCP Server** - Connect AI agents (Claude Desktop, Claude Code, Cursor) with 14 tools
 2. **CLI Tool** - Direct command-line access for testing, automation, and bulk operations
 
 **Key capabilities:**
@@ -87,13 +87,15 @@ uv run rag status
 ```bash
 rag init                      # Initialize database schema
 rag status                    # Check database connection and stats
+rag migrate                   # Run database migrations (Alembic)
 ```
 
 ### Collection Management
 ```bash
-rag collection create <name> [--description TEXT]
+rag collection create <name> --description TEXT  # Description now required
 rag collection list
 rag collection info <name>    # View stats and crawl history
+rag collection update <name> --description TEXT  # Update collection description
 rag collection delete <name>
 ```
 
@@ -154,7 +156,7 @@ rag document delete <ID> [--confirm]
 
 ## MCP Server for AI Agents
 
-RAG Memory exposes 11 tools via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for AI agent integration.
+RAG Memory exposes 14 tools via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for AI agent integration.
 
 ### Quick Setup
 
@@ -192,12 +194,16 @@ docker-compose up -d
 
 **5. Test:** Ask your agent "List available RAG collections"
 
-### Available MCP Tools (11 Total)
+### Available MCP Tools (14 Total)
 
 **Core RAG (3 tools):**
 - `search_documents` - Semantic search across knowledge base
 - `list_collections` - Discover available collections
 - `ingest_text` - Add text content with auto-chunking
+
+**Collection Management (2 tools):**
+- `create_collection` - Create new collections (description required)
+- `update_collection_description` - Update existing collection descriptions
 
 **Document Management (4 tools):**
 - `list_documents` - Browse documents with pagination
@@ -205,11 +211,12 @@ docker-compose up -d
 - `update_document` - Edit existing documents (triggers re-chunking/re-embedding)
 - `delete_document` - Remove outdated documents
 
-**Advanced Ingestion (4 tools):**
+**Advanced Ingestion (5 tools):**
 - `get_collection_info` - Collection stats and crawl history
 - `analyze_website` - Sitemap analysis for planning crawls
-- `ingest_url` - Crawl web pages with duplicate prevention
+- `ingest_url` - Crawl web pages with duplicate prevention (crawl/recrawl modes)
 - `ingest_file` - Ingest from file system
+- `ingest_directory` - Batch ingest from directories
 
 See [docs/MCP_SERVER_GUIDE.md](./docs/MCP_SERVER_GUIDE.md) for complete tool reference and examples.
 
@@ -254,6 +261,7 @@ See [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md) for complet
 - Many-to-many relationships (documents can belong to multiple collections)
 - Search can be scoped to specific collection
 - Collection statistics and crawl history
+- Required descriptions for better organization (enforced by database constraint)
 
 ### Full Document Lifecycle
 - Create: Ingest from text, files, directories, URLs
@@ -268,12 +276,17 @@ See [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md) for complet
 **Source documents and chunks:**
 - `source_documents` - Full original documents
 - `document_chunks` - Searchable chunks with embeddings (vector[1536])
-- `collections` - Named groupings
+- `collections` - Named groupings (description required with NOT NULL constraint)
 - `chunk_collections` - Junction table (N:M relationship)
 
 **Indexes:**
 - HNSW on `document_chunks.embedding` for fast vector search
 - GIN on metadata columns for efficient JSONB queries
+
+**Migrations:**
+- Managed by Alembic (see `docs/DATABASE_MIGRATION_GUIDE.md`)
+- Version tracking in `alembic_version` table
+- Run migrations: `uv run rag migrate`
 
 ### Python Application
 
@@ -295,7 +308,7 @@ src/
 │   └── search.py          # Semantic search with pgvector
 └── mcp/
     ├── server.py          # MCP server (FastMCP)
-    └── tools.py           # 11 MCP tool implementations
+    └── tools.py           # 14 MCP tool implementations
 ```
 
 ## Documentation
@@ -303,7 +316,8 @@ src/
 - **[.reference/OVERVIEW.md](./.reference/OVERVIEW.md)** - Quick overview for slash command
 - **[.reference/MCP_QUICK_START.md](./.reference/MCP_QUICK_START.md)** - MCP setup guide
 - **[docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)** - Configuration system explained
-- **[docs/MCP_SERVER_GUIDE.md](./docs/MCP_SERVER_GUIDE.md)** - Complete MCP tool reference
+- **[docs/MCP_SERVER_GUIDE.md](./docs/MCP_SERVER_GUIDE.md)** - Complete MCP tool reference (14 tools)
+- **[docs/DATABASE_MIGRATION_GUIDE.md](./docs/DATABASE_MIGRATION_GUIDE.md)** - Database schema migration guide (Alembic)
 - **[CLAUDE.md](./CLAUDE.md)** - Development guide and CLI reference
 
 ## Prerequisites

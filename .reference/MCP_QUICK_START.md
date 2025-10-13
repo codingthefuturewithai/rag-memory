@@ -135,7 +135,7 @@ If your client supports stdio transport:
 2. Look for the MCP server indicator (🔌 icon in Claude Desktop)
 3. Ask your agent: "List available RAG collections"
 4. You should see it call the `list_collections` tool
-5. Success! Your agent can now use all 11 RAG tools
+5. Success! Your agent can now use all 14 RAG tools
 
 ### Method 2: Using MCP Inspector (Recommended for Testing)
 
@@ -150,10 +150,10 @@ This will:
 1. Start the MCP Inspector in your browser
 2. Start your RAG Memory server
 3. Connect them automatically
-4. Show all 11 available tools
+4. Show all 14 available tools
 
 **In the Inspector UI:**
-- **Tools Tab**: See all 11 tools with descriptions
+- **Tools Tab**: See all 14 tools with descriptions
 - Click any tool to test it
 - View tool call history and responses
 
@@ -169,7 +169,7 @@ rag status
 rag collection list
 
 # Create test collection
-rag collection create test-collection
+rag collection create test-collection --description "Test collection"
 
 # Ingest test document
 rag ingest text "PostgreSQL with pgvector enables semantic search for AI agents" --collection test-collection
@@ -252,29 +252,34 @@ rag collection list
 **Test search with existing data:**
 ```bash
 # Create test data if needed
-rag collection create test-collection
+rag collection create test-collection --description "Test collection"
 rag ingest text "Test document" --collection test-collection
 rag search "test" --collection test-collection
 ```
 
-## Available Tools (11 Total)
+## Available Tools (14 Total)
 
 ### Core RAG (3 tools)
 1. **search_documents** - Semantic search with vector similarity
 2. **list_collections** - Discover available knowledge bases
 3. **ingest_text** - Add text content with auto-chunking
 
-### Document Management (4 tools)
-4. **list_documents** - Browse documents with pagination
-5. **get_document_by_id** - Retrieve full source document
-6. **update_document** ⭐ - Edit existing documents
-7. **delete_document** ⭐ - Remove outdated content
+### Collection Management (2 tools)
+4. **create_collection** ⭐ - Create new collections with required descriptions
+5. **update_collection_description** ⭐ - Update existing collection descriptions
 
-### Advanced Ingestion (4 tools)
-8. **get_collection_info** - Collection stats + crawl history
-9. **analyze_website** ⭐ NEW - Sitemap analysis for planning crawls
-10. **ingest_url** - Crawl web pages with duplicate prevention
-11. **ingest_file** - Ingest text files from filesystem
+### Document Management (4 tools)
+6. **list_documents** - Browse documents with pagination
+7. **get_document_by_id** - Retrieve full source document
+8. **update_document** ⭐ - Edit existing documents
+9. **delete_document** ⭐ - Remove outdated content
+
+### Advanced Ingestion (5 tools)
+10. **get_collection_info** - Collection stats + crawl history
+11. **analyze_website** ⭐ - Sitemap analysis for planning crawls
+12. **ingest_url** - Crawl web pages with duplicate prevention
+13. **ingest_file** - Ingest text files from filesystem
+14. **ingest_directory** ⭐ - Batch ingest from directories
 
 ## Complete Documentation
 
