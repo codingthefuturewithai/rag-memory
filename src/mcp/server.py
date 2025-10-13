@@ -5,10 +5,17 @@ Exposes RAG functionality via Model Context Protocol for AI agents.
 """
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
+import jwt
+import requests
+from pydantic import AnyHttpUrl
+
 from mcp.server.fastmcp import FastMCP
+from mcp.server.auth.settings import AuthSettings
+from mcp.server.auth.provider import TokenVerifier, AccessToken
 
 from src.core.database import get_database
 from src.core.embeddings import get_embedding_generator
@@ -71,9 +78,74 @@ async def lifespan(app: FastMCP):
         db.close()
 
 
-# Initialize MCP server with lifespan
-# Note: Authentication disabled for now - add OAuth later if needed
-mcp = FastMCP("rag-memory", lifespan=lifespan)
+# Auth0 Token Verifier
+class Auth0TokenVerifier(TokenVerifier):
+    """Validates JWT tokens issued by Auth0."""
+
+    def __init__(self, domain: str, audience: str):
+        self.domain = domain
+        self.audience = audience
+        self.issuer = f"https://{domain}/"
+        self.jwks_uri = f"https://{domain}/.well-known/jwks.json"
+        self._jwks_client = None
+
+    def _get_jwks_client(self):
+        """Lazy load JWKS client."""
+        if self._jwks_client is None:
+            from jwt import PyJWKClient
+            self._jwks_client = PyJWKClient(self.jwks_uri)
+        return self._jwks_client
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Verify JWT token from Auth0."""
+        try:
+            # Get signing key from JWKS
+            jwks_client = self._get_jwks_client()
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+            # Decode and validate token
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["RS256"],
+                audience=self.audience,
+                issuer=self.issuer
+            )
+
+            # Extract scopes
+            scopes = []
+            if "scope" in payload:
+                scopes = payload["scope"].split()
+            elif "permissions" in payload:
+                scopes = payload["permissions"]
+
+            return AccessToken(
+                token=token,
+                client_id=payload.get("sub", ""),
+                scopes=scopes,
+                expires_at=payload.get("exp")
+            )
+        except Exception as e:
+            logger.warning(f"Token verification failed: {e}")
+            return None
+
+
+# Initialize authentication (only if AUTH0_DOMAIN is set)
+auth_domain = os.getenv("AUTH0_DOMAIN")
+auth_audience = os.getenv("AUTH0_AUDIENCE")
+
+if auth_domain and auth_audience:
+    logger.info("OAuth authentication enabled via Auth0")
+    token_verifier = Auth0TokenVerifier(domain=auth_domain, audience=auth_audience)
+    auth_settings = AuthSettings(
+        issuer_url=AnyHttpUrl(f"https://{auth_domain}"),
+        resource_server_url=AnyHttpUrl(auth_audience),
+        required_scopes=["mcp:read", "mcp:write"]
+    )
+    mcp = FastMCP("rag-memory", lifespan=lifespan, token_verifier=token_verifier, auth=auth_settings)
+else:
+    logger.warning("OAuth authentication DISABLED - set AUTH0_DOMAIN and AUTH0_AUDIENCE to enable")
+    mcp = FastMCP("rag-memory", lifespan=lifespan)
 
 
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)

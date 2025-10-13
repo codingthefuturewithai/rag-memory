@@ -44,6 +44,8 @@ dependencies = [
     # MCP Server
     "mcp[cli]>=1.0.0",
     "alembic>=1.17.0",
+    # OAuth/JWT
+    "PyJWT[crypto]>=2.8.0",
 ]
 
 [project.optional-dependencies]
