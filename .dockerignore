@@ -31,6 +31,8 @@ test-results/
 docs/
 .reference/
 *.md
+
+# Keep README.md (required by pyproject.toml)
 !README.md
 
 # Build artifacts

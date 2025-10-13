@@ -8,12 +8,14 @@ FROM --platform=linux/amd64 mcr.microsoft.com/playwright:v1.44.0-jammy AS builde
 
 WORKDIR /app
 
-# Copy dependency files
-COPY pyproject.toml uv.lock ./
+# Copy dependency files (README.md required by pyproject.toml)
+COPY pyproject.toml uv.lock README.md ./
 
-# Install uv package manager and sync dependencies
-RUN pip install --no-cache-dir -U uv && \
-    uv sync --frozen --no-dev
+# Install pip, then uv, then sync dependencies
+RUN apt-get update && apt-get install -y python3-pip && \
+    python3 -m pip install --no-cache-dir -U uv && \
+    uv sync --frozen --no-dev && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ============================================================================
 # Stage 2: Runtime image
