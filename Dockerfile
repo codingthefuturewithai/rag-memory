@@ -36,6 +36,7 @@ COPY pyproject.toml /app/pyproject.toml
 
 # Environment variables
 ENV PORT=8000
+ENV FASTMCP_HOST=0.0.0.0
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 ENV PATH="/app/.venv/bin:$PATH"
