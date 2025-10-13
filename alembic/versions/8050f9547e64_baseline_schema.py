@@ -24,12 +24,18 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     """Upgrade schema.
 
-    This is a baseline migration - the schema already exists from init.sql.
-    No changes are made to the database.
+    Create initial schema from init.sql.
     """
-    # Schema already exists from init.sql
-    # This migration serves only as a baseline marker
-    pass
+    # Read and execute init.sql
+    import os
+    from pathlib import Path
+
+    init_sql_path = Path(__file__).parent.parent.parent / "init.sql"
+    with open(init_sql_path, 'r') as f:
+        sql_commands = f.read()
+
+    # Execute the SQL
+    op.execute(sql_commands)
 
 
 def downgrade() -> None:
