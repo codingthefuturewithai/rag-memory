@@ -493,6 +493,108 @@ npx @modelcontextprotocol/inspector
 
 ---
 
+## Fly.io Deployment
+
+### Overview
+
+The MCP server is deployed to Fly.io at `https://rag-memory-mcp.fly.dev/sse` for remote AI agent access. The deployment connects to Supabase PostgreSQL and scales to zero when idle.
+
+**Deployment Script:** `scripts/deploy.sh`
+
+### Quick Commands
+
+```bash
+# Deploy to Fly.io (primary command)
+./scripts/deploy.sh
+
+# Or deploy directly with flyctl
+~/.fly/bin/flyctl deploy --wait-timeout 300 --app rag-memory-mcp
+
+# View logs
+./scripts/deploy.sh logs
+
+# Check deployment status
+./scripts/deploy.sh status
+
+# Restart the app
+./scripts/deploy.sh restart
+
+# SSH into container
+./scripts/deploy.sh shell
+
+# List secrets (values hidden)
+./scripts/deploy.sh secrets
+```
+
+### Deployment Configuration
+
+**Files:**
+- `Dockerfile` - Multi-stage build with Playwright base image
+- `fly.toml` - App configuration (region: iad, auto-scaling enabled)
+- `.dockerignore` - Excludes unnecessary files from build
+
+**Environment Variables (Fly.io Secrets):**
+```bash
+# Set secrets with flyctl
+~/.fly/bin/flyctl secrets set DATABASE_URL="postgresql://..." --app rag-memory-mcp
+~/.fly/bin/flyctl secrets set OPENAI_API_KEY="sk-..." --app rag-memory-mcp
+
+# List secrets (values hidden for security)
+~/.fly/bin/flyctl secrets list --app rag-memory-mcp
+```
+
+**Regions:**
+- Primary: `iad` (Ashburn, VA) - closest to Supabase us-east-1
+
+### Testing Deployment
+
+```bash
+# Test SSE endpoint
+curl https://rag-memory-mcp.fly.dev/sse
+
+# Test health endpoint (if implemented)
+curl https://rag-memory-mcp.fly.dev/health
+```
+
+### Auto-Scaling
+
+The deployment is configured to scale to zero when idle:
+- **Min machines:** 0
+- **Auto-stop:** 5 minutes idle
+- **Auto-start:** On incoming request
+- **Cost:** ~$3-5/month (vs $40/month always-on)
+
+### Troubleshooting
+
+**Check logs:**
+```bash
+./scripts/deploy.sh logs
+# Or with flyctl directly
+~/.fly/bin/flyctl logs --app rag-memory-mcp
+```
+
+**Check machine status:**
+```bash
+./scripts/deploy.sh status
+```
+
+**Restart if needed:**
+```bash
+./scripts/deploy.sh restart
+```
+
+**SSH into container for debugging:**
+```bash
+./scripts/deploy.sh shell
+```
+
+**Complete Documentation:**
+- Deployment plan: `docs/FLYIO_DEPLOYMENT_PLAN.md`
+- Implementation checklist: `docs/FLYIO_IMPLEMENTATION_CHECKLIST.md`
+- Deployment summary: `docs/FLYIO_DEPLOYMENT_SUMMARY.md`
+
+---
+
 ## RAG Search Optimization Results (2025-10-11)
 
 **TL;DR: Baseline vector-only search is optimal. Both attempted optimizations decreased performance.**
