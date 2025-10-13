@@ -1,0 +1,53 @@
+# Fly.io configuration for RAG Memory MCP Server
+# Generated: 2025-10-13
+# Region: iad (Ashburn, VA - closest to Supabase us-east-1)
+
+app = "rag-memory-mcp"
+primary_region = "iad"
+
+[build]
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/health"
+
+[[services]]
+  protocol = "tcp"
+  internal_port = 8000
+  processes = ["app"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+    force_https = true
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.tcp_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+
+[env]
+  PORT = "8000"
+  PLAYWRIGHT_BROWSERS_PATH = "/ms-playwright"
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
+  PYTHONUNBUFFERED = "1"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
