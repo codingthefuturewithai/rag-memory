@@ -1,6 +1,6 @@
 [project]
 name = "rag-memory"
-version = "0.6.0"
+version = "0.7.0"
 description = "PostgreSQL pgvector-based RAG memory system with MCP server"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -44,8 +44,6 @@ dependencies = [
     # MCP Server
     "mcp[cli]>=1.0.0",
     "alembic>=1.17.0",
-    # OAuth/JWT
-    "PyJWT[crypto]>=2.8.0",
 ]
 
 [project.optional-dependencies]
