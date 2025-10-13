@@ -5,12 +5,10 @@ Exposes RAG functionality via Model Context Protocol for AI agents.
 """
 
 import logging
-import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
-from mcp.server.auth.providers.jwt import StaticTokenVerifier
 
 from src.core.database import get_database
 from src.core.embeddings import get_embedding_generator
@@ -73,29 +71,9 @@ async def lifespan(app: FastMCP):
         db.close()
 
 
-# Initialize authentication
-# Read MCP_AUTH_TOKEN from environment (required for SSE transport in production)
-auth_token = os.getenv("MCP_AUTH_TOKEN")
-auth = None
-
-if auth_token:
-    # Token-based authentication for production deployment
-    logger.info("Authentication enabled: Bearer token required")
-    auth = StaticTokenVerifier(
-        tokens={
-            auth_token: {
-                "client_id": "rag-memory-client",
-                "scopes": ["mcp:read", "mcp:write"],
-                "expires_at": None  # No expiration
-            }
-        }
-    )
-else:
-    # No authentication for local development
-    logger.warning("Authentication disabled: Set MCP_AUTH_TOKEN environment variable to enable")
-
-# Initialize MCP server with lifespan and optional authentication
-mcp = FastMCP("rag-memory", lifespan=lifespan, auth=auth)
+# Initialize MCP server with lifespan
+# Note: Authentication disabled for now - add OAuth later if needed
+mcp = FastMCP("rag-memory", lifespan=lifespan)
 
 
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)
