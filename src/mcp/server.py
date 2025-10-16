@@ -16,6 +16,7 @@ from src.core.embeddings import get_embedding_generator
 from src.core.collections import get_collection_manager
 from src.retrieval.search import get_similarity_search
 from src.ingestion.document_store import get_document_store
+from src.unified import GraphStore, UnifiedIngestionMediator
 from src.mcp.tools import (
     search_documents_impl,
     list_collections_impl,
@@ -43,6 +44,10 @@ coll_mgr = None
 searcher = None
 doc_store = None
 
+# Global variables for Knowledge Graph components
+graph_store = None
+unified_mediator = None
+
 
 @asynccontextmanager
 async def lifespan(app: FastMCP):
@@ -54,6 +59,7 @@ async def lifespan(app: FastMCP):
     than at module import time to avoid issues with MCP client startup.
     """
     global db, embedder, coll_mgr, searcher, doc_store
+    global graph_store, unified_mediator
 
     # Initialize RAG components when server starts
     logger.info("Initializing RAG components...")
@@ -62,12 +68,40 @@ async def lifespan(app: FastMCP):
     coll_mgr = get_collection_manager(db)
     searcher = get_similarity_search(db, embedder, coll_mgr)
     doc_store = get_document_store(db, embedder, coll_mgr)
-    logger.info("MCP server initialized with RAG components")
+    logger.info("RAG components initialized")
+
+    # Initialize Knowledge Graph components
+    logger.info("Initializing Knowledge Graph components...")
+    try:
+        from graphiti_core import Graphiti
+
+        # Read Neo4j connection details from environment (docker-compose.graphiti.yml)
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
+
+        graphiti = Graphiti(
+            uri=neo4j_uri,
+            user=neo4j_user,
+            password=neo4j_password
+        )
+        await graphiti.build_indices_and_constraints()
+
+        graph_store = GraphStore(graphiti)
+        unified_mediator = UnifiedIngestionMediator(db, embedder, coll_mgr, graph_store)
+        logger.info("Knowledge Graph components initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Knowledge Graph: {e}")
+        logger.warning("Knowledge Graph features will be disabled. RAG-only mode.")
+        graph_store = None
+        unified_mediator = None
 
     yield {}  # Server runs here
 
     # Cleanup on shutdown
     logger.info("Shutting down MCP server...")
+    if graph_store:
+        await graph_store.close()
     if db:
         db.close()
 
@@ -276,7 +310,7 @@ def update_collection_description(name: str, description: str) -> dict:
 
 
 @mcp.tool()
-def ingest_text(
+async def ingest_text(
     content: str,
     collection_name: str,
     document_title: Optional[str] = None,
@@ -337,8 +371,9 @@ def ingest_text(
 
     Note: This triggers OpenAI API calls for embeddings (~$0.00003 per document).
     """
-    return ingest_text_impl(
+    return await ingest_text_impl(
         doc_store,
+        unified_mediator,
         content,
         collection_name,
         document_title,

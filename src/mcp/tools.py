@@ -154,15 +154,21 @@ def update_collection_description_impl(
         raise
 
 
-def ingest_text_impl(
+async def ingest_text_impl(
     doc_store: DocumentStore,
+    unified_mediator,
     content: str,
     collection_name: str,
     document_title: Optional[str],
     metadata: Optional[Dict[str, Any]],
     include_chunk_ids: bool,
 ) -> Dict[str, Any]:
-    """Implementation of ingest_text tool."""
+    """
+    Implementation of ingest_text tool.
+
+    Now routes through unified mediator to update both RAG and Knowledge Graph.
+    Falls back to RAG-only mode if mediator is not available.
+    """
     try:
         # Auto-generate title if not provided
         if not document_title:
@@ -177,7 +183,24 @@ def ingest_text_impl(
                 f"Create it first using create_collection('{collection_name}', 'description')."
             )
 
-        # Ingest document
+        # Route through unified mediator if available (RAG + Graph)
+        if unified_mediator:
+            logger.info("Using unified mediator (RAG + Graph ingestion)")
+            result = await unified_mediator.ingest_text(
+                content=content,
+                collection_name=collection_name,
+                document_title=document_title,
+                metadata=metadata
+            )
+
+            # Remove chunk_ids if not requested (minimize response size)
+            if not include_chunk_ids:
+                result.pop("chunk_ids", None)
+
+            return result
+
+        # Fallback: RAG-only mode
+        logger.info("Using RAG-only mode (Knowledge Graph not available)")
         source_id, chunk_ids = doc_store.ingest_document(
             content=content,
             filename=document_title,

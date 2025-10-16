@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Neo4j database for Graphiti knowledge graph
+  neo4j-graphiti:
+    image: neo4j:5.26-community
+    container_name: neo4j-graphiti
+    ports:
+      - "7474:7474"  # HTTP - Neo4j Browser UI
+      - "7687:7687"  # Bolt - Database protocol
+    environment:
+      # Authentication
+      NEO4J_AUTH: neo4j/graphiti-password
+
+      # Performance tuning
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512m
+
+      # APOC plugin (useful for graph algorithms)
+      NEO4J_PLUGINS: '["apoc"]'
+
+      # Allow unlimited query execution time for complex graph queries
+      NEO4J_dbms_transaction_timeout: 0
+    volumes:
+      # Persist graph data
+      - neo4j_graphiti_data:/data
+      - neo4j_graphiti_logs:/logs
+      - neo4j_graphiti_import:/var/lib/neo4j/import
+      - neo4j_graphiti_plugins:/plugins
+    networks:
+      - graphiti-network
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "graphiti-password", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  neo4j_graphiti_data:
+    driver: local
+  neo4j_graphiti_logs:
+    driver: local
+  neo4j_graphiti_import:
+    driver: local
+  neo4j_graphiti_plugins:
+    driver: local
+
+networks:
+  graphiti-network:
+    driver: bridge

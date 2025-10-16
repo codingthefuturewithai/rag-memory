@@ -44,6 +44,8 @@ dependencies = [
     # MCP Server
     "mcp[cli]>=1.0.0",
     "alembic>=1.17.0",
+    # Knowledge Graph
+    "graphiti-core>=0.3.0",
 ]
 
 [project.optional-dependencies]
