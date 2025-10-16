@@ -845,3 +845,166 @@ def list_documents_impl(
     except Exception as e:
         logger.error(f"list_documents failed: {e}")
         raise
+
+
+# =============================================================================
+# Knowledge Graph Query Tools
+# =============================================================================
+
+
+async def query_relationships_impl(
+    graph_store,
+    query: str,
+    num_results: int = 5,
+) -> Dict[str, Any]:
+    """
+    Implementation of query_relationships tool.
+
+    Searches the knowledge graph for entity relationships using natural language.
+    Returns relationships (edges) between entities that match the query.
+    """
+    try:
+        if not graph_store:
+            return {
+                "status": "unavailable",
+                "message": "Knowledge Graph is not available. Only RAG search is enabled.",
+                "relationships": []
+            }
+
+        # Search the knowledge graph
+        results = await graph_store.search_relationships(query, num_results=num_results)
+
+        # Handle both old API (object with .edges) and new API (returns list directly)
+        if hasattr(results, 'edges'):
+            edges = results.edges
+        elif isinstance(results, list):
+            edges = results
+        else:
+            edges = []
+
+        # Convert edge objects to JSON-serializable dicts
+        relationships = []
+        for edge in edges[:num_results]:
+            try:
+                rel = {
+                    "id": str(getattr(edge, 'uuid', '')),
+                    "relationship_type": getattr(edge, 'name', 'RELATED_TO'),
+                    "fact": getattr(edge, 'fact', ''),
+                }
+
+                # Add source and target entity info if available
+                if hasattr(edge, 'source_node_uuid'):
+                    rel["source_node_id"] = str(edge.source_node_uuid)
+                if hasattr(edge, 'target_node_uuid'):
+                    rel["target_node_id"] = str(edge.target_node_uuid)
+
+                # Add temporal validity info if available
+                if hasattr(edge, 'valid_at') and edge.valid_at:
+                    rel["valid_from"] = edge.valid_at.isoformat()
+                if hasattr(edge, 'invalid_at') and edge.invalid_at:
+                    rel["valid_until"] = edge.invalid_at.isoformat()
+
+                relationships.append(rel)
+            except Exception as e:
+                logger.warning(f"Failed to serialize edge: {e}")
+                continue
+
+        return {
+            "status": "success",
+            "query": query,
+            "num_results": len(relationships),
+            "relationships": relationships
+        }
+
+    except Exception as e:
+        logger.error(f"query_relationships failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "relationships": []
+        }
+
+
+async def query_temporal_impl(
+    graph_store,
+    query: str,
+    num_results: int = 10,
+) -> Dict[str, Any]:
+    """
+    Implementation of query_temporal tool.
+
+    Queries how knowledge has evolved over time. Shows facts with their
+    temporal validity intervals to understand how information changed.
+    """
+    try:
+        if not graph_store:
+            return {
+                "status": "unavailable",
+                "message": "Knowledge Graph is not available. Only RAG search is enabled.",
+                "timeline": []
+            }
+
+        # Search the knowledge graph (Graphiti handles temporal queries automatically)
+        results = await graph_store.search_relationships(query, num_results=num_results)
+
+        # Handle both old API (object with .edges) and new API (returns list directly)
+        if hasattr(results, 'edges'):
+            edges = results.edges
+        elif isinstance(results, list):
+            edges = results
+        else:
+            edges = []
+
+        # Convert to timeline format, grouped by temporal validity
+        timeline_items = []
+        for edge in edges[:num_results]:
+            try:
+                item = {
+                    "fact": getattr(edge, 'fact', ''),
+                    "relationship_type": getattr(edge, 'name', 'RELATED_TO'),
+                }
+
+                # Add temporal validity
+                if hasattr(edge, 'valid_at') and edge.valid_at:
+                    item["valid_from"] = edge.valid_at.isoformat()
+                else:
+                    item["valid_from"] = None
+
+                if hasattr(edge, 'invalid_at') and edge.invalid_at:
+                    item["valid_until"] = edge.invalid_at.isoformat()
+                    item["status"] = "expired"
+                else:
+                    item["valid_until"] = None
+                    item["status"] = "current"
+
+                # Add creation/expiration timestamps
+                if hasattr(edge, 'created_at') and edge.created_at:
+                    item["created_at"] = edge.created_at.isoformat()
+                if hasattr(edge, 'expired_at') and edge.expired_at:
+                    item["expired_at"] = edge.expired_at.isoformat()
+
+                timeline_items.append(item)
+            except Exception as e:
+                logger.warning(f"Failed to serialize temporal edge: {e}")
+                continue
+
+        # Sort by valid_from date (most recent first)
+        timeline_items.sort(
+            key=lambda x: x.get('valid_from') or '',
+            reverse=True
+        )
+
+        return {
+            "status": "success",
+            "query": query,
+            "num_results": len(timeline_items),
+            "timeline": timeline_items
+        }
+
+    except Exception as e:
+        logger.error(f"query_temporal failed: {e}")
+        return {
+            "status": "error",
+            "message": str(e),
+            "timeline": []
+        }

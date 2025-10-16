@@ -32,6 +32,8 @@ from src.mcp.tools import (
     update_document_impl,
     delete_document_impl,
     list_documents_impl,
+    query_relationships_impl,
+    query_temporal_impl,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -991,6 +993,149 @@ def list_documents(
             result = list_documents(limit=50, offset=offset)
     """
     return list_documents_impl(db, coll_mgr, collection_name, limit, offset, include_details)
+
+
+# =============================================================================
+# Knowledge Graph Query Tools
+# =============================================================================
+
+
+@mcp.tool()
+async def query_relationships(
+    query: str,
+    num_results: int = 5,
+) -> dict:
+    """
+    Search the knowledge graph for entity relationships using natural language.
+
+    This tool searches for connections and relationships between entities in your
+    knowledge graph. Use it to understand how concepts, people, projects, and ideas
+    relate to each other.
+
+    **What it does:**
+    - Finds relationships between entities (e.g., "How does X relate to Y?")
+    - Discovers connections across your knowledge base
+    - Maps entity relationships automatically extracted from your content
+
+    **Best for:**
+    - "How" questions - "How does my YouTube channel relate to my business?"
+    - Connection queries - "What connects project A to project B?"
+    - Relationship discovery - "Show me relationships involving RAG systems"
+
+    **Note:** Knowledge Graph must be enabled (Neo4j running). If unavailable,
+    returns status="unavailable" and falls back to RAG-only mode.
+
+    Args:
+        query: (REQUIRED) Natural language query about relationships
+               (e.g., "How does my content strategy support my business?")
+        num_results: Maximum number of relationships to return (default: 5, max: 20)
+
+    Returns:
+        {
+            "status": str,  # "success", "unavailable", or "error"
+            "query": str,  # Echo of your query
+            "num_results": int,  # Number of relationships found
+            "relationships": [
+                {
+                    "id": str,  # Relationship ID
+                    "relationship_type": str,  # Type of relationship (e.g., "RELATES_TO")
+                    "fact": str,  # Human-readable description
+                    "source_node_id": str,  # ID of source entity
+                    "target_node_id": str,  # ID of target entity
+                    "valid_from": str,  # ISO 8601 timestamp (when fact became valid)
+                    "valid_until": str  # ISO 8601 timestamp (when fact expired, if applicable)
+                }
+            ]
+        }
+
+    Example:
+        # Discover business relationships
+        result = query_relationships(
+            query="How does my YouTube channel relate to my product strategy?",
+            num_results=5
+        )
+
+        for rel in result['relationships']:
+            print(f"{rel['relationship_type']}: {rel['fact']}")
+
+    Performance: ~500-800ms per query (includes LLM-based entity matching)
+    """
+    return await query_relationships_impl(
+        graph_store,
+        query,
+        num_results,
+    )
+
+
+@mcp.tool()
+async def query_temporal(
+    query: str,
+    num_results: int = 10,
+) -> dict:
+    """
+    Query how knowledge has evolved over time using temporal reasoning.
+
+    This tool reveals how your knowledge and understanding have changed over time.
+    It shows facts with their validity periods, helping you understand what was
+    true when, and how information has evolved.
+
+    **What it does:**
+    - Tracks how facts changed over time
+    - Shows current vs expired knowledge
+    - Reveals evolution of your understanding
+    - Identifies outdated vs current information
+
+    **Best for:**
+    - Evolution queries - "How has my business strategy changed?"
+    - Temporal tracking - "What was my focus in January vs March?"
+    - Trend analysis - "Show me how my product priorities evolved"
+    - Consistency checking - "What beliefs changed about X?"
+
+    **Note:** Knowledge Graph must be enabled (Neo4j running). If unavailable,
+    returns status="unavailable" and falls back to RAG-only mode.
+
+    Args:
+        query: (REQUIRED) Natural language query about temporal changes
+               (e.g., "How has my business vision evolved?")
+        num_results: Maximum number of timeline items to return (default: 10, max: 50)
+
+    Returns:
+        {
+            "status": str,  # "success", "unavailable", or "error"
+            "query": str,  # Echo of your query
+            "num_results": int,  # Number of timeline items found
+            "timeline": [  # Sorted by valid_from (most recent first)
+                {
+                    "fact": str,  # Human-readable description
+                    "relationship_type": str,  # Type of relationship
+                    "valid_from": str,  # ISO 8601 (when this became true)
+                    "valid_until": str,  # ISO 8601 (when this expired, null if current)
+                    "status": str,  # "current" or "expired"
+                    "created_at": str,  # ISO 8601 (when fact was added to graph)
+                    "expired_at": str  # ISO 8601 (when fact was marked expired)
+                }
+            ]
+        }
+
+    Example:
+        # Track business evolution
+        result = query_temporal(
+            query="How has my business strategy evolved?",
+            num_results=10
+        )
+
+        for item in result['timeline']:
+            status = "✅ Current" if item['status'] == "current" else "⏰ Expired"
+            print(f"{status}: {item['fact']}")
+            print(f"  Valid: {item['valid_from']} → {item['valid_until'] or 'present'}")
+
+    Performance: ~500-800ms per query (includes LLM-based temporal matching)
+    """
+    return await query_temporal_impl(
+        graph_store,
+        query,
+        num_results,
+    )
 
 
 def main():
