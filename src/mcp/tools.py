@@ -422,6 +422,7 @@ def check_existing_crawl(
 async def ingest_url_impl(
     doc_store: DocumentStore,
     db: Database,
+    unified_mediator,
     url: str,
     collection_name: str,
     follow_links: bool,
@@ -431,6 +432,9 @@ async def ingest_url_impl(
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_url tool with mode support.
+
+    Now routes through unified mediator to update both RAG and Knowledge Graph.
+    Falls back to RAG-only mode if mediator is not available.
 
     Args:
         mode: "crawl" (new crawl, error if exists) or "recrawl" (update existing)
@@ -497,9 +501,10 @@ async def ingest_url_impl(
             result = await crawl_single_page(url, headless=True, verbose=False)
             results = [result] if result.success else []
 
-        # Ingest each page
+        # Ingest each page (route through unified mediator if available)
         document_ids = []
         total_chunks = 0
+        total_entities = 0
         successful_ingests = 0
 
         for result in results:
@@ -507,16 +512,36 @@ async def ingest_url_impl(
                 continue
 
             try:
-                source_id, chunk_ids = doc_store.ingest_document(
-                    content=result.content,
-                    filename=result.metadata.get("title", result.url),
-                    collection_name=collection_name,
-                    metadata=result.metadata,
-                    file_type="web_page",
-                )
-                document_ids.append(source_id)
-                total_chunks += len(chunk_ids)
-                successful_ingests += 1
+                page_title = result.metadata.get("title", result.url)
+
+                # Route through unified mediator if available (RAG + Graph)
+                if unified_mediator:
+                    logger.info(f"Using unified mediator for page: {page_title}")
+                    ingest_result = await unified_mediator.ingest_text(
+                        content=result.content,
+                        collection_name=collection_name,
+                        document_title=page_title,
+                        metadata=result.metadata
+                    )
+                    document_ids.append(ingest_result["source_document_id"])
+                    total_chunks += ingest_result["num_chunks"]
+                    total_entities += ingest_result.get("entities_extracted", 0)
+                    successful_ingests += 1
+
+                # Fallback: RAG-only mode
+                else:
+                    logger.info(f"Using RAG-only mode for page: {page_title}")
+                    source_id, chunk_ids = doc_store.ingest_document(
+                        content=result.content,
+                        filename=page_title,
+                        collection_name=collection_name,
+                        metadata=result.metadata,
+                        file_type="web_page",
+                    )
+                    document_ids.append(source_id)
+                    total_chunks += len(chunk_ids)
+                    successful_ingests += 1
+
             except Exception as e:
                 logger.warning(f"Failed to ingest page {result.url}: {e}")
 
@@ -535,6 +560,10 @@ async def ingest_url_impl(
             },
         }
 
+        # Include entities_extracted if unified mediator was used
+        if unified_mediator:
+            response["entities_extracted"] = total_entities
+
         if mode == "recrawl":
             response["old_pages_deleted"] = old_pages_deleted
 
@@ -547,14 +576,20 @@ async def ingest_url_impl(
         raise
 
 
-def ingest_file_impl(
+async def ingest_file_impl(
     doc_store: DocumentStore,
+    unified_mediator,
     file_path: str,
     collection_name: str,
     metadata: Optional[Dict[str, Any]],
     include_chunk_ids: bool,
 ) -> Dict[str, Any]:
-    """Implementation of ingest_file tool."""
+    """
+    Implementation of ingest_file tool.
+
+    Now routes through unified mediator to update both RAG and Knowledge Graph.
+    Falls back to RAG-only mode if mediator is not available.
+    """
     try:
         path = Path(file_path)
 
@@ -570,7 +605,48 @@ def ingest_file_impl(
                 f"Create it first using create_collection('{collection_name}', 'description')."
             )
 
-        # Ingest file
+        file_size = path.stat().st_size
+        file_type = path.suffix.lstrip(".").lower() or "text"
+
+        # Route through unified mediator if available (RAG + Graph)
+        if unified_mediator:
+            logger.info(f"Using unified mediator for file: {path.name}")
+
+            # Read file content
+            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                content = f.read()
+
+            # Merge file metadata with user metadata
+            file_metadata = metadata.copy() if metadata else {}
+            file_metadata.update({
+                "file_type": file_type,
+                "file_size": file_size,
+            })
+
+            ingest_result = await unified_mediator.ingest_text(
+                content=content,
+                collection_name=collection_name,
+                document_title=path.name,
+                metadata=file_metadata
+            )
+
+            result = {
+                "source_document_id": ingest_result["source_document_id"],
+                "num_chunks": ingest_result["num_chunks"],
+                "entities_extracted": ingest_result.get("entities_extracted", 0),
+                "filename": path.name,
+                "file_type": file_type,
+                "file_size": file_size,
+                "collection_name": collection_name,
+            }
+
+            if include_chunk_ids:
+                result["chunk_ids"] = ingest_result.get("chunk_ids", [])
+
+            return result
+
+        # Fallback: RAG-only mode
+        logger.info(f"Using RAG-only mode for file: {path.name}")
         source_id, chunk_ids = doc_store.ingest_file(
             file_path=file_path, collection_name=collection_name, metadata=metadata
         )
@@ -579,8 +655,8 @@ def ingest_file_impl(
             "source_document_id": source_id,
             "num_chunks": len(chunk_ids),
             "filename": path.name,
-            "file_type": path.suffix.lstrip(".").lower() or "text",
-            "file_size": path.stat().st_size,
+            "file_type": file_type,
+            "file_size": file_size,
             "collection_name": collection_name,
         }
 
@@ -593,15 +669,21 @@ def ingest_file_impl(
         raise
 
 
-def ingest_directory_impl(
+async def ingest_directory_impl(
     doc_store: DocumentStore,
+    unified_mediator,
     directory_path: str,
     collection_name: str,
     file_extensions: Optional[List[str]],
     recursive: bool,
     include_document_ids: bool,
 ) -> Dict[str, Any]:
-    """Implementation of ingest_directory tool."""
+    """
+    Implementation of ingest_directory tool.
+
+    Now routes through unified mediator to update both RAG and Knowledge Graph.
+    Falls back to RAG-only mode if mediator is not available.
+    """
     try:
         path = Path(directory_path)
 
@@ -631,18 +713,50 @@ def ingest_directory_impl(
 
         files = sorted(set(files))
 
-        # Ingest each file
+        # Ingest each file (route through unified mediator if available)
         document_ids = []
         total_chunks = 0
+        total_entities = 0
         failed_files = []
 
         for file_path in files:
             try:
-                source_id, chunk_ids = doc_store.ingest_file(
-                    file_path=str(file_path), collection_name=collection_name
-                )
-                document_ids.append(source_id)
-                total_chunks += len(chunk_ids)
+                file_size = file_path.stat().st_size
+                file_type = file_path.suffix.lstrip(".").lower() or "text"
+
+                # Route through unified mediator if available (RAG + Graph)
+                if unified_mediator:
+                    logger.info(f"Using unified mediator for file: {file_path.name}")
+
+                    # Read file content
+                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+
+                    # Build metadata
+                    file_metadata = {
+                        "file_type": file_type,
+                        "file_size": file_size,
+                    }
+
+                    ingest_result = await unified_mediator.ingest_text(
+                        content=content,
+                        collection_name=collection_name,
+                        document_title=file_path.name,
+                        metadata=file_metadata
+                    )
+                    document_ids.append(ingest_result["source_document_id"])
+                    total_chunks += ingest_result["num_chunks"]
+                    total_entities += ingest_result.get("entities_extracted", 0)
+
+                # Fallback: RAG-only mode
+                else:
+                    logger.info(f"Using RAG-only mode for file: {file_path.name}")
+                    source_id, chunk_ids = doc_store.ingest_file(
+                        file_path=str(file_path), collection_name=collection_name
+                    )
+                    document_ids.append(source_id)
+                    total_chunks += len(chunk_ids)
+
             except Exception as e:
                 failed_files.append({"filename": file_path.name, "error": str(e)})
 
@@ -653,6 +767,10 @@ def ingest_directory_impl(
             "total_chunks": total_chunks,
             "collection_name": collection_name,
         }
+
+        # Include entities_extracted if unified mediator was used
+        if unified_mediator:
+            result["entities_extracted"] = total_entities
 
         if include_document_ids:
             result["document_ids"] = document_ids

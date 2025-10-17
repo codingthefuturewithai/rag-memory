@@ -7,10 +7,13 @@ This module abstracts Graphiti complexity, providing a simple interface for:
 - Querying temporal evolution of knowledge
 """
 
+import logging
 from datetime import datetime
 from typing import Optional, Any
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
+
+logger = logging.getLogger(__name__)
 
 
 class GraphStore:
@@ -42,16 +45,51 @@ class GraphStore:
         Returns:
             List of extracted entity nodes
         """
+        logger.info(f"📊 GraphStore.add_knowledge() - Starting entity extraction for doc_id={source_document_id}")
+        logger.info(f"   Content length: {len(content)} chars")
+        if metadata:
+            logger.info(f"   Metadata: {metadata}")
+
         # Build episode name from source document ID
         episode_name = f"doc_{source_document_id}"
 
-        # Build source description with metadata context
+        # Build source description with ALL metadata embedded
+        # This ensures metadata is searchable in Neo4j and visible in graph queries
         source_desc = f"RAG document {source_document_id}"
         if metadata:
+            # Core identification
             if "collection_name" in metadata:
                 source_desc += f" (collection: {metadata['collection_name']})"
             if "document_title" in metadata:
                 source_desc += f" - {metadata['document_title']}"
+
+            # Rich metadata for better searchability
+            if "topic" in metadata:
+                source_desc += f" | topic: {metadata['topic']}"
+            if "content_type" in metadata:
+                source_desc += f" | type: {metadata['content_type']}"
+            if "author" in metadata:
+                source_desc += f" | author: {metadata['author']}"
+            if "created_date" in metadata:
+                source_desc += f" | created: {metadata['created_date']}"
+            if "concepts" in metadata:
+                # Handle list of concepts
+                concepts = metadata['concepts']
+                if isinstance(concepts, list):
+                    source_desc += f" | concepts: {', '.join(concepts)}"
+                else:
+                    source_desc += f" | concepts: {concepts}"
+
+            # Web crawl metadata (for URL ingestion)
+            if "crawl_root_url" in metadata:
+                source_desc += f" | crawl_root: {metadata['crawl_root_url']}"
+            if "crawl_session_id" in metadata:
+                source_desc += f" | crawl_session: {metadata['crawl_session_id']}"
+            if "crawl_depth" in metadata:
+                source_desc += f" | depth: {metadata['crawl_depth']}"
+
+        logger.info(f"   Episode: {episode_name}, Source: {source_desc}")
+        logger.info(f"⏳ Calling Graphiti.add_episode() - This may take 30-60 seconds for LLM entity extraction...")
 
         # Add episode to graph
         result = await self.graphiti.add_episode(
@@ -61,6 +99,9 @@ class GraphStore:
             source_description=source_desc,
             reference_time=datetime.now()
         )
+
+        num_entities = len(result.nodes) if result.nodes else 0
+        logger.info(f"✅ Graphiti.add_episode() completed - Extracted {num_entities} entities")
 
         return result.nodes
 

@@ -752,3 +752,251 @@ uv run rag search "query" --collection name --multi-query
 - ⚠️ Latency and cost are not concerns
 
 **Recommendation:** Stick with baseline unless you have specific evidence it's failing in production.
+
+---
+
+## Knowledge Graph Integration (Graphiti + Neo4j)
+
+### Overview
+
+**Status:** 🚧 Phase 3 Complete, Phase 4 In Progress (as of 2025-10-17)
+
+The system now supports **hybrid RAG + Knowledge Graph** architecture, combining:
+- **RAG (pgvector)**: Semantic search for content retrieval
+- **Knowledge Graph (Neo4j/Graphiti)**: Entity relationships and temporal reasoning
+
+**Architecture:**
+```
+AI Agent Request
+       ↓
+  MCP Server
+       ↓
+UnifiedIngestionMediator
+   ↓           ↓
+RAG Store   Graph Store
+(pgvector)  (Graphiti/Neo4j)
+```
+
+### Setup
+
+**Prerequisites:**
+```bash
+# Start Neo4j via Docker
+docker-compose -f docker-compose.graphiti.yml up -d
+
+# Neo4j Browser: http://localhost:7474
+# Username: neo4j
+# Password: graphiti-password
+```
+
+**Environment Variables:**
+```bash
+# In .env (optional, defaults to localhost)
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=graphiti-password
+```
+
+### Implementation Phases
+
+#### ✅ Phase 1: Core Unified Ingestion (Completed)
+- **File:** `src/unified/mediator.py`
+- **What it does:** Routes `ingest_text()` to both RAG and Graph stores
+- **Status:** Working - Test 1 passed with fictional data
+- **Logging:** Comprehensive INFO-level logging added for debugging
+
+#### ✅ Phase 2: Graph Query Tools (Completed)
+- **Files:** `src/mcp/tools.py` (query_relationships_impl, query_temporal_impl)
+- **Tools:**
+  - `query_relationships()` - Search for entity relationships
+  - `query_temporal()` - Track how knowledge evolved over time
+- **Status:** Tools registered, tested with existing data
+
+#### ✅ Phase 3: Extended Unified Ingestion (Completed 2025-10-17)
+- **Extended to:** `ingest_url()`, `ingest_file()`, `ingest_directory()`
+- **What changed:**
+  - All three now route through `UnifiedIngestionMediator`
+  - Web crawling, file ingestion, and directory ingestion update both stores
+  - Graceful fallback to RAG-only if Graph unavailable
+- **Status:** Code complete, partial testing done
+
+#### 🚧 Phase 4: Consistency & Cleanup (In Progress)
+**CRITICAL GAPS IDENTIFIED:**
+
+1. **update_document() - RAG-only** ❌
+   - Currently only updates RAG store
+   - Graph keeps old entities/relationships
+   - **Result:** Stale graph data when documents are edited
+
+2. **delete_document() - RAG-only** ❌
+   - Currently only deletes from RAG store
+   - Graph keeps orphaned episode nodes
+   - **Result:** Graph accumulates zombie episodes
+
+3. **recrawl mode - RAG-only cleanup** ❌
+   - Deletes old RAG documents before re-crawling
+   - Graph episodes remain (no cleanup)
+   - **Result:** Orphaned episodes accumulate with each recrawl
+
+### Current Issues & Debugging (2025-10-17)
+
+#### Issue 1: Wikipedia Ingestion Timeout
+**Test:** Ingesting `https://en.wikipedia.org/wiki/Quantum_computing`
+
+**What happened:**
+- ✅ RAG ingestion succeeded (searchable via `search_documents`)
+- ⏰ MCP Inspector timed out after 60 seconds
+- ❌ Neo4j shows 4 episode nodes (`doc_290-294`) with **ZERO entities**
+- ❓ Unknown if Graph ingestion completed or failed
+
+**Observations:**
+- Episode nodes exist → Graphiti.add_episode() was called
+- No entities extracted → Either timeout or LLM returned empty
+- RAG search works fine for quantum computing queries
+- Graph queries return nothing quantum-related
+
+**Possible causes:**
+1. Graphiti LLM call (GPT-4o) took >60 seconds
+2. Content too large for entity extraction
+3. OpenAI API error/timeout
+4. Wikipedia content format confused the LLM
+
+**Debugging added:**
+- Added comprehensive logging to:
+  - `src/unified/graph_store.py` - tracks Graphiti calls
+  - `src/unified/mediator.py` - tracks dual ingestion flow
+  - `src/mcp/server.py` - logs to `logs/mcp_server.log`
+- Fixed Crawl4AI stdout pollution (redirected to stderr)
+
+**Next steps:**
+1. Use `mode="recrawl"` to retry (avoids RAG duplicate error)
+2. Monitor `logs/mcp_server.log` during ingestion
+3. Determine if Graph ingestion completes or times out
+4. Consider testing with smaller Wikipedia page
+
+#### Issue 2: Graph Orphan Accumulation
+**Problem:** Partial ingestions leave orphaned episode nodes
+
+**Example:**
+```
+Ingestion attempt #1:
+├─ RAG: ✅ doc_290 created
+└─ Graph: ⏰ Episode "doc_290" created, but 0 entities
+
+Recrawl attempt #2:
+├─ RAG: ✅ doc_290 deleted, doc_295 created
+└─ Graph: ❌ Episode "doc_290" still exists (orphan!)
+            ✅ Episode "doc_295" created
+
+Result: Graph has both doc_290 (empty) and doc_295 (with entities)
+```
+
+**Solution (Phase 4):**
+Implement Graph cleanup in recrawl logic:
+```python
+if mode == "recrawl" and unified_mediator:
+    # Get old documents
+    old_docs = get_documents_by_crawl_url(url, collection_name)
+
+    # Delete from Graph first
+    for doc in old_docs:
+        await graph_store.delete_episode(f"doc_{doc['id']}")
+
+    # Then delete from RAG
+    for doc in old_docs:
+        delete_document(doc['id'])
+```
+
+### MCP Tools for Knowledge Graph
+
+**New tools (Phase 2):**
+
+1. **`query_relationships(query, num_results=5)`**
+   - Search for entity relationships using natural language
+   - Example: "How does my YouTube channel relate to my business?"
+   - Returns: List of relationships with fact descriptions, types, timestamps
+
+2. **`query_temporal(query, num_results=10)`**
+   - Track how knowledge evolved over time
+   - Example: "How has my business strategy changed?"
+   - Returns: Timeline of facts with valid_from/valid_until timestamps
+
+**Graceful degradation:**
+- Both tools return `status="unavailable"` if Neo4j not running
+- System falls back to RAG-only mode automatically
+- No errors thrown, just informative status message
+
+### Testing
+
+**Test data ingestion:**
+```bash
+# Manual test script with fictional data
+uv run python test_unified_ingestion.py
+```
+
+**Test graph queries:**
+```bash
+# Test relationship and temporal queries
+uv run python test_graph_query_tools.py
+```
+
+**Neo4j Browser queries:**
+```cypher
+// View all entities and relationships
+MATCH (n)-[r]->(m) RETURN n, r, m LIMIT 25
+
+// Find episode nodes
+MATCH (n) WHERE n.name CONTAINS 'doc_' RETURN n
+
+// Search for specific entities
+MATCH (n) WHERE toLower(n.name) CONTAINS 'quantum' RETURN n
+```
+
+### Documentation
+
+- **Implementation plan:** `docs/KNOWLEDGE_GRAPH_INTEGRATION.md`
+- **Research:** `knowledge-graph-research-report.md`
+- **Test scripts:** `test_unified_ingestion.py`, `test_graph_query_tools.py`
+
+### Known Limitations
+
+1. **No atomic transactions** - RAG and Graph updated sequentially (Phase 1 limitation)
+2. **No rollback on failure** - If Graph fails, RAG changes persist
+3. **No Graph cleanup** - update/delete/recrawl don't touch Graph (Phase 4 gap)
+4. **Performance** - Entity extraction is LLM-heavy (30-60 seconds per document)
+5. **Orphan accumulation** - Failed ingestions leave empty episode nodes
+
+### When to Use Graph vs RAG
+
+**Use RAG search when:**
+- ✅ "What" questions - "What is my YouTube strategy?"
+- ✅ Content retrieval - Need exact text passages
+- ✅ Semantic similarity - Find similar documents
+- ✅ Fast queries - Sub-second response time
+
+**Use Graph queries when:**
+- ✅ "How" questions - "How do my projects relate?"
+- ✅ Relationship discovery - Connect entities across documents
+- ✅ Temporal reasoning - "How has my thinking evolved?"
+- ✅ Multi-hop questions - "What connects A to B to C?"
+
+**Use both:**
+- ✅ Graph finds entities → RAG retrieves detailed context
+- ✅ RAG finds relevant docs → Graph maps relationships
+- ✅ Complete memory system for AI agents
+
+### Future Work (Phase 4+)
+
+**Critical:**
+1. ✅ Implement Graph cleanup in `update_document()`
+2. ✅ Implement Graph cleanup in `delete_document()`
+3. ✅ Implement Graph cleanup in recrawl logic
+4. ✅ Add two-phase commit for atomicity
+
+**Nice to have:**
+5. Optimize entity extraction for large documents
+6. Batch entity extraction for directory ingestion
+7. Add Graph-specific search filters to `search_documents()`
+8. Implement Graph deduplication (merge similar entities)
+9. Add Graph visualization tools
+10. Performance profiling for Graph ingestion

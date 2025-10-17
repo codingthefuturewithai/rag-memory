@@ -7,6 +7,7 @@ Exposes RAG functionality via Model Context Protocol for AI agents.
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
@@ -36,7 +37,18 @@ from src.mcp.tools import (
     query_temporal_impl,
 )
 
-logging.basicConfig(level=logging.INFO)
+# Configure cross-platform file logging
+log_dir = Path(__file__).parent.parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(log_dir / "mcp_server.log"),
+        logging.StreamHandler()  # Also log to stderr for debugging
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Global variables to hold RAG components (initialized by lifespan)
@@ -660,12 +672,12 @@ async def ingest_url(
     Use analyze_website() first to understand site structure and plan comprehensive crawling.
     """
     return await ingest_url_impl(
-        doc_store, db, url, collection_name, follow_links, max_depth, mode, include_document_ids
+        doc_store, db, unified_mediator, url, collection_name, follow_links, max_depth, mode, include_document_ids
     )
 
 
 @mcp.tool()
-def ingest_file(
+async def ingest_file(
     file_path: str,
     collection_name: str,
     metadata: Optional[dict] = None,
@@ -733,13 +745,13 @@ def ingest_file(
             metadata={"year": 2025, "department": "engineering"}
         )
     """
-    return ingest_file_impl(
-        doc_store, file_path, collection_name, metadata, include_chunk_ids
+    return await ingest_file_impl(
+        doc_store, unified_mediator, file_path, collection_name, metadata, include_chunk_ids
     )
 
 
 @mcp.tool()
-def ingest_directory(
+async def ingest_directory(
     directory_path: str,
     collection_name: str,
     file_extensions: Optional[list[str]] = None,
@@ -807,8 +819,9 @@ def ingest_directory(
 
         print(f"Ingested {result['files_ingested']} files with {result['total_chunks']} chunks")
     """
-    return ingest_directory_impl(
+    return await ingest_directory_impl(
         doc_store,
+        unified_mediator,
         directory_path,
         collection_name,
         file_extensions,

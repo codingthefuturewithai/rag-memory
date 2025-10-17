@@ -1,7 +1,10 @@
 """Web crawler for documentation ingestion using Crawl4AI."""
 
 import logging
+import os
+import sys
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 from urllib.parse import urlparse, urljoin
@@ -17,6 +20,26 @@ from crawl4ai import (
 from src.ingestion.models import CrawlError, CrawlResult
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def suppress_crawl4ai_stdout():
+    """
+    Context manager to suppress Crawl4AI's stdout logging.
+
+    Crawl4AI writes progress messages like [FETCH], [SCRAPE], [COMPLETE] directly
+    to stdout, which interferes with MCP's JSON-RPC protocol over stdio transport.
+
+    This redirects stdout to stderr temporarily during crawl operations.
+    """
+    original_stdout = sys.stdout
+    try:
+        # Redirect stdout to stderr (or to devnull if you want to suppress completely)
+        sys.stdout = sys.stderr
+        yield
+    finally:
+        # Restore original stdout
+        sys.stdout = original_stdout
 
 
 class WebCrawler:
@@ -48,13 +71,9 @@ class WebCrawler:
             remove_overlay_elements=True,  # Remove popups/modals
         )
 
-        logger.info(
-            f"WebCrawler initialized (headless={headless}, verbose={verbose})"
-        )
+        logger.info(f"WebCrawler initialized (headless={headless}, verbose={verbose})")
 
-    async def crawl_page(
-        self, url: str, crawl_root_url: Optional[str] = None
-    ) -> CrawlResult:
+    async def crawl_page(self, url: str, crawl_root_url: Optional[str] = None) -> CrawlResult:
         """
         Crawl a single web page.
 
@@ -74,54 +93,55 @@ class WebCrawler:
         logger.info(f"Crawling page: {url}")
 
         try:
-            async with AsyncWebCrawler(config=self.browser_config) as crawler:
-                result = await crawler.arun(
-                    url=url,
-                    config=self.crawler_config,
-                )
-
-                if not result.success:
-                    error = CrawlError(
+            with suppress_crawl4ai_stdout():
+                async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                    result = await crawler.arun(
                         url=url,
-                        error_type="crawl_failed",
-                        error_message=result.error_message or "Unknown error",
-                        timestamp=crawl_timestamp,
-                        status_code=result.status_code,
+                        config=self.crawler_config,
                     )
-                    logger.error(f"Failed to crawl {url}: {error.error_message}")
+
+                    if not result.success:
+                        error = CrawlError(
+                            url=url,
+                            error_type="crawl_failed",
+                            error_message=result.error_message or "Unknown error",
+                            timestamp=crawl_timestamp,
+                            status_code=result.status_code,
+                        )
+                        logger.error(f"Failed to crawl {url}: {error.error_message}")
+                        return CrawlResult(
+                            url=url,
+                            content="",
+                            metadata={},
+                            success=False,
+                            error=error,
+                        )
+
+                    # Extract metadata
+                    metadata = self._build_metadata(
+                        url=url,
+                        crawl_root_url=crawl_root_url,
+                        crawl_timestamp=crawl_timestamp,
+                        crawl_session_id=crawl_session_id,
+                        crawl_depth=0,  # Single page = depth 0
+                        result=result,
+                    )
+
+                    # Get clean markdown content
+                    content = result.markdown.raw_markdown
+
+                    logger.info(
+                        f"Successfully crawled {url} ({len(content)} chars, "
+                        f"status={result.status_code})"
+                    )
+
                     return CrawlResult(
                         url=url,
-                        content="",
-                        metadata={},
-                        success=False,
-                        error=error,
+                        content=content,
+                        metadata=metadata,
+                        success=True,
+                        links_found=result.links.get("internal", []) if result.links else [],
                     )
-
-                # Extract metadata
-                metadata = self._build_metadata(
-                    url=url,
-                    crawl_root_url=crawl_root_url,
-                    crawl_timestamp=crawl_timestamp,
-                    crawl_session_id=crawl_session_id,
-                    crawl_depth=0,  # Single page = depth 0
-                    result=result,
-                )
-
-                # Get clean markdown content
-                content = result.markdown.raw_markdown
-
-                logger.info(
-                    f"Successfully crawled {url} ({len(content)} chars, "
-                    f"status={result.status_code})"
-                )
-
-                return CrawlResult(
-                    url=url,
-                    content=content,
-                    metadata=metadata,
-                    success=True,
-                    links_found=result.links.get("internal", []) if result.links else [],
-                )
 
         except Exception as e:
             error = CrawlError(
@@ -236,73 +256,76 @@ class WebCrawler:
         )
 
         try:
-            async with AsyncWebCrawler(config=self.browser_config) as crawler:
-                # Start crawling - returns list when deep_crawl_strategy is set
-                crawl_results = await crawler.arun(
-                    url=url,
-                    config=deep_crawler_config,
-                )
+            with suppress_crawl4ai_stdout():
+                async with AsyncWebCrawler(config=self.browser_config) as crawler:
+                    # Start crawling - returns list when deep_crawl_strategy is set
+                    crawl_results = await crawler.arun(
+                        url=url,
+                        config=deep_crawler_config,
+                    )
 
-                # Process each crawled page
-                for depth, crawl_result in enumerate(crawl_results):
-                    page_url = crawl_result.url
-                    self.visited_urls.add(page_url)
+                    # Process each crawled page
+                    for depth, crawl_result in enumerate(crawl_results):
+                        page_url = crawl_result.url
+                        self.visited_urls.add(page_url)
 
-                    if crawl_result.success:
-                        # Determine parent URL (first page has no parent)
-                        parent_url = None
-                        if depth > 0:
-                            # Parent is the starting URL for depth 1, and could be any previously crawled page
-                            # For simplicity, we'll use the starting URL as parent for all depth=1 pages
-                            parent_url = url
+                        if crawl_result.success:
+                            # Determine parent URL (first page has no parent)
+                            parent_url = None
+                            if depth > 0:
+                                # Parent is the starting URL for depth 1, and could be any previously crawled page
+                                # For simplicity, we'll use the starting URL as parent for all depth=1 pages
+                                parent_url = url
 
-                        metadata = self._build_metadata(
-                            url=page_url,
-                            crawl_root_url=crawl_root_url,
-                            crawl_timestamp=crawl_timestamp,
-                            crawl_session_id=crawl_session_id,
-                            crawl_depth=depth,
-                            result=crawl_result,
-                            parent_url=parent_url,
-                        )
-                        results.append(
-                            CrawlResult(
+                            metadata = self._build_metadata(
                                 url=page_url,
-                                content=crawl_result.markdown.raw_markdown,
-                                metadata=metadata,
-                                success=True,
-                                links_found=crawl_result.links.get("internal", [])
-                                if crawl_result.links
-                                else [],
+                                crawl_root_url=crawl_root_url,
+                                crawl_timestamp=crawl_timestamp,
+                                crawl_session_id=crawl_session_id,
+                                crawl_depth=depth,
+                                result=crawl_result,
+                                parent_url=parent_url,
                             )
-                        )
-                        logger.info(
-                            f"Successfully crawled page {page_url} (depth={depth}, {len(crawl_result.markdown.raw_markdown)} chars)"
-                        )
-                    else:
-                        error = CrawlError(
-                            url=page_url,
-                            error_type="crawl_failed",
-                            error_message=crawl_result.error_message or "Unknown error",
-                            timestamp=crawl_timestamp,
-                            status_code=crawl_result.status_code,
-                        )
-                        results.append(
-                            CrawlResult(
+                            results.append(
+                                CrawlResult(
+                                    url=page_url,
+                                    content=crawl_result.markdown.raw_markdown,
+                                    metadata=metadata,
+                                    success=True,
+                                    links_found=(
+                                        crawl_result.links.get("internal", [])
+                                        if crawl_result.links
+                                        else []
+                                    ),
+                                )
+                            )
+                            logger.info(
+                                f"Successfully crawled page {page_url} (depth={depth}, {len(crawl_result.markdown.raw_markdown)} chars)"
+                            )
+                        else:
+                            error = CrawlError(
                                 url=page_url,
-                                content="",
-                                metadata={},
-                                success=False,
-                                error=error,
+                                error_type="crawl_failed",
+                                error_message=crawl_result.error_message or "Unknown error",
+                                timestamp=crawl_timestamp,
+                                status_code=crawl_result.status_code,
                             )
-                        )
-                        logger.warning(f"Failed to crawl {page_url}: {error.error_message}")
+                            results.append(
+                                CrawlResult(
+                                    url=page_url,
+                                    content="",
+                                    metadata={},
+                                    success=False,
+                                    error=error,
+                                )
+                            )
+                            logger.warning(f"Failed to crawl {page_url}: {error.error_message}")
 
-                logger.info(
-                    f"Deep crawl completed: {len(results)} pages crawled, "
-                    f"{sum(1 for r in results if r.success)} successful"
-                )
-                return results
+                    logger.info(
+                        f"Deep crawl completed: {len(results)} pages crawled, "
+                        f"{sum(1 for r in results if r.success)} successful"
+                    )
+                    return results
 
         except Exception as e:
             error = CrawlError(
@@ -326,9 +349,7 @@ class WebCrawler:
             return results
 
 
-async def crawl_single_page(
-    url: str, headless: bool = True, verbose: bool = False
-) -> CrawlResult:
+async def crawl_single_page(url: str, headless: bool = True, verbose: bool = False) -> CrawlResult:
     """
     Convenience function to crawl a single page.
 

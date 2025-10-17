@@ -65,6 +65,7 @@ Thumbs.db
 
 # Logs
 *.log
+logs/
 
 # Benchmark test results (generated data)
 test-results/
