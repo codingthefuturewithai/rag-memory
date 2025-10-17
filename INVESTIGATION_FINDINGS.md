@@ -302,8 +302,8 @@ Comprehensive audit of all 16 MCP tools:
 ### Immediate (Before User Returns)
 
 1. ✅ **Commit metadata changes** - Already done (8000c71)
-2. ⏳ **Implement Graph content chunking** - Fix for Issue 2
-3. ⏳ **Add MCP tool wrapper logging** - Diagnose Issue 1
+2. ✅ **Implement Graph content chunking** - Fix for Issue 2 (198c36a)
+3. ✅ **Add MCP tool wrapper logging** - Diagnose Issue 1 (198c36a)
 4. ⏳ **Create test plan** - Verify fixes work
 
 ### When User Returns
@@ -324,9 +324,9 @@ Comprehensive audit of all 16 MCP tools:
 
 ## Files Modified
 
-1. `src/unified/graph_store.py` - Metadata embedding (committed)
-2. `src/mcp/tools.py` - Debug logging added (system reminder shows user modified)
-3. `src/mcp/server.py` - Tool wrapper logging (needs to be added)
+1. `src/unified/graph_store.py` - Metadata embedding (8000c71) + Content chunking (198c36a)
+2. `src/mcp/tools.py` - Debug logging added (198c36a)
+3. `src/mcp/server.py` - Tool wrapper logging (198c36a)
 
 ---
 
@@ -365,7 +365,7 @@ Comprehensive audit of all 16 MCP tools:
 
 ## Next Code Changes Required
 
-1. **src/unified/graph_store.py** - Add content chunking logic
-2. **src/mcp/server.py** - Add tool wrapper logging for list_documents
-3. **Tests** - Add integration test for collection isolation
-4. **Documentation** - Update CLAUDE.md with content size limits
+1. ✅ **src/unified/graph_store.py** - Add content chunking logic (DONE - 198c36a)
+2. ✅ **src/mcp/server.py** - Add tool wrapper logging for list_documents (DONE - 198c36a)
+3. ⏳ **Tests** - Add integration test for collection isolation
+4. ⏳ **Documentation** - Update CLAUDE.md with content size limits
