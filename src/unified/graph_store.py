@@ -105,6 +105,79 @@ class GraphStore:
 
         return result.nodes
 
+    async def get_episode_uuid_by_name(self, episode_name: str) -> Optional[str]:
+        """
+        Look up episode UUID by name using direct Neo4j query.
+
+        Args:
+            episode_name: Name of the episode (e.g., "doc_42")
+
+        Returns:
+            Episode UUID if found, None if not found
+        """
+        logger.info(f"🔍 Looking up episode UUID for name: {episode_name}")
+
+        try:
+            # Direct Neo4j query to find episode by name
+            query = """
+            MATCH (e:Episodic {name: $name})
+            RETURN e.uuid as uuid
+            LIMIT 1
+            """
+
+            # Execute query using Graphiti's driver
+            result = await self.graphiti.driver.execute_query(
+                query,
+                name=episode_name
+            )
+
+            records = result.records
+            if not records:
+                logger.warning(f"⚠️  Episode '{episode_name}' not found in graph")
+                return None
+
+            uuid = records[0]['uuid']
+            logger.info(f"✅ Found episode UUID: {uuid}")
+            return uuid
+
+        except Exception as e:
+            logger.error(f"❌ Error looking up episode UUID: {e}")
+            return None
+
+    async def delete_episode_by_name(self, episode_name: str) -> bool:
+        """
+        Delete episode by name (looks up UUID first, then deletes).
+
+        This removes the episode and its associated data, including edges
+        and orphaned nodes, from the knowledge graph. Entities shared with
+        other episodes are preserved.
+
+        Args:
+            episode_name: Name of the episode (e.g., "doc_42")
+
+        Returns:
+            True if deleted successfully, False if episode not found or error occurred
+        """
+        logger.info(f"🗑️  GraphStore.delete_episode_by_name() - Deleting episode: {episode_name}")
+
+        # Look up UUID
+        episode_uuid = await self.get_episode_uuid_by_name(episode_name)
+
+        if not episode_uuid:
+            logger.warning(f"⚠️  Cannot delete - episode '{episode_name}' not found")
+            return False
+
+        try:
+            # Delete using Graphiti's remove_episode (handles orphaned entity cleanup)
+            await self.graphiti.remove_episode(episode_uuid)
+            logger.info(f"✅ Successfully deleted episode '{episode_name}' (UUID: {episode_uuid})")
+            logger.info(f"   Graphiti automatically cleaned up orphaned entities and edges")
+            return True
+
+        except Exception as e:
+            logger.error(f"❌ Error deleting episode '{episode_name}': {e}")
+            return False
+
     async def search_relationships(
         self,
         query: str,

@@ -343,12 +343,13 @@ class DocumentStore:
 
             return chunks
 
-    def update_document(
+    async def update_document(
         self,
         document_id: int,
         content: Optional[str] = None,
         filename: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
+        graph_store: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
         Update an existing document's content, title, or metadata.
@@ -356,11 +357,15 @@ class DocumentStore:
         If content is provided, the document is re-chunked and re-embedded automatically.
         Old chunks are deleted and replaced with new ones.
 
+        If graph_store is provided and content is being updated, deletes the old
+        Graph episode and creates a new one (handled by caller after this returns).
+
         Args:
             document_id: ID of document to update
             content: New content (if provided, triggers re-chunking/re-embedding)
             filename: New title/filename
             metadata: New or updated metadata (merged with existing)
+            graph_store: Optional GraphStore instance for Knowledge Graph cleanup
 
         Returns:
             Dictionary with update results:
@@ -368,7 +373,8 @@ class DocumentStore:
                 "document_id": int,
                 "updated_fields": list[str],
                 "old_chunk_count": int,
-                "new_chunk_count": int
+                "new_chunk_count": int,
+                "graph_episode_deleted": bool  # True if old episode was deleted
             }
 
         Raises:
@@ -380,6 +386,20 @@ class DocumentStore:
         doc = self.get_source_document(document_id)
         if not doc:
             raise ValueError(f"Document {document_id} not found")
+
+        graph_episode_deleted = False
+
+        # If content is being updated and we have a graph store, delete old episode
+        if content is not None and graph_store is not None:
+            episode_name = f"doc_{document_id}"
+            logger.info(f"🗑️  Deleting old Graph episode '{episode_name}' before updating content")
+            deleted = await graph_store.delete_episode_by_name(episode_name)
+            if deleted:
+                graph_episode_deleted = True
+                logger.info(f"✅ Old Graph episode deleted successfully")
+            else:
+                logger.warning(f"⚠️  Old Graph episode '{episode_name}' not found (may not have been indexed)")
+
 
         updated_fields = []
 
@@ -504,10 +524,11 @@ class DocumentStore:
             "document_id": document_id,
             "updated_fields": updated_fields,
             "old_chunk_count": old_chunk_count,
-            "new_chunk_count": new_chunk_count
+            "new_chunk_count": new_chunk_count,
+            "graph_episode_deleted": graph_episode_deleted
         }
 
-    def delete_document(self, document_id: int) -> Dict[str, Any]:
+    async def delete_document(self, document_id: int, graph_store: Optional[Any] = None) -> Dict[str, Any]:
         """
         Delete a source document and all its chunks.
 
@@ -515,11 +536,13 @@ class DocumentStore:
         - The source document
         - All document chunks
         - All chunk-collection links (via cascade)
+        - The corresponding Knowledge Graph episode (if graph_store provided)
 
         The document is permanently deleted and cannot be recovered.
 
         Args:
             document_id: ID of document to delete
+            graph_store: Optional GraphStore instance for Knowledge Graph cleanup
 
         Returns:
             Dictionary with deletion results:
@@ -527,7 +550,8 @@ class DocumentStore:
                 "document_id": int,
                 "document_title": str,
                 "chunks_deleted": int,
-                "collections_affected": list[str]
+                "collections_affected": list[str],
+                "graph_episode_deleted": bool  # True if Graph episode was deleted
             }
 
         Raises:
@@ -539,6 +563,19 @@ class DocumentStore:
         doc = self.get_source_document(document_id)
         if not doc:
             raise ValueError(f"Document {document_id} not found")
+
+        # Delete from Knowledge Graph first (if available)
+        graph_episode_deleted = False
+        if graph_store is not None:
+            episode_name = f"doc_{document_id}"
+            logger.info(f"🗑️  Deleting Graph episode '{episode_name}' for document {document_id}")
+            deleted = await graph_store.delete_episode_by_name(episode_name)
+            if deleted:
+                graph_episode_deleted = True
+                logger.info(f"✅ Graph episode deleted successfully")
+            else:
+                logger.warning(f"⚠️  Graph episode '{episode_name}' not found (may not have been indexed)")
+
 
         chunks = self.get_document_chunks(document_id)
 
@@ -578,7 +615,8 @@ class DocumentStore:
             "document_id": document_id,
             "document_title": doc["filename"],
             "chunks_deleted": len(chunks),
-            "collections_affected": collections_affected
+            "collections_affected": collections_affected,
+            "graph_episode_deleted": graph_episode_deleted
         }
 
 

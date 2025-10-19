@@ -694,7 +694,7 @@ async def ingest_url(
     your crawling strategy (single large crawl vs multiple smaller crawls).
     """
     return await ingest_url_impl(
-        doc_store, db, unified_mediator, url, collection_name, follow_links, max_depth, mode, include_document_ids
+        doc_store, db, unified_mediator, url, collection_name, follow_links, max_depth, mode, include_document_ids, graph_store
     )
 
 
@@ -893,7 +893,7 @@ async def ingest_directory(
 
 
 @mcp.tool()
-def update_document(
+async def update_document(
     document_id: int,
     content: Optional[str] = None,
     title: Optional[str] = None,
@@ -946,11 +946,11 @@ def update_document(
     Note: Metadata is merged with existing values. To remove a key,
     use delete_document and re-ingest instead.
     """
-    return update_document_impl(doc_store, document_id, content, title, metadata)
+    return await update_document_impl(doc_store, document_id, content, title, metadata, graph_store)
 
 
 @mcp.tool()
-def delete_document(document_id: int) -> dict:
+async def delete_document(document_id: int) -> dict:
     """
     Delete a source document and all its chunks permanently.
 
@@ -985,7 +985,7 @@ def delete_document(document_id: int) -> dict:
     Note: This does NOT delete collections, only removes the document from them.
     Use with caution - deletion is permanent.
     """
-    return delete_document_impl(doc_store, document_id)
+    return await delete_document_impl(doc_store, document_id, graph_store)
 
 
 @mcp.tool()

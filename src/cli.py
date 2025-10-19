@@ -676,50 +676,90 @@ def ingest_file_cmd(path, collection, metadata):
 )
 @click.option("--recursive", is_flag=True, help="Search subdirectories")
 def ingest_directory(path, collection, extensions, recursive):
-    """Ingest all files from a directory with automatic chunking."""
-    try:
-        db = get_database()
-        embedder = get_embedding_generator()
-        coll_mgr = get_collection_manager(db)
-        doc_store = get_document_store(db, embedder, coll_mgr)
+    """Ingest all files from a directory with automatic chunking.
 
-        ext_list = [ext.strip() for ext in extensions.split(",")]
-        path_obj = Path(path)
+    Routes through unified mediator to update both RAG store and Knowledge Graph.
+    Falls back to RAG-only mode if Knowledge Graph unavailable.
+    """
+    async def run_ingest():
+        try:
+            ext_list = [ext.strip() for ext in extensions.split(",")]
+            path_obj = Path(path)
 
-        console.print(
-            f"[bold blue]Ingesting files from: {path} (extensions: {ext_list})[/bold blue]"
-        )
+            console.print(
+                f"[bold blue]Ingesting files from: {path} (extensions: {ext_list})[/bold blue]"
+            )
 
-        # Find all matching files
-        files = []
-        if recursive:
-            for ext in ext_list:
-                files.extend(path_obj.rglob(f"*{ext}"))
-        else:
-            for ext in ext_list:
-                files.extend(path_obj.glob(f"*{ext}"))
+            # Find all matching files
+            files = []
+            if recursive:
+                for ext in ext_list:
+                    files.extend(path_obj.rglob(f"*{ext}"))
+            else:
+                for ext in ext_list:
+                    files.extend(path_obj.glob(f"*{ext}"))
 
-        files = sorted(set(files))  # Remove duplicates and sort
+            files = sorted(set(files))  # Remove duplicates and sort
 
-        # Ingest each file
-        source_ids = []
-        total_chunks = 0
-        for file_path in files:
-            try:
-                source_id, chunk_ids = doc_store.ingest_file(str(file_path), collection)
-                source_ids.append(source_id)
-                total_chunks += len(chunk_ids)
-                console.print(f"  ✓ {file_path.name}: {len(chunk_ids)} chunks")
-            except Exception as e:
-                console.print(f"  ✗ {file_path.name}: {e}")
+            # Initialize Knowledge Graph components (lazy initialization within async context)
+            local_graph_store, local_unified_mediator = await initialize_graph_components()
 
-        console.print(
-            f"[bold green]✓ Ingested {len(source_ids)} documents with {total_chunks} total chunks to collection '{collection}'[/bold green]"
-        )
+            # Ingest each file
+            source_ids = []
+            total_chunks = 0
+            total_entities = 0
 
-    except Exception as e:
-        console.print(f"[bold red]Error: {e}[/bold red]")
-        sys.exit(1)
+            for file_path in files:
+                try:
+                    # Use unified mediator if available
+                    if local_unified_mediator:
+                        # Read file content
+                        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                            file_content = f.read()
+
+                        # Build file metadata
+                        file_metadata = {
+                            "file_type": file_path.suffix.lstrip(".").lower() or "text",
+                            "file_size": file_path.stat().st_size,
+                        }
+
+                        result = await local_unified_mediator.ingest_text(
+                            content=file_content,
+                            collection_name=collection,
+                            document_title=file_path.name,
+                            metadata=file_metadata
+                        )
+
+                        source_ids.append(result['source_document_id'])
+                        total_chunks += result['num_chunks']
+                        total_entities += result.get('entities_extracted', 0)
+                        console.print(f"  ✓ {file_path.name}: {result['num_chunks']} chunks, {result.get('entities_extracted', 0)} entities")
+
+                    # Fallback: RAG-only mode
+                    else:
+                        source_id, chunk_ids = doc_store.ingest_file(str(file_path), collection)
+                        source_ids.append(source_id)
+                        total_chunks += len(chunk_ids)
+                        console.print(f"  ✓ {file_path.name}: {len(chunk_ids)} chunks")
+
+                except Exception as e:
+                    console.print(f"  ✗ {file_path.name}: {e}")
+
+            console.print(
+                f"[bold green]✓ Ingested {len(source_ids)} documents with {total_chunks} total chunks to collection '{collection}'[/bold green]"
+            )
+            if local_unified_mediator and total_entities > 0:
+                console.print(f"[dim]Total entities extracted: {total_entities}[/dim]")
+            elif not local_unified_mediator:
+                console.print("[dim]Knowledge Graph not available - RAG-only mode[/dim]")
+
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+    asyncio.run(run_ingest())
 
 
 @ingest.command("url")
@@ -734,6 +774,9 @@ def ingest_directory(path, collection, extensions, recursive):
 def ingest_url(url, collection, headless, verbose, chunk_size, chunk_overlap, follow_links, max_depth):
     """Crawl and ingest a web page with automatic chunking.
 
+    Routes through unified mediator to update both RAG store and Knowledge Graph.
+    Falls back to RAG-only mode if Knowledge Graph unavailable.
+
     By default, only the specified page is crawled. Use --follow-links to crawl
     linked pages up to --max-depth levels deep.
 
@@ -747,100 +790,146 @@ def ingest_url(url, collection, headless, verbose, chunk_size, chunk_overlap, fo
         # Follow links 2 levels deep
         rag ingest url https://example.com --collection docs --follow-links --max-depth 2
     """
-    try:
-        # Create custom chunker for web pages (larger chunks)
-        web_chunking_config = ChunkingConfig(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        )
-        web_chunker = get_document_chunker(web_chunking_config)
+    async def run_ingest():
+        try:
+            # Initialize Knowledge Graph components (lazy initialization within async context)
+            local_graph_store, local_unified_mediator = await initialize_graph_components()
 
-        # Initialize database components
-        db = get_database()
-        embedder = get_embedding_generator()
-        coll_mgr = get_collection_manager(db)
-        doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
+            if follow_links:
+                # Multi-page crawl with link following
+                console.print(f"[bold blue]Crawling URL with link following: {url} (max_depth={max_depth})[/bold blue]")
 
-        if follow_links:
-            # Multi-page crawl with link following
-            console.print(f"[bold blue]Crawling URL with link following: {url} (max_depth={max_depth})[/bold blue]")
+                crawler = WebCrawler(headless=headless, verbose=verbose)
+                results = await crawler.crawl_with_depth(url, max_depth=max_depth)
 
-            crawler = WebCrawler(headless=headless, verbose=verbose)
-            results = asyncio.run(crawler.crawl_with_depth(url, max_depth=max_depth))
+                if not results:
+                    console.print(f"[bold red]✗ No pages crawled from {url}[/bold red]")
+                    sys.exit(1)
 
-            if not results:
-                console.print(f"[bold red]✗ No pages crawled from {url}[/bold red]")
-                sys.exit(1)
+                console.print(f"[green]✓ Crawled {len(results)} pages[/green]")
 
-            console.print(f"[green]✓ Crawled {len(results)} pages[/green]")
+                # Ingest each page
+                total_chunks = 0
+                total_entities = 0
+                successful_ingests = 0
 
-            # Ingest each page
-            total_chunks = 0
-            successful_ingests = 0
-            for i, result in enumerate(results, 1):
+                for i, result in enumerate(results, 1):
+                    if not result.success:
+                        console.print(f"  [yellow]⚠ Skipped failed page {i}: {result.url}[/yellow]")
+                        continue
+
+                    try:
+                        # Use unified mediator if available
+                        if local_unified_mediator:
+                            ingest_result = await local_unified_mediator.ingest_text(
+                                content=result.content,
+                                collection_name=collection,
+                                document_title=result.metadata.get("title", result.url),
+                                metadata=result.metadata
+                            )
+                            total_chunks += ingest_result['num_chunks']
+                            total_entities += ingest_result.get('entities_extracted', 0)
+                            successful_ingests += 1
+                            console.print(
+                                f"  ✓ Page {i}/{len(results)}: {result.metadata.get('title', result.url)[:50]}... "
+                                f"({ingest_result['num_chunks']} chunks, {ingest_result.get('entities_extracted', 0)} entities, "
+                                f"depth={result.metadata.get('crawl_depth', 0)})"
+                            )
+
+                        # Fallback: RAG-only mode
+                        else:
+                            web_chunking_config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                            web_chunker = get_document_chunker(web_chunking_config)
+                            web_doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
+
+                            source_id, chunk_ids = web_doc_store.ingest_document(
+                                content=result.content,
+                                filename=result.metadata.get("title", result.url),
+                                collection_name=collection,
+                                metadata=result.metadata,
+                                file_type="web_page",
+                            )
+                            total_chunks += len(chunk_ids)
+                            successful_ingests += 1
+                            console.print(
+                                f"  ✓ Page {i}/{len(results)}: {result.metadata.get('title', result.url)[:50]}... "
+                                f"({len(chunk_ids)} chunks, depth={result.metadata.get('crawl_depth', 0)})"
+                            )
+
+                    except Exception as e:
+                        console.print(f"  [red]✗ Failed to ingest page {i}: {e}[/red]")
+
+                console.print(
+                    f"\n[bold green]✓ Ingested {successful_ingests} pages with {total_chunks} total chunks "
+                    f"to collection '{collection}'[/bold green]"
+                )
+                if local_unified_mediator and total_entities > 0:
+                    console.print(f"[dim]Total entities extracted: {total_entities}[/dim]")
+                elif not local_unified_mediator:
+                    console.print("[dim]Knowledge Graph not available - RAG-only mode[/dim]")
+                console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
+
+            else:
+                # Single-page crawl
+                console.print(f"[bold blue]Crawling URL: {url}[/bold blue]")
+
+                # Crawl the page
+                result = await crawl_single_page(url, headless=headless, verbose=verbose)
+
                 if not result.success:
-                    console.print(f"  [yellow]⚠ Skipped failed page {i}: {result.url}[/yellow]")
-                    continue
+                    console.print(f"[bold red]✗ Failed to crawl {url}[/bold red]")
+                    if result.error:
+                        console.print(f"[bold red]Error: {result.error.error_message}[/bold red]")
+                    sys.exit(1)
 
-                try:
-                    source_id, chunk_ids = doc_store.ingest_document(
+                console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
+
+                # Use unified mediator if available
+                if local_unified_mediator:
+                    ingest_result = await local_unified_mediator.ingest_text(
                         content=result.content,
-                        filename=result.metadata.get("title", result.url),
+                        collection_name=collection,
+                        document_title=result.metadata.get("title", url),
+                        metadata=result.metadata
+                    )
+
+                    console.print(
+                        f"[bold green]✓ Ingested web page (ID: {ingest_result['source_document_id']}) "
+                        f"with {ingest_result['num_chunks']} chunks to collection '{collection}'[/bold green]"
+                    )
+                    console.print(f"[dim]Entities extracted: {ingest_result.get('entities_extracted', 0)}[/dim]")
+                    console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
+                    console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
+
+                # Fallback: RAG-only mode
+                else:
+                    web_chunking_config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                    web_chunker = get_document_chunker(web_chunking_config)
+                    web_doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
+
+                    source_id, chunk_ids = web_doc_store.ingest_document(
+                        content=result.content,
+                        filename=result.metadata.get("title", url),
                         collection_name=collection,
                         metadata=result.metadata,
                         file_type="web_page",
                     )
-                    total_chunks += len(chunk_ids)
-                    successful_ingests += 1
+
                     console.print(
-                        f"  [dim]✓ Page {i}/{len(results)}: {result.metadata.get('title', result.url)[:50]}... "
-                        f"({len(chunk_ids)} chunks, depth={result.metadata.get('crawl_depth', 0)})[/dim]"
+                        f"[bold green]✓ Ingested web page (ID: {source_id}) with {len(chunk_ids)} chunks to collection '{collection}'[/bold green]"
                     )
-                except Exception as e:
-                    console.print(f"  [red]✗ Failed to ingest page {i}: {e}[/red]")
+                    console.print("[dim]Knowledge Graph not available - RAG-only mode[/dim]")
+                    console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
+                    console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
+                    console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
 
-            console.print(
-                f"\n[bold green]✓ Ingested {successful_ingests} pages with {total_chunks} total chunks "
-                f"to collection '{collection}'[/bold green]"
-            )
-            console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
-        else:
-            # Single-page crawl
-            console.print(f"[bold blue]Crawling URL: {url}[/bold blue]")
-
-            # Crawl the page
-            result = asyncio.run(crawl_single_page(url, headless=headless, verbose=verbose))
-
-            if not result.success:
-                console.print(f"[bold red]✗ Failed to crawl {url}[/bold red]")
-                if result.error:
-                    console.print(f"[bold red]Error: {result.error.error_message}[/bold red]")
-                sys.exit(1)
-
-            console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
-
-            # Ingest the content
-            source_id, chunk_ids = doc_store.ingest_document(
-                content=result.content,
-                filename=result.metadata.get("title", url),
-                collection_name=collection,
-                metadata=result.metadata,
-                file_type="web_page",
-            )
-
-            console.print(
-                f"[bold green]✓ Ingested web page (ID: {source_id}) with {len(chunk_ids)} chunks to collection '{collection}'[/bold green]"
-            )
-            console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
-            console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
-            console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
-
-    except Exception as e:
-        console.print(f"[bold red]Error: {e}[/bold red]")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    asyncio.run(run_ingest())
 
 
 @main.command()
@@ -855,6 +944,9 @@ def ingest_url(url, collection, headless, verbose, chunk_size, chunk_overlap, fo
 def recrawl(url, collection, headless, verbose, chunk_size, chunk_overlap, follow_links, max_depth):
     """Re-crawl a URL by deleting old pages and re-ingesting.
 
+    Routes through unified mediator to update both RAG store and Knowledge Graph.
+    Falls back to RAG-only mode if Knowledge Graph unavailable.
+
     This command finds all source documents where metadata.crawl_root_url matches
     the specified URL, deletes those documents and their chunks, then re-crawls
     and re-ingests the content. Other documents in the collection are unaffected.
@@ -866,153 +958,200 @@ def recrawl(url, collection, headless, verbose, chunk_size, chunk_overlap, follo
         # Re-crawl with link following
         rag recrawl https://example.com --collection docs --follow-links --max-depth 2
     """
-    try:
-        # Create custom chunker for web pages (larger chunks)
-        web_chunking_config = ChunkingConfig(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-        )
-        web_chunker = get_document_chunker(web_chunking_config)
+    async def run_recrawl():
+        try:
+            console.print(f"[bold blue]Re-crawling: {url}[/bold blue]")
+            console.print(f"[dim]Finding existing documents with crawl_root_url = {url}...[/dim]")
 
-        # Initialize database components
-        db = get_database()
-        embedder = get_embedding_generator()
-        coll_mgr = get_collection_manager(db)
-        doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
+            # Step 1: Find all source documents with matching crawl_root_url
+            conn = db.connect()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, filename, metadata
+                    FROM source_documents
+                    WHERE metadata->>'crawl_root_url' = %s
+                    """,
+                    (url,)
+                )
+                existing_docs = cur.fetchall()
 
-        console.print(f"[bold blue]Re-crawling: {url}[/bold blue]")
-        console.print(f"[dim]Finding existing documents with crawl_root_url = {url}...[/dim]")
+            if not existing_docs:
+                console.print(f"[yellow]No existing documents found with crawl_root_url = {url}[/yellow]")
+                console.print("[dim]Proceeding with fresh crawl...[/dim]")
+                old_doc_count = 0
+            else:
+                old_doc_count = len(existing_docs)
+                console.print(f"[yellow]Found {old_doc_count} existing documents to delete[/yellow]")
 
-        # Step 1: Find all source documents with matching crawl_root_url
-        conn = db.connect()
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, filename, metadata
-                FROM source_documents
-                WHERE metadata->>'crawl_root_url' = %s
-                """,
-                (url,)
-            )
-            existing_docs = cur.fetchall()
+                # Step 2: Delete the old documents and their chunks
+                # Note: Using direct database access here for RAG cleanup
+                # TODO (Phase 4): Also delete corresponding Graph episodes
+                web_chunking_config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                web_chunker = get_document_chunker(web_chunking_config)
+                web_doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
 
-        if not existing_docs:
-            console.print(f"[yellow]No existing documents found with crawl_root_url = {url}[/yellow]")
-            console.print("[dim]Proceeding with fresh crawl...[/dim]")
-            old_doc_count = 0
-        else:
-            old_doc_count = len(existing_docs)
-            console.print(f"[yellow]Found {old_doc_count} existing documents to delete[/yellow]")
+                for doc_id, filename, metadata in existing_docs:
+                    try:
+                        # Get chunk count before deletion
+                        chunks = web_doc_store.get_document_chunks(doc_id)
+                        chunk_count = len(chunks)
 
-            # Step 2: Delete the old documents and their chunks
-            for doc_id, filename, metadata in existing_docs:
-                try:
-                    # Get chunk count before deletion
-                    chunks = doc_store.get_document_chunks(doc_id)
-                    chunk_count = len(chunks)
+                        # Delete the document (cascades to chunks and chunk_collections)
+                        with conn.cursor() as cur:
+                            # Delete chunks first
+                            cur.execute(
+                                "DELETE FROM document_chunks WHERE source_document_id = %s",
+                                (doc_id,)
+                            )
+                            # Delete source document
+                            cur.execute(
+                                "DELETE FROM source_documents WHERE id = %s",
+                                (doc_id,)
+                            )
 
-                    # Delete the document (cascades to chunks and chunk_collections)
-                    with conn.cursor() as cur:
-                        # Delete chunks first
-                        cur.execute(
-                            "DELETE FROM document_chunks WHERE source_document_id = %s",
-                            (doc_id,)
-                        )
-                        # Delete source document
-                        cur.execute(
-                            "DELETE FROM source_documents WHERE id = %s",
-                            (doc_id,)
-                        )
+                        console.print(f"  [dim]✓ Deleted document {doc_id}: {filename} ({chunk_count} chunks)[/dim]")
+                    except Exception as e:
+                        console.print(f"  [red]✗ Failed to delete document {doc_id}: {e}[/red]")
 
-                    console.print(f"  [dim]✓ Deleted document {doc_id}: {filename} ({chunk_count} chunks)[/dim]")
-                except Exception as e:
-                    console.print(f"  [red]✗ Failed to delete document {doc_id}: {e}[/red]")
+            console.print(f"\n[bold blue]Starting crawl...[/bold blue]")
 
-        console.print(f"\n[bold blue]Starting crawl...[/bold blue]")
+            # Initialize Knowledge Graph components (lazy initialization within async context)
+            local_graph_store, local_unified_mediator = await initialize_graph_components()
 
-        # Step 3: Perform the crawl
-        if follow_links:
-            # Multi-page crawl with link following
-            console.print(f"[dim]Crawling with link following (max_depth={max_depth})...[/dim]")
+            # Step 3: Perform the crawl
+            if follow_links:
+                # Multi-page crawl with link following
+                console.print(f"[dim]Crawling with link following (max_depth={max_depth})...[/dim]")
 
-            crawler = WebCrawler(headless=headless, verbose=verbose)
-            results = asyncio.run(crawler.crawl_with_depth(url, max_depth=max_depth))
+                crawler = WebCrawler(headless=headless, verbose=verbose)
+                results = await crawler.crawl_with_depth(url, max_depth=max_depth)
 
-            if not results:
-                console.print(f"[bold red]✗ No pages crawled from {url}[/bold red]")
-                sys.exit(1)
+                if not results:
+                    console.print(f"[bold red]✗ No pages crawled from {url}[/bold red]")
+                    sys.exit(1)
 
-            console.print(f"[green]✓ Crawled {len(results)} pages[/green]")
+                console.print(f"[green]✓ Crawled {len(results)} pages[/green]")
 
-            # Ingest each page
-            total_chunks = 0
-            successful_ingests = 0
-            for i, result in enumerate(results, 1):
+                # Ingest each page
+                total_chunks = 0
+                total_entities = 0
+                successful_ingests = 0
+
+                for i, result in enumerate(results, 1):
+                    if not result.success:
+                        console.print(f"  [yellow]⚠ Skipped failed page {i}: {result.url}[/yellow]")
+                        continue
+
+                    try:
+                        # Use unified mediator if available
+                        if local_unified_mediator:
+                            ingest_result = await local_unified_mediator.ingest_text(
+                                content=result.content,
+                                collection_name=collection,
+                                document_title=result.metadata.get("title", result.url),
+                                metadata=result.metadata
+                            )
+                            total_chunks += ingest_result['num_chunks']
+                            total_entities += ingest_result.get('entities_extracted', 0)
+                            successful_ingests += 1
+                            console.print(
+                                f"  ✓ Page {i}/{len(results)}: {result.metadata.get('title', result.url)[:50]}... "
+                                f"({ingest_result['num_chunks']} chunks, {ingest_result.get('entities_extracted', 0)} entities, "
+                                f"depth={result.metadata.get('crawl_depth', 0)})"
+                            )
+
+                        # Fallback: RAG-only mode
+                        else:
+                            web_chunking_config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                            web_chunker = get_document_chunker(web_chunking_config)
+                            web_doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
+
+                            source_id, chunk_ids = web_doc_store.ingest_document(
+                                content=result.content,
+                                filename=result.metadata.get("title", result.url),
+                                collection_name=collection,
+                                metadata=result.metadata,
+                                file_type="web_page",
+                            )
+                            total_chunks += len(chunk_ids)
+                            successful_ingests += 1
+                            console.print(
+                                f"  ✓ Page {i}/{len(results)}: {result.metadata.get('title', result.url)[:50]}... "
+                                f"({len(chunk_ids)} chunks, depth={result.metadata.get('crawl_depth', 0)})"
+                            )
+
+                    except Exception as e:
+                        console.print(f"  [red]✗ Failed to ingest page {i}: {e}[/red]")
+
+                console.print(f"\n[bold green]✓ Re-crawl complete![/bold green]")
+                console.print(f"[bold]Deleted {old_doc_count} old pages, crawled {successful_ingests} new pages with {total_chunks} total chunks[/bold]")
+                console.print(f"[dim]Collection: '{collection}'[/dim]")
+                if local_unified_mediator and total_entities > 0:
+                    console.print(f"[dim]Total entities extracted: {total_entities}[/dim]")
+                elif not local_unified_mediator:
+                    console.print("[dim]Knowledge Graph not available - RAG-only mode[/dim]")
+                console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
+
+            else:
+                # Single-page crawl
+                console.print(f"[dim]Crawling single page...[/dim]")
+
+                result = await crawl_single_page(url, headless=headless, verbose=verbose)
+
                 if not result.success:
-                    console.print(f"  [yellow]⚠ Skipped failed page {i}: {result.url}[/yellow]")
-                    continue
+                    console.print(f"[bold red]✗ Failed to crawl {url}[/bold red]")
+                    if result.error:
+                        console.print(f"[bold red]Error: {result.error.error_message}[/bold red]")
+                    sys.exit(1)
 
-                try:
-                    source_id, chunk_ids = doc_store.ingest_document(
+                console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
+
+                # Use unified mediator if available
+                if local_unified_mediator:
+                    ingest_result = await local_unified_mediator.ingest_text(
                         content=result.content,
-                        filename=result.metadata.get("title", result.url),
+                        collection_name=collection,
+                        document_title=result.metadata.get("title", url),
+                        metadata=result.metadata
+                    )
+
+                    console.print(f"\n[bold green]✓ Re-crawl complete![/bold green]")
+                    console.print(f"[bold]Deleted {old_doc_count} old pages, crawled 1 new page with {ingest_result['num_chunks']} chunks[/bold]")
+                    console.print(f"[dim]Collection: '{collection}'[/dim]")
+                    console.print(f"[dim]Entities extracted: {ingest_result.get('entities_extracted', 0)}[/dim]")
+                    console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
+                    console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
+
+                # Fallback: RAG-only mode
+                else:
+                    web_chunking_config = ChunkingConfig(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                    web_chunker = get_document_chunker(web_chunking_config)
+                    web_doc_store = get_document_store(db, embedder, coll_mgr, chunker=web_chunker)
+
+                    source_id, chunk_ids = web_doc_store.ingest_document(
+                        content=result.content,
+                        filename=result.metadata.get("title", url),
                         collection_name=collection,
                         metadata=result.metadata,
                         file_type="web_page",
                     )
-                    total_chunks += len(chunk_ids)
-                    successful_ingests += 1
-                    console.print(
-                        f"  [dim]✓ Page {i}/{len(results)}: {result.metadata.get('title', result.url)[:50]}... "
-                        f"({len(chunk_ids)} chunks, depth={result.metadata.get('crawl_depth', 0)})[/dim]"
-                    )
-                except Exception as e:
-                    console.print(f"  [red]✗ Failed to ingest page {i}: {e}[/red]")
 
-            console.print(
-                f"\n[bold green]✓ Re-crawl complete![/bold green]"
-            )
-            console.print(f"[bold]Deleted {old_doc_count} old pages, crawled {successful_ingests} new pages with {total_chunks} total chunks[/bold]")
-            console.print(f"[dim]Collection: '{collection}'[/dim]")
-            console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
+                    console.print(f"\n[bold green]✓ Re-crawl complete![/bold green]")
+                    console.print(f"[bold]Deleted {old_doc_count} old pages, crawled 1 new page with {len(chunk_ids)} chunks[/bold]")
+                    console.print(f"[dim]Collection: '{collection}'[/dim]")
+                    console.print("[dim]Knowledge Graph not available - RAG-only mode[/dim]")
+                    console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
+                    console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
+                    console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
 
-        else:
-            # Single-page crawl
-            console.print(f"[dim]Crawling single page...[/dim]")
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
 
-            result = asyncio.run(crawl_single_page(url, headless=headless, verbose=verbose))
-
-            if not result.success:
-                console.print(f"[bold red]✗ Failed to crawl {url}[/bold red]")
-                if result.error:
-                    console.print(f"[bold red]Error: {result.error.error_message}[/bold red]")
-                sys.exit(1)
-
-            console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
-
-            # Ingest the content
-            source_id, chunk_ids = doc_store.ingest_document(
-                content=result.content,
-                filename=result.metadata.get("title", url),
-                collection_name=collection,
-                metadata=result.metadata,
-                file_type="web_page",
-            )
-
-            console.print(
-                f"\n[bold green]✓ Re-crawl complete![/bold green]"
-            )
-            console.print(f"[bold]Deleted {old_doc_count} old pages, crawled 1 new page with {len(chunk_ids)} chunks[/bold]")
-            console.print(f"[dim]Collection: '{collection}'[/dim]")
-            console.print(f"[dim]Title: {result.metadata.get('title', 'N/A')}[/dim]")
-            console.print(f"[dim]Domain: {result.metadata.get('domain', 'N/A')}[/dim]")
-            console.print(f"[dim]Chunk size: {chunk_size} chars, Overlap: {chunk_overlap} chars[/dim]")
-
-    except Exception as e:
-        console.print(f"[bold red]Error: {e}[/bold red]")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
+    asyncio.run(run_recrawl())
 
 
 @main.command()

@@ -429,6 +429,7 @@ async def ingest_url_impl(
     max_depth: int,
     mode: str,
     include_document_ids: bool,
+    graph_store = None,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_url tool with mode support.
@@ -438,6 +439,7 @@ async def ingest_url_impl(
 
     Args:
         mode: "crawl" (new crawl, error if exists) or "recrawl" (update existing)
+        graph_store: Optional GraphStore for episode cleanup during recrawl
     """
     try:
         # Validate mode
@@ -483,7 +485,18 @@ async def ingest_url_impl(
 
                 old_pages_deleted = len(existing_docs)
 
-                # Delete old documents and chunks
+                # Delete Graph episodes first (if available)
+                if graph_store:
+                    logger.info(f"🗑️  Deleting {old_pages_deleted} Graph episodes for recrawl of {url}")
+                    for doc_id, filename in existing_docs:
+                        episode_name = f"doc_{doc_id}"
+                        deleted = await graph_store.delete_episode_by_name(episode_name)
+                        if deleted:
+                            logger.info(f"✅ Deleted Graph episode '{episode_name}' for {filename}")
+                        else:
+                            logger.warning(f"⚠️  Graph episode '{episode_name}' not found (may not have been indexed)")
+
+                # Delete old RAG documents and chunks
                 for doc_id, filename in existing_docs:
                     # Delete chunks
                     cur.execute(
@@ -784,22 +797,33 @@ async def ingest_directory_impl(
         raise
 
 
-def update_document_impl(
+async def update_document_impl(
     doc_store: DocumentStore,
     document_id: int,
     content: Optional[str],
     title: Optional[str],
     metadata: Optional[Dict[str, Any]],
+    graph_store = None,
 ) -> Dict[str, Any]:
-    """Implementation of update_document tool."""
+    """
+    Implementation of update_document tool.
+
+    Now includes Graph episode cleanup when content is updated.
+    If graph_store is provided and content is changed, deletes the old
+    Graph episode before re-chunking and re-embedding the document.
+    """
     try:
         if not content and not title and not metadata:
             raise ValueError(
                 "At least one of content, title, or metadata must be provided"
             )
 
-        result = doc_store.update_document(
-            document_id=document_id, content=content, filename=title, metadata=metadata
+        result = await doc_store.update_document(
+            document_id=document_id,
+            content=content,
+            filename=title,
+            metadata=metadata,
+            graph_store=graph_store
         )
 
         return result
@@ -808,12 +832,20 @@ def update_document_impl(
         raise
 
 
-def delete_document_impl(
-    doc_store: DocumentStore, document_id: int
+async def delete_document_impl(
+    doc_store: DocumentStore,
+    document_id: int,
+    graph_store = None
 ) -> Dict[str, Any]:
-    """Implementation of delete_document tool."""
+    """
+    Implementation of delete_document tool.
+
+    Now includes Graph episode cleanup. If graph_store is provided,
+    deletes the corresponding Knowledge Graph episode before removing
+    the RAG document.
+    """
     try:
-        result = doc_store.delete_document(document_id)
+        result = await doc_store.delete_document(document_id, graph_store=graph_store)
         return result
     except Exception as e:
         logger.error(f"delete_document failed: {e}")
@@ -860,7 +892,7 @@ def list_documents_impl(
                 # Get paginated documents
                 cur.execute(
                     """
-                    SELECT DISTINCT
+                    SELECT
                         sd.id,
                         sd.filename,
                         sd.file_type,
@@ -868,11 +900,12 @@ def list_documents_impl(
                         sd.created_at,
                         sd.updated_at,
                         sd.metadata,
-                        (SELECT COUNT(*) FROM document_chunks WHERE source_document_id = sd.id) as chunk_count
+                        COUNT(dc.id) as chunk_count
                     FROM source_documents sd
                     JOIN document_chunks dc ON dc.source_document_id = sd.id
                     JOIN chunk_collections cc ON cc.chunk_id = dc.id
                     WHERE cc.collection_id = %s
+                    GROUP BY sd.id, sd.filename, sd.file_type, sd.file_size, sd.created_at, sd.updated_at, sd.metadata
                     ORDER BY sd.updated_at DESC
                     LIMIT %s OFFSET %s
                     """,
