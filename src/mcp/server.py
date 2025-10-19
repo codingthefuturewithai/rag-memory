@@ -335,10 +335,17 @@ async def ingest_text(
     Ingest text content into a collection with automatic chunking.
 
     This is the primary way for agents to add knowledge to the RAG system.
-    Content is automatically chunked (~1000 chars with 200 char overlap),
-    embedded with OpenAI, and stored for future retrieval.
+    Content is chunked, embedded, and ingested into both vector store and knowledge graph.
 
     IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
+
+    IMPORTANT - PROCESSING TIME:
+    Processing time depends on content size:
+    - Small content (<10KB): Typically completes in seconds
+    - Large content (>50KB): Can take a minute or longer
+
+    The MCP server will continue processing even if your client times out. You may need
+    to configure longer timeout values when ingesting large amounts of content.
 
     By default, returns minimal response (source_document_id and num_chunks).
     Use include_chunk_ids=True to get the list of chunk IDs (may be large).
@@ -586,10 +593,25 @@ async def ingest_url(
     """
     Crawl and ingest content from a web URL with duplicate prevention.
 
-    Uses Crawl4AI for web scraping. Supports single-page or multi-page crawling
-    with link following. Automatically chunks content (~2500 chars for web pages).
+    Scrapes web pages, processes the content, and ingests into both vector store
+    and knowledge graph. Supports single-page or multi-page crawling with link following.
 
     IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
+
+    IMPORTANT - PROCESSING TIME:
+    This operation scrapes web pages, processes content, and ingests data. Processing
+    time varies based on crawl scope:
+
+    - Single page (follow_links=False, max_depth=0): Typically completes in seconds
+    - Multi-page crawl (follow_links=True, max_depth=1+): Can take several minutes
+
+    Factors affecting duration:
+    - Number of pages crawled (controlled by follow_links and max_depth)
+    - Content size per page
+    - Network latency for page fetches
+
+    The MCP server will continue processing even if your client times out. You may need
+    to configure longer timeout values or poll for completion when crawling large sites.
 
     IMPORTANT DUPLICATE PREVENTION:
     - mode="crawl": New crawl. Raises error if URL already crawled into collection.
@@ -668,8 +690,8 @@ async def ingest_url(
         for crawl in info['crawled_urls']:
             print(f"Already crawled: {crawl['url']}")
 
-    Note: Web crawling can be slow (1-5 seconds per page). Use follow_links sparingly.
-    Use analyze_website() first to understand site structure and plan comprehensive crawling.
+    Recommendation: Use analyze_website() first to understand site structure and plan
+    your crawling strategy (single large crawl vs multiple smaller crawls).
     """
     return await ingest_url_impl(
         doc_store, db, unified_mediator, url, collection_name, follow_links, max_depth, mode, include_document_ids

@@ -966,63 +966,6 @@ MATCH (n) WHERE toLower(n.name) CONTAINS 'quantum' RETURN n
 4. **Performance** - Entity extraction is LLM-heavy (30-60 seconds per document)
 5. **Orphan accumulation** - Failed ingestions leave empty episode nodes
 
-### Graph Content Size Limits & Chunking
-
-**Critical Issue:** Graphiti's GPT-4o entity extraction is time-intensive (~2 seconds per 1KB). Combined with MCP's 60-second client timeout, large documents cause ingestion failures.
-
-**Content Size Guidelines:**
-- **< 50KB**: Safe - processes within 60-second timeout
-- **50-100KB**: Borderline - may timeout on complex content
-- **> 100KB**: Guaranteed timeout - requires chunking
-
-**Automatic Chunking (Implemented 2025-10-17):**
-
-The system now automatically chunks large content to prevent timeouts:
-
-```python
-# src/unified/graph_store.py
-MAX_GRAPHITI_CONTENT = 50000  # 50KB safe limit
-
-# Large documents automatically split into chunks
-# Episode naming: doc_{id}_part1of6, doc_{id}_part2of6, ...
-```
-
-**How it works:**
-1. Content > 50KB triggers automatic chunking
-2. Each chunk processed as separate episode node in Neo4j
-3. All chunks share same metadata (collection, title, crawl info)
-4. Entities extracted from all chunks independently
-5. If one chunk fails, others continue processing
-
-**Example (287KB Wikipedia article):**
-```
-Original: doc_297 (287KB) → Timeout ❌
-
-With chunking:
-├─ doc_297_part1of6 (50KB) → 45 entities extracted ✅
-├─ doc_297_part2of6 (50KB) → 38 entities extracted ✅
-├─ doc_297_part3of6 (50KB) → 42 entities extracted ✅
-├─ doc_297_part4of6 (50KB) → 51 entities extracted ✅
-├─ doc_297_part5of6 (50KB) → 39 entities extracted ✅
-└─ doc_297_part6of6 (37KB) → 33 entities extracted ✅
-
-Total: 248 entities, all chunks complete within timeout
-```
-
-**Querying chunked content:**
-- Neo4j queries: Search by `source_description` includes part numbers
-- Episode names clearly indicate chunking: `doc_297_part3of6`
-- All chunks maintain same metadata for filtering
-- Entities span chunks but remain connected through shared source
-
-**Trade-offs:**
-- ✅ Prevents timeouts for large content
-- ✅ All content gets entity extraction
-- ✅ Observable progress (per-chunk logging)
-- ⚠️ More episode nodes in Neo4j
-- ⚠️ Entity relationships may be split across chunks
-- ⚠️ Slight increase in total processing time (overhead per chunk)
-
 ### When to Use Graph vs RAG
 
 **Use RAG search when:**
