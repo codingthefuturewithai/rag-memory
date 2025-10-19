@@ -9,14 +9,12 @@ This test is ATOMIC:
 No external dependencies or pre-existing data required.
 """
 
-import asyncio
 import pytest
+import pytest_asyncio
 from graphiti_core import Graphiti
 
-pytest_plugins = ("pytest_asyncio",)
 
-
-@pytest.fixture
+@pytest_asyncio.fixture
 async def graphiti_instance():
     """
     Create a fresh Graphiti instance connected to Neo4j test server.
