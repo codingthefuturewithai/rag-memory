@@ -534,24 +534,15 @@ def collection_update(name, description):
         db = get_database()
         mgr = get_collection_manager(db)
 
-        # Get collection to verify it exists
-        collection = mgr.get_collection(name)
-        if not collection:
-            console.print(f"[yellow]Collection '{name}' not found[/yellow]")
-            sys.exit(1)
-
-        # Update the description
-        conn = db.connect()
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE collections SET description = %s WHERE name = %s",
-                (description, name)
-            )
-            conn.commit()
+        # Call business logic layer
+        mgr.update_description(name, description)
 
         console.print(f"[bold green]✓ Updated collection '{name}'[/bold green]")
         console.print(f"  New description: {description}")
 
+    except ValueError as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")
         sys.exit(1)
@@ -1274,7 +1265,9 @@ def document_list(collection):
 
         console.print("[bold blue]Listing source documents...[/bold blue]\n")
 
-        documents = doc_store.list_source_documents(collection)
+        # Call business logic layer (now returns dict with documents + metadata)
+        result = doc_store.list_source_documents(collection_name=collection, include_details=True)
+        documents = result["documents"]
 
         if not documents:
             console.print("[yellow]No documents found[/yellow]")
@@ -1300,7 +1293,7 @@ def document_list(collection):
             )
 
         console.print(table)
-        console.print(f"\n[bold]Total: {len(documents)} documents[/bold]")
+        console.print(f"\n[bold]Total: {result['total_count']} documents[/bold]")
 
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")

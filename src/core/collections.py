@@ -133,6 +133,38 @@ class CollectionManager:
                 }
             return None
 
+    def update_description(self, name: str, description: str) -> bool:
+        """
+        Update a collection's description.
+
+        Args:
+            name: Collection name to update.
+            description: New description for the collection.
+
+        Returns:
+            True if collection was updated, False if not found.
+
+        Raises:
+            ValueError: If collection doesn't exist.
+        """
+        conn = self.db.connect()
+        with conn.cursor() as cur:
+            # Check if collection exists first
+            cur.execute("SELECT id FROM collections WHERE name = %s", (name,))
+            result = cur.fetchone()
+
+            if not result:
+                raise ValueError(f"Collection '{name}' not found")
+
+            # Update description
+            cur.execute(
+                "UPDATE collections SET description = %s WHERE name = %s",
+                (description, name)
+            )
+
+            logger.info(f"Updated description for collection '{name}'")
+            return True
+
     def delete_collection(self, name: str) -> bool:
         """
         Delete a collection by name and clean up orphaned documents.

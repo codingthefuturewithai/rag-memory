@@ -121,25 +121,14 @@ def create_collection_impl(
 def update_collection_description_impl(
     coll_mgr: CollectionManager, name: str, description: str
 ) -> Dict[str, Any]:
-    """Implementation of update_collection_description tool."""
+    """
+    Implementation of update_collection_description tool.
+
+    Thin facade over CollectionManager.update_description() business logic.
+    """
     try:
-        # Check if collection exists
-        collection = coll_mgr.get_collection(name)
-        if not collection:
-            raise ValueError(f"Collection '{name}' not found")
-
-        # Update description using direct SQL since CollectionManager doesn't have update method yet
-        from src.core.database import get_database
-        db = get_database()
-        conn = db.connect()
-
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE collections SET description = %s WHERE name = %s",
-                (description, name)
-            )
-
-        logger.info(f"Updated description for collection '{name}'")
+        # Call business logic layer
+        coll_mgr.update_description(name, description)
 
         return {
             "name": name,
@@ -853,146 +842,38 @@ async def delete_document_impl(
 
 
 def list_documents_impl(
-    db: Database,
-    coll_mgr: CollectionManager,
+    doc_store: DocumentStore,
     collection_name: Optional[str],
     limit: int,
     offset: int,
     include_details: bool,
 ) -> Dict[str, Any]:
-    """Implementation of list_documents tool."""
+    """
+    Implementation of list_documents tool.
+
+    Thin facade over DocumentStore.list_source_documents() business logic.
+    """
     try:
         # Cap limit at 200
-        limit = min(limit, 200)
+        if limit > 200:
+            limit = 200
 
-        conn = db.connect()
+        # Call business logic layer
+        result = doc_store.list_source_documents(
+            collection_name=collection_name,
+            limit=limit,
+            offset=offset,
+            include_details=include_details
+        )
 
-        # Build query based on collection filter
-        if collection_name:
-            # Get collection ID
-            collection = coll_mgr.get_collection(collection_name)
-            if not collection:
-                raise ValueError(f"Collection '{collection_name}' not found")
+        # Convert datetime objects to ISO 8601 strings for JSON serialization
+        for doc in result["documents"]:
+            if "created_at" in doc and hasattr(doc["created_at"], "isoformat"):
+                doc["created_at"] = doc["created_at"].isoformat()
+            if "updated_at" in doc and hasattr(doc["updated_at"], "isoformat"):
+                doc["updated_at"] = doc["updated_at"].isoformat()
 
-            # Query documents in specific collection
-            with conn.cursor() as cur:
-                # Get total count
-                cur.execute(
-                    """
-                    SELECT COUNT(DISTINCT sd.id)
-                    FROM source_documents sd
-                    JOIN document_chunks dc ON dc.source_document_id = sd.id
-                    JOIN chunk_collections cc ON cc.chunk_id = dc.id
-                    WHERE cc.collection_id = %s
-                    """,
-                    (collection["id"],),
-                )
-                total_count = cur.fetchone()[0]
-
-                # Get paginated documents
-                cur.execute(
-                    """
-                    SELECT
-                        sd.id,
-                        sd.filename,
-                        sd.file_type,
-                        sd.file_size,
-                        sd.created_at,
-                        sd.updated_at,
-                        sd.metadata,
-                        COUNT(dc.id) as chunk_count
-                    FROM source_documents sd
-                    JOIN document_chunks dc ON dc.source_document_id = sd.id
-                    JOIN chunk_collections cc ON cc.chunk_id = dc.id
-                    WHERE cc.collection_id = %s
-                    GROUP BY sd.id, sd.filename, sd.file_type, sd.file_size, sd.created_at, sd.updated_at, sd.metadata
-                    ORDER BY sd.updated_at DESC
-                    LIMIT %s OFFSET %s
-                    """,
-                    (collection["id"], limit, offset),
-                )
-                rows = cur.fetchall()
-        else:
-            # Query all documents
-            with conn.cursor() as cur:
-                # Get total count
-                cur.execute("SELECT COUNT(*) FROM source_documents")
-                total_count = cur.fetchone()[0]
-
-                # Get paginated documents
-                cur.execute(
-                    """
-                    SELECT
-                        sd.id,
-                        sd.filename,
-                        sd.file_type,
-                        sd.file_size,
-                        sd.created_at,
-                        sd.updated_at,
-                        sd.metadata,
-                        (SELECT COUNT(*) FROM document_chunks WHERE source_document_id = sd.id) as chunk_count
-                    FROM source_documents sd
-                    ORDER BY sd.updated_at DESC
-                    LIMIT %s OFFSET %s
-                    """,
-                    (limit, offset),
-                )
-                rows = cur.fetchall()
-
-        # For each document, get its collections
-        documents = []
-        for row in rows:
-            (
-                doc_id,
-                filename,
-                file_type,
-                file_size,
-                created_at,
-                updated_at,
-                metadata,
-                chunk_count,
-            ) = row
-
-            # Get collections for this document
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    SELECT DISTINCT c.name
-                    FROM collections c
-                    JOIN chunk_collections cc ON cc.collection_id = c.id
-                    JOIN document_chunks dc ON dc.id = cc.chunk_id
-                    WHERE dc.source_document_id = %s
-                    """,
-                    (doc_id,),
-                )
-                collections = [c[0] for c in cur.fetchall()]
-
-            # Minimal response by default (optimized for AI agent context windows)
-            doc_dict = {
-                "id": doc_id,
-                "filename": filename,
-                "chunk_count": chunk_count,
-            }
-
-            # Optionally include extended details
-            if include_details:
-                doc_dict.update({
-                    "file_type": file_type,
-                    "file_size": file_size,
-                    "created_at": created_at.isoformat(),
-                    "updated_at": updated_at.isoformat(),
-                    "collections": collections,
-                    "metadata": metadata or {},
-                })
-
-            documents.append(doc_dict)
-
-        return {
-            "documents": documents,
-            "total_count": total_count,
-            "returned_count": len(documents),
-            "has_more": (offset + len(documents)) < total_count,
-        }
+        return result
     except Exception as e:
         logger.error(f"list_documents failed: {e}")
         raise

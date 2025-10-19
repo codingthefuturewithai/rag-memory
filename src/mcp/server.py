@@ -1067,7 +1067,7 @@ def list_documents(
             offset += result['returned_count']
             result = list_documents(limit=50, offset=offset)
     """
-    return list_documents_impl(db, coll_mgr, collection_name, limit, offset, include_details)
+    return list_documents_impl(doc_store, collection_name, limit, offset, include_details)
 
 
 # =============================================================================

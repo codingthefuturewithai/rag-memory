@@ -243,66 +243,143 @@ class DocumentStore:
             return None
 
     def list_source_documents(
-        self, collection_name: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
+        self,
+        collection_name: Optional[str] = None,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        include_details: bool = False
+    ) -> Dict[str, Any]:
         """
-        List all source documents, optionally filtered by collection.
+        List all source documents, optionally filtered by collection, with pagination.
 
         Args:
             collection_name: Optional collection filter
+            limit: Maximum number of documents to return (None = all)
+            offset: Number of documents to skip for pagination
+            include_details: If True, includes file_type, file_size, timestamps, collections, metadata
 
         Returns:
-            List of document dictionaries
+            Dictionary with:
+            - documents: List of document dictionaries
+            - total_count: Total documents matching filter
+            - returned_count: Documents in this response
+            - has_more: Whether more pages available
         """
         conn = self.db.connect()
 
+        # Get total count first
         with conn.cursor() as cur:
             if collection_name:
                 cur.execute(
                     """
-                    SELECT DISTINCT
-                        sd.id, sd.filename, sd.file_type,
-                        sd.file_size, sd.created_at,
-                        COUNT(dc.id) as chunk_count
+                    SELECT COUNT(DISTINCT sd.id)
                     FROM source_documents sd
                     JOIN document_chunks dc ON dc.source_document_id = sd.id
                     JOIN chunk_collections cc ON cc.chunk_id = dc.id
                     JOIN collections c ON c.id = cc.collection_id
                     WHERE c.name = %s
-                    GROUP BY sd.id
-                    ORDER BY sd.created_at DESC
                     """,
                     (collection_name,),
                 )
             else:
-                cur.execute(
-                    """
-                    SELECT
-                        sd.id, sd.filename, sd.file_type,
-                        sd.file_size, sd.created_at,
-                        COUNT(dc.id) as chunk_count
-                    FROM source_documents sd
-                    LEFT JOIN document_chunks dc ON dc.source_document_id = sd.id
-                    GROUP BY sd.id
-                    ORDER BY sd.created_at DESC
-                    """
-                )
+                cur.execute("SELECT COUNT(*) FROM source_documents")
 
+            total_count = cur.fetchone()[0]
+
+        # Build query based on include_details flag
+        if include_details:
+            # Extended query with all metadata
+            base_select = """
+                SELECT
+                    sd.id, sd.filename, sd.file_type,
+                    sd.file_size, sd.created_at, sd.updated_at,
+                    sd.metadata, COUNT(dc.id) as chunk_count
+                FROM source_documents sd
+                LEFT JOIN document_chunks dc ON dc.source_document_id = sd.id
+            """
+        else:
+            # Minimal query
+            base_select = """
+                SELECT
+                    sd.id, sd.filename, COUNT(dc.id) as chunk_count
+                FROM source_documents sd
+                LEFT JOIN document_chunks dc ON dc.source_document_id = sd.id
+            """
+
+        # Add collection filter if specified
+        if collection_name:
+            query = base_select + """
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                JOIN collections c ON c.id = cc.collection_id
+                WHERE c.name = %s
+                GROUP BY sd.id
+                ORDER BY sd.created_at DESC
+            """
+            params = [collection_name]
+        else:
+            query = base_select + """
+                GROUP BY sd.id
+                ORDER BY sd.created_at DESC
+            """
+            params = []
+
+        # Add pagination
+        if limit is not None:
+            query += " LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+
+        # Execute query
+        with conn.cursor() as cur:
+            cur.execute(query, params)
             results = cur.fetchall()
-            documents = []
-            for row in results:
-                documents.append(
-                    {
-                        "id": row[0],
-                        "filename": row[1],
-                        "file_type": row[2],
-                        "file_size": row[3],
-                        "created_at": row[4],
-                        "chunk_count": row[5],
-                    }
-                )
 
-            return documents
+        # Build document list
+        documents = []
+        for row in results:
+            if include_details:
+                doc = {
+                    "id": row[0],
+                    "filename": row[1],
+                    "file_type": row[2],
+                    "file_size": row[3],
+                    "created_at": row[4],
+                    "updated_at": row[5],
+                    "metadata": row[6] or {},
+                    "chunk_count": row[7],
+                }
+
+                # Get collections for this document
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT c.name
+                        FROM collections c
+                        JOIN chunk_collections cc ON cc.collection_id = c.id
+                        JOIN document_chunks dc ON dc.id = cc.chunk_id
+                        WHERE dc.source_document_id = %s
+                        """,
+                        (row[0],)
+                    )
+                    doc["collections"] = [r[0] for r in cur.fetchall()]
+            else:
+                # Minimal response
+                doc = {
+                    "id": row[0],
+                    "filename": row[1],
+                    "chunk_count": row[2],
+                }
+
+            documents.append(doc)
+
+        returned_count = len(documents)
+        has_more = (offset + returned_count) < total_count
+
+        return {
+            "documents": documents,
+            "total_count": total_count,
+            "returned_count": returned_count,
+            "has_more": has_more
+        }
 
     def get_document_chunks(self, source_id: int) -> List[Dict[str, Any]]:
         """
