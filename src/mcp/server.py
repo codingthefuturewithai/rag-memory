@@ -708,10 +708,26 @@ async def ingest_file(
     """
     Ingest a text-based file from the file system.
 
-    IMPORTANT: Requires file system access. Most MCP agents should use
-    ingest_text() or ingest_url() instead unless they have local file access.
+    **FILE SYSTEM ACCESS REQUIREMENT:**
+    This tool requires the MCP server to have access to the file path you provide.
+
+    Depending on how this MCP server is hosted, it may or may not have access to files
+    or directories. If file access fails, you will receive:
+
+    FileNotFoundError: "File not found: {file_path}"
+
+    When you see this error, read the file content through other means and use
+    ingest_text() instead.
 
     IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
+
+    IMPORTANT - PROCESSING TIME:
+    Processing time depends on file size:
+    - Small files (<100KB): Typically completes in seconds
+    - Large files (>1MB): Can take a minute or longer
+
+    The MCP server will continue processing even if your client times out. You may need
+    to configure longer timeout values when ingesting large files.
 
     Supported file types (text-based only):
         ✓ Plain text (.txt, .md, .rst)
@@ -752,9 +768,9 @@ async def ingest_file(
         }
 
     Raises:
-        FileNotFoundError: If file doesn't exist
+        FileNotFoundError: If file doesn't exist - "File not found: {file_path}"
         UnicodeDecodeError: If file is binary/not text
-        ValueError: If collection doesn't exist
+        ValueError: If collection doesn't exist - "Collection '{collection_name}' does not exist. Create it first using create_collection('{collection_name}', 'description')."
 
     Example:
         # First, create collection
@@ -783,10 +799,33 @@ async def ingest_directory(
     """
     Ingest multiple text-based files from a directory.
 
-    IMPORTANT: Requires file system access. Most MCP agents should use
-    ingest_text() or ingest_url() instead unless they have local file access.
+    **FILE SYSTEM ACCESS REQUIREMENT:**
+    This tool requires the MCP server to have access to the directory path you provide.
+
+    Depending on how this MCP server is hosted, it may or may not have access to files
+    or directories. If directory access fails, you will receive:
+
+    ValueError: "Directory not found: {directory_path}"
+
+    When you see this error, read the file contents through other means and use
+    ingest_text() for each document.
 
     IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
+
+    IMPORTANT - PROCESSING TIME:
+    Processing time depends on directory size and recursive settings:
+    - Small directories (few files, <1MB total): Typically completes in seconds
+    - Large directories (many files, >10MB total): Can take several minutes
+    - Recursive mode with deep hierarchies: Can take significantly longer
+
+    Factors affecting duration:
+    - Number of files to process
+    - Total size of all files
+    - Directory depth (when recursive=True)
+    - Number of subdirectories scanned
+
+    The MCP server will continue processing even if your client times out. You may need
+    to configure longer timeout values when ingesting large directories or using recursive mode.
 
     Only processes text-based files (see ingest_file for supported types).
     Binary files and files without matching extensions are skipped.
@@ -825,7 +864,8 @@ async def ingest_directory(
         }
 
     Raises:
-        ValueError: If collection doesn't exist
+        ValueError: If directory doesn't exist - "Directory not found: {directory_path}"
+        ValueError: If collection doesn't exist - "Collection '{collection_name}' does not exist. Create it first using create_collection('{collection_name}', 'description')."
 
     Example:
         # First, create collection
