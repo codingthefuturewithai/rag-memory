@@ -830,9 +830,6 @@ def list_documents_impl(
 ) -> Dict[str, Any]:
     """Implementation of list_documents tool."""
     try:
-        # DEBUG LOGGING
-        logger.info(f"list_documents_impl called with: collection_name={collection_name!r}, limit={limit}, offset={offset}, include_details={include_details}")
-
         # Cap limit at 200
         limit = min(limit, 200)
 
@@ -844,8 +841,6 @@ def list_documents_impl(
             collection = coll_mgr.get_collection(collection_name)
             if not collection:
                 raise ValueError(f"Collection '{collection_name}' not found")
-
-            logger.info(f"Filtering by collection: name={collection_name!r}, id={collection['id']}")
 
             # Query documents in specific collection
             with conn.cursor() as cur:
@@ -861,7 +856,6 @@ def list_documents_impl(
                     (collection["id"],),
                 )
                 total_count = cur.fetchone()[0]
-                logger.info(f"Total count for collection {collection_name!r}: {total_count}")
 
                 # Get paginated documents
                 cur.execute(
@@ -885,7 +879,6 @@ def list_documents_impl(
                     (collection["id"], limit, offset),
                 )
                 rows = cur.fetchall()
-                logger.info(f"Query returned {len(rows)} rows for collection {collection_name!r}")
         else:
             # Query all documents
             with conn.cursor() as cur:

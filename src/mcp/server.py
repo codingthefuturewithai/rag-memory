@@ -958,8 +958,6 @@ def list_documents(
     """
     List source documents in the knowledge base.
 
-    DEBUG: Logging parameters at MCP tool wrapper level.
-
     Useful for agents to discover what documents exist before updating or
     deleting them. Can be scoped to a specific collection or list all documents.
 
@@ -1029,7 +1027,6 @@ def list_documents(
             offset += result['returned_count']
             result = list_documents(limit=50, offset=offset)
     """
-    logger.info(f"list_documents MCP tool called with: collection_name={collection_name!r}, limit={limit}, offset={offset}, include_details={include_details}")
     return list_documents_impl(db, coll_mgr, collection_name, limit, offset, include_details)
 
 
