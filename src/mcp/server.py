@@ -8,7 +8,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Optional
 
 from mcp.server.fastmcp import FastMCP
 
@@ -130,7 +129,7 @@ mcp = FastMCP("rag-memory", lifespan=lifespan)
 @mcp.tool()
 def search_documents(
     query: str,
-    collection_name: Optional[str] = None,
+    collection_name: str = None,
     limit: int = 5,
     threshold: float = 0.35,
     include_source: bool = False,
@@ -327,8 +326,8 @@ def update_collection_description(name: str, description: str) -> dict:
 async def ingest_text(
     content: str,
     collection_name: str,
-    document_title: Optional[str] = None,
-    metadata: Optional[dict] = None,
+    document_title: str = None,
+    metadata: dict = None,
     include_chunk_ids: bool = False,
 ) -> dict:
     """
@@ -702,7 +701,7 @@ async def ingest_url(
 async def ingest_file(
     file_path: str,
     collection_name: str,
-    metadata: Optional[dict] = None,
+    metadata: dict = None,
     include_chunk_ids: bool = False,
 ) -> dict:
     """
@@ -792,7 +791,7 @@ async def ingest_file(
 async def ingest_directory(
     directory_path: str,
     collection_name: str,
-    file_extensions: Optional[list[str]] = None,
+    file_extensions: list = None,
     recursive: bool = False,
     include_document_ids: bool = False,
 ) -> dict:
@@ -895,9 +894,9 @@ async def ingest_directory(
 @mcp.tool()
 async def update_document(
     document_id: int,
-    content: Optional[str] = None,
-    title: Optional[str] = None,
-    metadata: Optional[dict] = None,
+    content: str = None,
+    title: str = None,
+    metadata: dict = None,
 ) -> dict:
     """
     Update an existing document's content, title, or metadata.
@@ -990,7 +989,7 @@ async def delete_document(document_id: int) -> dict:
 
 @mcp.tool()
 def list_documents(
-    collection_name: Optional[str] = None,
+    collection_name: str = None,
     limit: int = 50,
     offset: int = 0,
     include_details: bool = False,
