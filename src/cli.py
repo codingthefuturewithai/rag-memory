@@ -1472,5 +1472,136 @@ def document_delete(doc_id, confirm):
         sys.exit(1)
 
 
+# =============================================================================
+# Knowledge Graph Commands
+# =============================================================================
+
+
+@main.group()
+def graph():
+    """Query the Knowledge Graph."""
+    pass
+
+
+@graph.command("query-relationships")
+@click.argument("query")
+@click.option("--limit", default=5, help="Maximum number of relationships to return")
+def graph_query_relationships(query, limit):
+    """
+    Search for entity relationships using natural language.
+
+    Example:
+        rag graph query-relationships "How does quantum computing relate to cryptography?" --limit 5
+    """
+    try:
+        from graphiti_core import Graphiti
+        from src.mcp.tools import query_relationships_impl
+
+        # Initialize Graphiti
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
+
+        graphiti = Graphiti(
+            uri=neo4j_uri,
+            user=neo4j_user,
+            password=neo4j_password
+        )
+
+        graph_store = GraphStore(graphiti)
+
+        console.print(f"[bold blue]Searching Knowledge Graph...[/bold blue]\n")
+        console.print(f"Query: {query}\n")
+
+        # Call business logic layer (same as MCP tool)
+        result = asyncio.run(query_relationships_impl(graph_store, query, num_results=limit))
+
+        if result["status"] == "unavailable":
+            console.print("[yellow]Knowledge Graph is not available. Only RAG search is enabled.[/yellow]")
+            sys.exit(1)
+
+        if not result["relationships"]:
+            console.print("[yellow]No relationships found.[/yellow]")
+            return
+
+        console.print(f"[bold green]Found {result['num_results']} relationship(s):[/bold green]\n")
+
+        for i, rel in enumerate(result["relationships"], 1):
+            console.print(f"[bold cyan]{i}. {rel['relationship_type']}[/bold cyan]")
+            console.print(f"   {rel['fact']}")
+            console.print(f"   Valid from: {rel.get('valid_from', 'N/A')}")
+            if rel.get("valid_until"):
+                console.print(f"   Valid until: {rel['valid_until']}")
+            console.print()
+
+    except ImportError:
+        console.print("[bold red]Error: Graphiti not installed. Knowledge Graph features unavailable.[/bold red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
+@graph.command("query-temporal")
+@click.argument("query")
+@click.option("--limit", default=10, help="Maximum number of timeline items to return")
+def graph_query_temporal(query, limit):
+    """
+    Query how knowledge evolved over time using temporal reasoning.
+
+    Example:
+        rag graph query-temporal "How has quantum computing understanding evolved?" --limit 10
+    """
+    try:
+        from graphiti_core import Graphiti
+        from src.mcp.tools import query_temporal_impl
+
+        # Initialize Graphiti
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
+
+        graphiti = Graphiti(
+            uri=neo4j_uri,
+            user=neo4j_user,
+            password=neo4j_password
+        )
+
+        graph_store = GraphStore(graphiti)
+
+        console.print(f"[bold blue]Searching Knowledge Graph Timeline...[/bold blue]\n")
+        console.print(f"Query: {query}\n")
+
+        # Call business logic layer (same as MCP tool)
+        result = asyncio.run(query_temporal_impl(graph_store, query, num_results=limit))
+
+        if result["status"] == "unavailable":
+            console.print("[yellow]Knowledge Graph is not available. Only RAG search is enabled.[/yellow]")
+            sys.exit(1)
+
+        if not result["timeline"]:
+            console.print("[yellow]No temporal data found.[/yellow]")
+            return
+
+        console.print(f"[bold green]Found {result['num_results']} timeline item(s):[/bold green]\n")
+
+        for i, item in enumerate(result["timeline"], 1):
+            status_icon = "✅" if item["status"] == "current" else "⏰"
+            console.print(f"[bold cyan]{status_icon} {i}. {item['relationship_type']}[/bold cyan]")
+            console.print(f"   {item['fact']}")
+            console.print(f"   Valid from: {item.get('valid_from', 'N/A')}")
+            if item.get("valid_until"):
+                console.print(f"   Valid until: {item['valid_until']}")
+            console.print(f"   Status: {item['status']}")
+            console.print()
+
+    except ImportError:
+        console.print("[bold red]Error: Graphiti not installed. Knowledge Graph features unavailable.[/bold red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()
