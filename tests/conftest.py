@@ -52,11 +52,17 @@ database_url = os.getenv("DATABASE_URL", "")
 neo4j_uri = os.getenv("NEO4J_URI", "")
 env_name = os.getenv("ENV_NAME", "unknown")
 
+# Get expected test ports from environment variables
+# These should be defined in .env.test (or .env.dev for fallback)
+expected_test_postgres_port = os.getenv("POSTGRES_PORT", "")
+expected_test_postgres_db = os.getenv("POSTGRES_DB", "")
+expected_neo4j_host = os.getenv("NEO4J_URI", "")
+
 # Check for production indicators
 is_supabase = "supabase.com" in database_url
-is_dev_postgres = "54320" in database_url or "rag_memory_dev" in database_url
-is_test_postgres = "54323" in database_url or "rag_memory_test" in database_url
-is_test_neo4j = "7689" in neo4j_uri
+is_dev_postgres = "rag_memory_dev" in database_url
+is_test_postgres = "rag_memory_test" in expected_test_postgres_db and expected_test_postgres_port in database_url
+is_test_neo4j = expected_neo4j_host in neo4j_uri
 
 # ============================================================================
 # Safety checks before running tests
@@ -79,7 +85,10 @@ if not is_test_postgres:
     if not is_dev_postgres:
         print("⚠️  WARNING: DATABASE_URL not pointing to test or dev server")
         print(f"   DATABASE_URL: {database_url}")
-        print("   Expected test database on port 54323 or dev on 54320")
+        if expected_test_postgres_port:
+            print(f"   Expected test database on port {expected_test_postgres_port} or dev on similar pattern")
+        else:
+            print("   Cannot determine expected test port - POSTGRES_PORT not set in environment")
     else:
         print("⚠️  WARNING: Using development database instead of test database")
         print("   This is suboptimal - development data may be affected by tests")
