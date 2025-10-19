@@ -1096,7 +1096,7 @@ async def query_relationships(
     - Connection queries - "What connects project A to project B?"
     - Relationship discovery - "Show me relationships involving RAG systems"
 
-    **Note:** Knowledge Graph must be enabled (Neo4j running). If unavailable,
+    **Note:** Knowledge Graph must be enabled and available. If unavailable,
     returns status="unavailable" with an empty relationships list.
 
     Args:
@@ -1165,7 +1165,7 @@ async def query_temporal(
     - Trend analysis - "Show me how my product priorities evolved"
     - Consistency checking - "What beliefs changed about X?"
 
-    **Note:** Knowledge Graph must be enabled (Neo4j running). If unavailable,
+    **Note:** Knowledge Graph must be enabled and available. If unavailable,
     returns status="unavailable" with an empty timeline list.
 
     Args:
