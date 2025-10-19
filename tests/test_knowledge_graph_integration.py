@@ -11,7 +11,9 @@ No external dependencies or pre-existing data required.
 
 import pytest
 import pytest_asyncio
+from datetime import datetime
 from graphiti_core import Graphiti
+from graphiti_core.nodes import EpisodeType
 
 
 @pytest_asyncio.fixture
@@ -71,7 +73,9 @@ class TestKnowledgeGraphIntegration:
         result = await graphiti.add_episode(
             name=episode_name,
             episode_body=test_content,
-            source="test"
+            source=EpisodeType.message,
+            source_description="Integration test - quantum computing",
+            reference_time=datetime.now()
         )
 
         # STEP 2: VERIFY - Check that episode was created
@@ -109,7 +113,9 @@ class TestKnowledgeGraphIntegration:
         result1 = await graphiti.add_episode(
             name="test_episode_python",
             episode_body=episode1_content,
-            source="test"
+            source=EpisodeType.message,
+            source_description="Integration test - Python",
+            reference_time=datetime.now()
         )
 
         # Create second episode
@@ -117,7 +123,9 @@ class TestKnowledgeGraphIntegration:
         result2 = await graphiti.add_episode(
             name="test_episode_javascript",
             episode_body=episode2_content,
-            source="test"
+            source=EpisodeType.message,
+            source_description="Integration test - JavaScript",
+            reference_time=datetime.now()
         )
 
         # VERIFY both exist
