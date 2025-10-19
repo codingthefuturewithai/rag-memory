@@ -65,13 +65,12 @@ def get_version():
 
 def initialize_components():
     """
-    Initialize RAG and Knowledge Graph components.
+    Initialize RAG components only.
 
-    Matches MCP server's lifespan initialization logic exactly.
-    Gracefully falls back to RAG-only mode if Knowledge Graph unavailable.
+    Knowledge Graph components (graph_store, unified_mediator) are initialized
+    lazily within async context to avoid event loop conflicts.
     """
     global db, embedder, coll_mgr, doc_store
-    global graph_store, unified_mediator
 
     # Initialize RAG components
     logger.info("Initializing RAG components...")
@@ -81,12 +80,22 @@ def initialize_components():
     doc_store = get_document_store(db, embedder, coll_mgr)
     logger.info("RAG components initialized")
 
-    # Initialize Knowledge Graph components (match MCP server exactly)
+
+async def initialize_graph_components():
+    """
+    Initialize Knowledge Graph components within async context.
+
+    This MUST be called from within an async function to avoid
+    "Future attached to a different loop" errors.
+
+    Returns:
+        tuple: (graph_store, unified_mediator) if successful, (None, None) if failed
+    """
     logger.info("Initializing Knowledge Graph components...")
     try:
         from graphiti_core import Graphiti
 
-        # Read Neo4j connection details from environment (docker-compose.graphiti.yml)
+        # Read Neo4j connection details from environment
         neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
@@ -96,16 +105,17 @@ def initialize_components():
             user=neo4j_user,
             password=neo4j_password
         )
-        asyncio.run(graphiti.build_indices_and_constraints())
+        await graphiti.build_indices_and_constraints()
 
         graph_store = GraphStore(graphiti)
         unified_mediator = UnifiedIngestionMediator(db, embedder, coll_mgr, graph_store)
         logger.info("Knowledge Graph components initialized")
+        return graph_store, unified_mediator
+
     except Exception as e:
         logger.warning(f"Failed to initialize Knowledge Graph: {e}")
         logger.warning("Knowledge Graph features will be disabled. RAG-only mode.")
-        graph_store = None
-        unified_mediator = None
+        return None, None
 
 
 @click.group()
@@ -608,8 +618,11 @@ def ingest_file_cmd(path, collection, metadata):
 
             console.print(f"[bold blue]Ingesting file: {path}[/bold blue]")
 
+            # Initialize Knowledge Graph components (lazy initialization within async context)
+            local_graph_store, local_unified_mediator = await initialize_graph_components()
+
             # Use unified mediator if available (match MCP server logic)
-            if unified_mediator:
+            if local_unified_mediator:
                 logger.info(f"Using unified mediator for file: {Path(path).name}")
 
                 # Read file content
@@ -624,7 +637,7 @@ def ingest_file_cmd(path, collection, metadata):
                     "file_size": file_path_obj.stat().st_size,
                 })
 
-                result = await unified_mediator.ingest_text(
+                result = await local_unified_mediator.ingest_text(
                     content=file_content,
                     collection_name=collection,
                     document_title=file_path_obj.name,
@@ -635,8 +648,7 @@ def ingest_file_cmd(path, collection, metadata):
                     f"[bold green]✓ Ingested file (ID: {result['source_document_id']}) "
                     f"with {result['num_chunks']} chunks to collection '{collection}'[/bold green]"
                 )
-                if unified_mediator:
-                    console.print(f"[dim]Entities extracted: {result.get('entities_extracted', 0)}[/dim]")
+                console.print(f"[dim]Entities extracted: {result.get('entities_extracted', 0)}[/dim]")
 
             # Fallback: RAG-only mode
             else:
