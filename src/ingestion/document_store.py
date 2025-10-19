@@ -308,17 +308,26 @@ class DocumentStore:
 
         # Add collection filter if specified
         if collection_name:
+            if include_details:
+                group_by = "GROUP BY sd.id, sd.filename, sd.file_type, sd.file_size, sd.created_at, sd.updated_at, sd.metadata"
+            else:
+                group_by = "GROUP BY sd.id, sd.filename"
+
             query = base_select + """
                 JOIN chunk_collections cc ON cc.chunk_id = dc.id
                 JOIN collections c ON c.id = cc.collection_id
                 WHERE c.name = %s
-                GROUP BY sd.id
+                """ + group_by + """
                 ORDER BY sd.created_at DESC
             """
             params = [collection_name]
         else:
-            query = base_select + """
-                GROUP BY sd.id
+            if include_details:
+                group_by = "GROUP BY sd.id, sd.filename, sd.file_type, sd.file_size, sd.created_at, sd.updated_at, sd.metadata"
+            else:
+                group_by = "GROUP BY sd.id, sd.filename"
+
+            query = base_select + group_by + """
                 ORDER BY sd.created_at DESC
             """
             params = []
