@@ -125,7 +125,8 @@ class TestRecrawlCommand:
         )
 
         # Verify both documents exist
-        docs = doc_store.list_source_documents(collection_name)
+        result = doc_store.list_source_documents(collection_name)
+        docs = result['documents']
         assert len(docs) == 2
 
         # Step 2: Simulate recrawl by deleting only documents matching https://example.com
@@ -157,7 +158,8 @@ class TestRecrawlCommand:
                 )
 
         # Step 3: Verify only example.com was deleted, httpbin.org remains
-        docs_after = doc_store.list_source_documents(collection_name)
+        result = doc_store.list_source_documents(collection_name)
+        docs_after = result['documents']
         assert len(docs_after) == 1
         assert docs_after[0]["id"] == source_id_httpbin
 
@@ -253,7 +255,8 @@ class TestRecrawlCommand:
                 cur.execute("DELETE FROM source_documents WHERE id = %s", (doc_id,))
 
         # Verify old content is deleted
-        docs_after_delete = doc_store.list_source_documents(collection_name)
+        result = doc_store.list_source_documents(collection_name)
+        docs_after_delete = result['documents']
         assert len(docs_after_delete) == 0
 
         # Step 3: Re-crawl with new session
@@ -315,7 +318,8 @@ class TestRecrawlCommand:
                 old_source_ids.append(source_id)
 
         # Verify all pages are in the collection
-        docs_old = doc_store.list_source_documents(collection_name)
+        result = doc_store.list_source_documents(collection_name)
+        docs_old = result['documents']
         assert len(docs_old) == old_page_count
 
         # Step 2: Simulate recrawl - delete all pages with matching crawl_root_url
@@ -339,7 +343,8 @@ class TestRecrawlCommand:
                 cur.execute("DELETE FROM source_documents WHERE id = %s", (doc_id,))
 
         # Verify all pages are deleted
-        docs_after_delete = doc_store.list_source_documents(collection_name)
+        result = doc_store.list_source_documents(collection_name)
+        docs_after_delete = result['documents']
         assert len(docs_after_delete) == 0
 
         # Step 3: Re-crawl with new session
@@ -360,7 +365,8 @@ class TestRecrawlCommand:
                 new_source_ids.append(source_id)
 
         # Verify new pages are in the collection
-        docs_new = doc_store.list_source_documents(collection_name)
+        result = doc_store.list_source_documents(collection_name)
+        docs_new = result['documents']
         assert len(docs_new) == new_page_count
         assert len(docs_new) >= 1  # At least the starting page
 

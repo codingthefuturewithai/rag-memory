@@ -261,7 +261,8 @@ class TestDocumentStore:
     def test_list_source_documents(self, doc_store, test_collection):
         """Test listing source documents."""
         # Get initial count
-        initial_docs = doc_store.list_source_documents(test_collection)
+        result = doc_store.list_source_documents(test_collection)
+        initial_docs = result['documents']
         initial_count = len(initial_docs)
 
         # Ingest some documents
@@ -275,7 +276,8 @@ class TestDocumentStore:
             source_ids.append(source_id)
 
         # List documents in specific collection - should be initial + 3
-        coll_docs = doc_store.list_source_documents(test_collection)
+        result = doc_store.list_source_documents(test_collection)
+        coll_docs = result['documents']
         assert len(coll_docs) == initial_count + 3
 
         # Verify our documents are in the list

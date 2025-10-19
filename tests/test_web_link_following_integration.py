@@ -162,7 +162,8 @@ class TestWebLinkFollowingIntegration:
         assert total_chunks > 0
 
         # Verify all documents are in the collection
-        docs = doc_store.list_source_documents(collection_name)
+        result = doc_store.list_source_documents(collection_name)
+        docs = result['documents']
         doc_ids = [d["id"] for d in docs]
         for source_id in source_ids:
             assert source_id in doc_ids
