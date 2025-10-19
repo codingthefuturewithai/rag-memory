@@ -55,8 +55,8 @@ env_name = os.getenv("ENV_NAME", "unknown")
 # Check for production indicators
 is_supabase = "supabase.com" in database_url
 is_dev_postgres = "54320" in database_url or "rag_memory_dev" in database_url
-is_test_postgres = "54321" in database_url or "rag_memory_test" in database_url
-is_test_neo4j = "7688" in neo4j_uri
+is_test_postgres = "54323" in database_url or "rag_memory_test" in database_url
+is_test_neo4j = "7689" in neo4j_uri
 
 # ============================================================================
 # Safety checks before running tests
@@ -79,7 +79,7 @@ if not is_test_postgres:
     if not is_dev_postgres:
         print("⚠️  WARNING: DATABASE_URL not pointing to test or dev server")
         print(f"   DATABASE_URL: {database_url}")
-        print("   Expected test database on port 54321 or dev on 54320")
+        print("   Expected test database on port 54323 or dev on 54320")
     else:
         print("⚠️  WARNING: Using development database instead of test database")
         print("   This is suboptimal - development data may be affected by tests")

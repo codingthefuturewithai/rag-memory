@@ -12,9 +12,10 @@ Multi-environment infrastructure has been successfully set up with complete prod
    - Persistent data - survives container restarts
 
 2. **docker-compose.test.yml** - Test environment
-   - PostgreSQL on port 54321 (database: `rag_memory_test`)
-   - Neo4j on port 7688 (UI: 7475)
+   - PostgreSQL on port 54323 (database: `rag_memory_test`)
+   - Neo4j on port 7689 (UI: 7476)
    - Ephemeral data - NOT persisted between runs
+   - **Completely isolated ports** - zero conflict with other environments
 
 3. **Environment Configuration Files**
    - `.env.dev` - Development configuration (manual loading)
@@ -56,11 +57,10 @@ docker-compose -f docker-compose.test.yml up -d
 docker-compose -f docker-compose.test.yml ps
 ```
 
-**Will start on:**
-- PostgreSQL: port 54321 (database: `rag_memory_test`)
-- Neo4j: port 7688 (UI: 7475)
-
-**Note:** Port 54321 is currently held by Supabase Kong container. Can be freed when Supabase is no longer needed or configured differently.
+**Will start on (completely isolated, no conflicts):**
+- PostgreSQL: port 54323 (database: `rag_memory_test`)
+- Neo4j: port 7689 (UI: 7476)
+- Completely separate from all other environments - zero port conflicts
 
 ## 🔐 Production Safety Features
 

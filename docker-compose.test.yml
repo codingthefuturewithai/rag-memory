@@ -12,10 +12,10 @@ version: '3.8'
 #   uv run pytest tests/                                  (run all tests)
 #   docker-compose -f docker-compose.test.yml down       (cleanup test data)
 #
-# Ports:
-#   - Postgres:     localhost:54321 (DATABASE_URL: postgresql://raguser:ragpassword@localhost:54321/rag_memory_test)
-#   - Neo4j UI:     http://localhost:7475 (username: neo4j, password: test-password)
-#   - Neo4j Bolt:   localhost:7688 (NEO4J_URI: bolt://localhost:7688)
+# Ports (completely separate from all other environments):
+#   - Postgres:     localhost:54323 (DATABASE_URL: postgresql://raguser:ragpassword@localhost:54323/rag_memory_test)
+#   - Neo4j UI:     http://localhost:7476 (username: neo4j, password: test-password)
+#   - Neo4j Bolt:   localhost:7689 (NEO4J_URI: bolt://localhost:7689)
 #
 # Environment: pytest auto-loads .env.test via conftest.py
 #
@@ -37,7 +37,7 @@ services:
       # Ephemeral mode - temporary tables and no persistence
       POSTGRES_INITDB_ARGS: "-c shared_buffers=128MB -c work_mem=8MB"
     ports:
-      - "54321:5432"
+      - "54323:5432"
     volumes:
       - pgvector_data_test:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -59,8 +59,8 @@ services:
     image: neo4j:5.26-community
     container_name: neo4j-test
     ports:
-      - "7475:7474"  # HTTP - Neo4j Browser UI
-      - "7688:7687"  # Bolt - Database protocol
+      - "7476:7474"  # HTTP - Neo4j Browser UI
+      - "7689:7687"  # Bolt - Database protocol
     environment:
       # Authentication
       NEO4J_AUTH: neo4j/test-password

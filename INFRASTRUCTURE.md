@@ -54,10 +54,10 @@ open http://localhost:7474
 # Password: dev-password
 
 # PostgreSQL Test
-psql postgresql://raguser:ragpassword@localhost:54321/rag_memory_test
+psql postgresql://raguser:ragpassword@localhost:54323/rag_memory_test
 
 # Neo4j Browser Test
-open http://localhost:7475
+open http://localhost:7476
 # Username: neo4j
 # Password: test-password
 ```
@@ -139,10 +139,10 @@ docker-compose -f docker-compose.dev.yml down -v
 
 **Persistence:** ❌ Data is EPHEMERAL (not persisted)
 
-**Ports:**
-- PostgreSQL: `localhost:54321`
-- Neo4j HTTP: `http://localhost:7475`
-- Neo4j Bolt: `localhost:7688`
+**Ports (completely isolated from all other environments):**
+- PostgreSQL: `localhost:54323`
+- Neo4j HTTP: `http://localhost:7476`
+- Neo4j Bolt: `localhost:7689`
 
 **Database Names:**
 - PostgreSQL: `rag_memory_test`
@@ -413,11 +413,11 @@ docker-compose -f docker-compose.test.yml logs neo4j-test
 ```bash
 # PostgreSQL health
 pg_isready -h localhost -p 54320 -U raguser  # Dev
-pg_isready -h localhost -p 54321 -U raguser  # Test
+pg_isready -h localhost -p 54323 -U raguser  # Test
 
 # Neo4j health
 curl http://localhost:7474/browser/           # Dev browser
-curl http://localhost:7475/browser/           # Test browser
+curl http://localhost:7476/browser/           # Test browser
 ```
 
 ## Environment Variables Reference
@@ -426,8 +426,8 @@ curl http://localhost:7475/browser/           # Test browser
 
 | Variable | Dev | Test | Supabase |
 |----------|-----|------|----------|
-| DATABASE_URL | localhost:54320 | localhost:54321 | supabase.com |
-| NEO4J_URI | localhost:7687 | localhost:7688 | localhost:7687 |
+| DATABASE_URL | localhost:54320 | localhost:54323 | supabase.com |
+| NEO4J_URI | localhost:7687 | localhost:7689 | localhost:7687 |
 | POSTGRES_DB | rag_memory_dev | rag_memory_test | postgres (Supabase) |
 | NEO4J_PASSWORD | dev-password | test-password | same as dev |
 | ENV_NAME | development | test | supabase-dev |
