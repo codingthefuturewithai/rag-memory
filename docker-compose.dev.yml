@@ -1,0 +1,99 @@
+version: '3.8'
+
+# ================================================================================
+# DEVELOPMENT ENVIRONMENT - docker-compose.dev.yml
+# ================================================================================
+# Persistent local development servers for manual testing and exploration.
+# Data persists across container restarts.
+#
+# Usage:
+#   docker-compose -f docker-compose.dev.yml up -d
+#   docker-compose -f docker-compose.dev.yml down
+#
+# Ports:
+#   - Postgres:     localhost:54320 (DATABASE_URL: postgresql://raguser:ragpassword@localhost:54320/rag_memory_dev)
+#   - Neo4j UI:     http://localhost:7474 (username: neo4j, password: dev-password)
+#   - Neo4j Bolt:   localhost:7687 (NEO4J_URI: bolt://localhost:7687)
+#
+# Environment: Use .env.dev to point CLI/code to dev servers
+# ================================================================================
+
+services:
+  # ============================================================================
+  # PostgreSQL with pgvector - Development Instance
+  # ============================================================================
+  postgres-dev:
+    image: pgvector/pgvector:pg17
+    container_name: rag-memory-dev
+    environment:
+      POSTGRES_USER: raguser
+      POSTGRES_PASSWORD: ragpassword
+      POSTGRES_DB: rag_memory_dev
+      # Enable persistent mode for development
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c work_mem=16MB"
+    ports:
+      - "54320:5432"
+    volumes:
+      - pgvector_data_dev:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U raguser -d rag_memory_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    labels:
+      description: "RAG Memory - Development PostgreSQL Instance"
+      environment: "development"
+
+  # ============================================================================
+  # Neo4j - Development Instance
+  # ============================================================================
+  neo4j-dev:
+    image: neo4j:5.26-community
+    container_name: neo4j-dev
+    ports:
+      - "7474:7474"  # HTTP - Neo4j Browser UI
+      - "7687:7687"  # Bolt - Database protocol
+    environment:
+      # Authentication
+      NEO4J_AUTH: neo4j/dev-password
+
+      # Performance tuning
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512m
+
+      # APOC plugin for graph algorithms
+      NEO4J_PLUGINS: '["apoc"]'
+
+      # Allow unlimited query execution time for complex graph queries
+      NEO4J_dbms_transaction_timeout: 0
+    volumes:
+      # Persist graph data across restarts
+      - neo4j_data_dev:/data
+      - neo4j_logs_dev:/logs
+      - neo4j_import_dev:/var/lib/neo4j/import
+      - neo4j_plugins_dev:/plugins
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "dev-password", "RETURN 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    labels:
+      description: "RAG Memory - Development Neo4j Instance"
+      environment: "development"
+
+volumes:
+  pgvector_data_dev:
+    driver: local
+  neo4j_data_dev:
+    driver: local
+  neo4j_logs_dev:
+    driver: local
+  neo4j_import_dev:
+    driver: local
+  neo4j_plugins_dev:
+    driver: local
