@@ -12,6 +12,8 @@ CRITICAL SAFETY FEATURES:
 import os
 import sys
 from pathlib import Path
+import asyncio
+import pytest
 
 from src.core.config_loader import load_environment_variables
 
@@ -99,3 +101,63 @@ if not is_test_postgres:
 print(f"ℹ️  Test Environment: {env_name}")
 print(f"ℹ️  Postgres: {database_url.split('@')[1] if '@' in database_url else 'local'}")
 print(f"ℹ️  Neo4j: {neo4j_uri}")
+
+# ============================================================================
+# AUTOMATED NEO4J INITIALIZATION: Initialize schema once per test session
+# ============================================================================
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize_test_neo4j():
+    """
+    Automatically initialize Neo4j test database schema before running any tests.
+
+    This fixture:
+    1. Runs once per test session (not per test)
+    2. Runs automatically without needing to be added to test functions
+    3. Creates Graphiti fulltext indexes and vector indexes required for KG queries
+    4. Handles both test and dev environments gracefully
+    5. Skips silently if Neo4j is not available (e.g., if only testing RAG layer)
+
+    Why this is needed:
+    - Graphiti requires specific indexes to exist (e.g., node_name_and_summary fulltext index)
+    - Without initialization, KG queries fail with "no such fulltext schema index" errors
+    - Manual initialization defeats the purpose of automated testing
+
+    The async operation is wrapped in asyncio.run() because pytest fixtures don't directly
+    support async in session scope (you need pytest-asyncio for that, which we don't use
+    in session scope).
+    """
+    neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7689")
+    neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+    neo4j_password = os.getenv("NEO4J_PASSWORD", "test-password")
+
+    # Skip initialization if Neo4j is not configured
+    if not neo4j_uri:
+        print("⏭️  Skipping Neo4j initialization (NEO4J_URI not set)")
+        return
+
+    try:
+        from graphiti_core import Graphiti
+
+        async def init_db():
+            try:
+                graphiti = Graphiti(
+                    uri=neo4j_uri,
+                    user=neo4j_user,
+                    password=neo4j_password,
+                )
+                await graphiti.build_indices_and_constraints()
+                print("✅ Neo4j test database initialized (fulltext indexes, vector indexes, schema)")
+                await graphiti.close()
+            except Exception as e:
+                print(f"⚠️  Warning: Neo4j initialization failed: {e}")
+                print("   Tests may fail if they depend on Knowledge Graph queries")
+                # Don't raise - let tests proceed anyway (RAG layer might still work)
+
+        asyncio.run(init_db())
+
+    except ImportError:
+        print("⏭️  Skipping Neo4j initialization (graphiti_core not installed)")
+    except Exception as e:
+        print(f"⚠️  Warning: Unexpected error during Neo4j initialization: {e}")
