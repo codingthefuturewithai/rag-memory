@@ -1097,7 +1097,7 @@ async def query_relationships(
     - Relationship discovery - "Show me relationships involving RAG systems"
 
     **Note:** Knowledge Graph must be enabled (Neo4j running). If unavailable,
-    returns status="unavailable" and falls back to RAG-only mode.
+    returns status="unavailable" with an empty relationships list.
 
     Args:
         query: (REQUIRED) Natural language query about relationships
@@ -1166,7 +1166,7 @@ async def query_temporal(
     - Consistency checking - "What beliefs changed about X?"
 
     **Note:** Knowledge Graph must be enabled (Neo4j running). If unavailable,
-    returns status="unavailable" and falls back to RAG-only mode.
+    returns status="unavailable" with an empty timeline list.
 
     Args:
         query: (REQUIRED) Natural language query about temporal changes
