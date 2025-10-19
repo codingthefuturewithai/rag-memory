@@ -3,17 +3,27 @@
 import asyncio
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-# Configure logging and suppress dotenv warnings BEFORE importing dependencies
+# Configure cross-platform file logging (match MCP server)
+log_dir = Path(__file__).parent.parent / "logs"
+log_dir.mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(log_dir / "cli.log"),
+        logging.StreamHandler()  # Also log to stderr
+    ]
 )
 # Suppress dotenv parsing warnings from dependencies (e.g., Crawl4AI)
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
+
+logger = logging.getLogger(__name__)
 
 import click
 from rich.console import Console
@@ -29,8 +39,19 @@ from src.retrieval.hybrid_search import get_hybrid_search
 from src.retrieval.multi_query import get_multi_query_search
 from src.ingestion.web_crawler import crawl_single_page, WebCrawler
 from src.ingestion.website_analyzer import analyze_website
+from src.unified import GraphStore, UnifiedIngestionMediator
 
 console = Console()
+
+# Global variables to hold RAG components (initialized by startup)
+db = None
+embedder = None
+coll_mgr = None
+doc_store = None
+
+# Global variables for Knowledge Graph components (match MCP server)
+graph_store = None
+unified_mediator = None
 
 
 def get_version():
@@ -42,6 +63,51 @@ def get_version():
         return "unknown"
 
 
+def initialize_components():
+    """
+    Initialize RAG and Knowledge Graph components.
+
+    Matches MCP server's lifespan initialization logic exactly.
+    Gracefully falls back to RAG-only mode if Knowledge Graph unavailable.
+    """
+    global db, embedder, coll_mgr, doc_store
+    global graph_store, unified_mediator
+
+    # Initialize RAG components
+    logger.info("Initializing RAG components...")
+    db = get_database()
+    embedder = get_embedding_generator()
+    coll_mgr = get_collection_manager(db)
+    doc_store = get_document_store(db, embedder, coll_mgr)
+    logger.info("RAG components initialized")
+
+    # Initialize Knowledge Graph components (match MCP server exactly)
+    logger.info("Initializing Knowledge Graph components...")
+    try:
+        from graphiti_core import Graphiti
+
+        # Read Neo4j connection details from environment (docker-compose.graphiti.yml)
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
+
+        graphiti = Graphiti(
+            uri=neo4j_uri,
+            user=neo4j_user,
+            password=neo4j_password
+        )
+        asyncio.run(graphiti.build_indices_and_constraints())
+
+        graph_store = GraphStore(graphiti)
+        unified_mediator = UnifiedIngestionMediator(db, embedder, coll_mgr, graph_store)
+        logger.info("Knowledge Graph components initialized")
+    except Exception as e:
+        logger.warning(f"Failed to initialize Knowledge Graph: {e}")
+        logger.warning("Knowledge Graph features will be disabled. RAG-only mode.")
+        graph_store = None
+        unified_mediator = None
+
+
 @click.group()
 @click.version_option(version=get_version(), prog_name="rag")
 def main():
@@ -49,6 +115,11 @@ def main():
     # Check for first-run setup before executing any command
     from src.core.first_run import ensure_config_or_exit
     ensure_config_or_exit()
+
+    # Initialize components if not already initialized
+    global db
+    if db is None:
+        initialize_components()
 
 
 @main.command()
@@ -525,26 +596,64 @@ def ingest():
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--collection", required=True, help="Collection name")
 @click.option("--metadata", help="Additional metadata as JSON string")
-def ingest_file(path, collection, metadata):
-    """Ingest a document from a file with automatic chunking."""
-    try:
-        db = get_database()
-        embedder = get_embedding_generator()
-        coll_mgr = get_collection_manager(db)
-        doc_store = get_document_store(db, embedder, coll_mgr)
+def ingest_file_cmd(path, collection, metadata):
+    """Ingest a document from a file with automatic chunking.
 
-        metadata_dict = json.loads(metadata) if metadata else None
+    Routes through unified mediator to update both RAG store and Knowledge Graph.
+    Falls back to RAG-only mode if Knowledge Graph unavailable.
+    """
+    async def run_ingest():
+        try:
+            metadata_dict = json.loads(metadata) if metadata else None
 
-        console.print(f"[bold blue]Ingesting file: {path}[/bold blue]")
+            console.print(f"[bold blue]Ingesting file: {path}[/bold blue]")
 
-        source_id, chunk_ids = doc_store.ingest_file(path, collection, metadata_dict)
-        console.print(
-            f"[bold green]✓ Ingested file (ID: {source_id}) with {len(chunk_ids)} chunks to collection '{collection}'[/bold green]"
-        )
+            # Use unified mediator if available (match MCP server logic)
+            if unified_mediator:
+                logger.info(f"Using unified mediator for file: {Path(path).name}")
 
-    except Exception as e:
-        console.print(f"[bold red]Error: {e}[/bold red]")
-        sys.exit(1)
+                # Read file content
+                with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                    file_content = f.read()
+
+                # Merge file metadata
+                file_metadata = metadata_dict.copy() if metadata_dict else {}
+                file_path_obj = Path(path)
+                file_metadata.update({
+                    "file_type": file_path_obj.suffix.lstrip(".").lower() or "text",
+                    "file_size": file_path_obj.stat().st_size,
+                })
+
+                result = await unified_mediator.ingest_text(
+                    content=file_content,
+                    collection_name=collection,
+                    document_title=file_path_obj.name,
+                    metadata=file_metadata
+                )
+
+                console.print(
+                    f"[bold green]✓ Ingested file (ID: {result['source_document_id']}) "
+                    f"with {result['num_chunks']} chunks to collection '{collection}'[/bold green]"
+                )
+                if unified_mediator:
+                    console.print(f"[dim]Entities extracted: {result.get('entities_extracted', 0)}[/dim]")
+
+            # Fallback: RAG-only mode
+            else:
+                logger.info(f"Using RAG-only mode for file: {Path(path).name}")
+                source_id, chunk_ids = doc_store.ingest_file(path, collection, metadata_dict)
+                console.print(
+                    f"[bold green]✓ Ingested file (ID: {source_id}) with {len(chunk_ids)} chunks to collection '{collection}'[/bold green]"
+                )
+                console.print("[dim]Knowledge Graph not available - RAG-only mode[/dim]")
+
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+    asyncio.run(run_ingest())
 
 
 @ingest.command("directory")
