@@ -37,7 +37,7 @@ services:
       # Ephemeral mode - temporary tables and no persistence
       POSTGRES_INITDB_ARGS: "-c shared_buffers=128MB -c work_mem=8MB"
     ports:
-      - "54323:5432"
+      - "${TEST_POSTGRES_PORT:-54323}:5432"
     volumes:
       - pgvector_data_test:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -59,8 +59,8 @@ services:
     image: neo4j:5.26-community
     container_name: neo4j-test
     ports:
-      - "7476:7474"  # HTTP - Neo4j Browser UI
-      - "7689:7687"  # Bolt - Database protocol
+      - "${TEST_NEO4J_HTTP_PORT:-7476}:7474"  # HTTP - Neo4j Browser UI
+      - "${TEST_NEO4J_BOLT_PORT:-7689}:7687"  # Bolt - Database protocol
     environment:
       # Authentication
       NEO4J_AUTH: neo4j/test-password
