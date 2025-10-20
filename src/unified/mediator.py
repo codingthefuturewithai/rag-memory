@@ -10,6 +10,7 @@ the second operation fails. Two-phase commit will be added in Phase 2.
 """
 
 import logging
+from datetime import datetime
 from typing import Optional, Any
 from src.core.database import Database
 from src.core.embeddings import EmbeddingGenerator
@@ -107,7 +108,9 @@ class UnifiedIngestionMediator:
             entities = await self.graph_store.add_knowledge(
                 content=content,
                 source_document_id=source_id,
-                metadata=graph_metadata
+                metadata=graph_metadata,
+                group_id=collection_name,
+                ingestion_timestamp=datetime.now()
             )
             logger.info(f"✅ Graph ingestion completed - {len(entities)} entities extracted")
         except Exception as e:

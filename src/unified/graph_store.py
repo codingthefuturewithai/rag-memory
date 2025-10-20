@@ -32,7 +32,9 @@ class GraphStore:
         self,
         content: str,
         source_document_id: int,
-        metadata: Optional[dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None,
+        group_id: Optional[str] = None,
+        ingestion_timestamp: Optional[datetime] = None
     ) -> list[Any]:
         """
         Add knowledge to the graph with automatic entity extraction.
@@ -41,6 +43,8 @@ class GraphStore:
             content: Text content to analyze for entities and relationships
             source_document_id: ID of source document in RAG store (for linking)
             metadata: Optional metadata from RAG ingestion (e.g., collection_name, tags)
+            group_id: Collection identifier (links episode to collection in Graphiti)
+            ingestion_timestamp: When the document was ingested (for temporal tracking)
 
         Returns:
             List of extracted entity nodes
@@ -89,15 +93,18 @@ class GraphStore:
                 source_desc += f" | depth: {metadata['crawl_depth']}"
 
         logger.info(f"   Episode: {episode_name}, Source: {source_desc}")
+        if group_id:
+            logger.info(f"   Group/Collection: {group_id}")
         logger.info(f"⏳ Calling Graphiti.add_episode() - This may take 30-60 seconds for LLM entity extraction...")
 
-        # Add episode to graph
+        # Add episode to graph with all metadata
         result = await self.graphiti.add_episode(
             name=episode_name,
             episode_body=content,
             source=EpisodeType.message,
             source_description=source_desc,
-            reference_time=datetime.now()
+            reference_time=ingestion_timestamp or datetime.now(),
+            group_id=group_id
         )
 
         num_entities = len(result.nodes) if result.nodes else 0
