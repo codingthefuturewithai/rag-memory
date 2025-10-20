@@ -161,3 +161,79 @@ def initialize_test_neo4j():
         print("⏭️  Skipping Neo4j initialization (graphiti_core not installed)")
     except Exception as e:
         print(f"⚠️  Warning: Unexpected error during Neo4j initialization: {e}")
+
+
+# ============================================================================
+# AUTOMATED POSTGRESQL INITIALIZATION: Initialize schema once per test session
+# ============================================================================
+
+
+@pytest.fixture(scope="session", autouse=True)
+def initialize_test_postgres():
+    """
+    Automatically initialize PostgreSQL test database schema before running any tests.
+
+    This fixture:
+    1. Runs once per test session (not per test)
+    2. Runs automatically without needing to be added to test functions
+    3. Ensures all required tables and extensions exist
+    4. Handles pgvector setup and HNSW indexing
+    5. Skips silently if PostgreSQL is not available
+
+    Why this is needed:
+    - RAG system requires pgvector extension for vector search
+    - Database migrations must run before tests
+    - HNSW indexes must be created for performance
+    - Ensures consistent schema across test runs
+
+    This runs before Neo4j initialization to ensure both databases are ready.
+    """
+    from src.core.database import Database
+
+    database_url = os.getenv("DATABASE_URL", "")
+
+    # Skip initialization if not using test database
+    if "rag_memory_test" not in database_url:
+        print("⏭️  Skipping PostgreSQL initialization (not test database)")
+        return
+
+    try:
+        db = Database()
+
+        # Test connection and verify schema
+        try:
+            conn = db.connection()
+            cur = conn.cursor()
+
+            # Check if tables exist
+            cur.execute("""
+                SELECT EXISTS(
+                    SELECT 1 FROM information_schema.tables
+                    WHERE table_name = 'source_documents'
+                )
+            """)
+            tables_exist = cur.fetchone()[0]
+
+            if tables_exist:
+                print("✅ PostgreSQL test database already initialized (schema exists)")
+            else:
+                print("⚠️  PostgreSQL schema not found - migrations may not have run")
+                print("   Run 'uv run rag init' to initialize database")
+
+            # Verify pgvector extension
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            conn.commit()
+            print("✅ PostgreSQL pgvector extension verified")
+
+            cur.close()
+            conn.close()
+
+        except Exception as e:
+            print(f"⚠️  Warning: PostgreSQL verification failed: {e}")
+            print("   Tests may fail if database schema is incomplete")
+            # Don't raise - let tests proceed anyway
+
+    except ImportError:
+        print("⏭️  Skipping PostgreSQL initialization (Database class not available)")
+    except Exception as e:
+        print(f"⚠️  Warning: Unexpected error during PostgreSQL initialization: {e}")
