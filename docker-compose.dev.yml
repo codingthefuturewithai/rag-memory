@@ -15,7 +15,7 @@ version: '3.8'
 #   - Neo4j UI:     http://localhost:7474 (username: neo4j, password: dev-password)
 #   - Neo4j Bolt:   localhost:7687 (NEO4J_URI: bolt://localhost:7687)
 #
-# Environment: Use .env.dev to point CLI/code to dev servers
+# Environment: Automatically loads .env.dev
 # ================================================================================
 
 services:

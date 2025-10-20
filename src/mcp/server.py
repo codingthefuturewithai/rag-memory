@@ -134,6 +134,7 @@ def search_documents(
     threshold: float = 0.35,
     include_source: bool = False,
     include_metadata: bool = False,
+    metadata_filter: dict = None,
 ) -> list[dict]:
     """
     Search for relevant document chunks using vector similarity.
@@ -177,6 +178,8 @@ def search_documents(
         include_source: If True, includes full source document content in results
         include_metadata: If True, includes chunk_id, chunk_index, char_start, char_end,
                          and metadata dict. Default: False (minimal response).
+        metadata_filter: Optional dict for filtering by custom metadata fields (e.g., {"domain": "backend"}).
+                        All fields must match (AND logic). Default: None (no filtering).
 
     Returns:
         List of matching chunks ordered by similarity (highest first).
@@ -227,7 +230,7 @@ def search_documents(
     Performance: ~400-500ms per query (includes embedding generation + vector search)
     """
     return search_documents_impl(
-        searcher, query, collection_name, limit, threshold, include_source, include_metadata
+        searcher, query, collection_name, limit, threshold, include_source, include_metadata, metadata_filter
     )
 
 

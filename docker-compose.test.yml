@@ -17,7 +17,7 @@ version: '3.8'
 #   - Neo4j UI:     http://localhost:7476 (username: neo4j, password: test-password)
 #   - Neo4j Bolt:   localhost:7689 (NEO4J_URI: bolt://localhost:7689)
 #
-# Environment: pytest auto-loads .env.test via conftest.py
+# Environment: Automatically loads .env.test
 #
 # ⚠️  WARNING: Data in test servers is INTENTIONALLY NOT PERSISTENT
 #     Use 'docker-compose -f docker-compose.test.yml down -v' to guarantee cleanup

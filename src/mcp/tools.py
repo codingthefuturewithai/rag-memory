@@ -29,6 +29,7 @@ def search_documents_impl(
     threshold: float,
     include_source: bool,
     include_metadata: bool,
+    metadata_filter: dict = None,
 ) -> List[Dict[str, Any]]:
     """Implementation of search_documents tool."""
     try:
@@ -39,6 +40,7 @@ def search_documents_impl(
             threshold=threshold if threshold is not None else 0.0,
             collection_name=collection_name,
             include_source=include_source,
+            metadata_filter=metadata_filter,
         )
 
         # Convert ChunkSearchResult objects to dicts
@@ -930,11 +932,9 @@ async def query_relationships_impl(
                 if hasattr(edge, 'target_node_uuid'):
                     rel["target_node_id"] = str(edge.target_node_uuid)
 
-                # Add temporal validity info if available
+                # Add when relationship was established (temporal info is for query_temporal only)
                 if hasattr(edge, 'valid_at') and edge.valid_at:
                     rel["valid_from"] = edge.valid_at.isoformat()
-                if hasattr(edge, 'invalid_at') and edge.invalid_at:
-                    rel["valid_until"] = edge.invalid_at.isoformat()
 
                 relationships.append(rel)
             except Exception as e:

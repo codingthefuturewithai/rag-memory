@@ -593,6 +593,61 @@ def ingest():
     pass
 
 
+@ingest.command("text")
+@click.argument("content")
+@click.option("--collection", required=True, help="Collection name")
+@click.option("--title", help="Document title")
+@click.option("--metadata", help="Additional metadata as JSON string")
+def ingest_text_cmd(content, collection, title, metadata):
+    """Ingest text content directly with automatic chunking.
+
+    Routes through unified mediator to update both RAG store and Knowledge Graph.
+    Falls back to RAG-only mode if Knowledge Graph unavailable.
+    """
+    async def run_ingest():
+        try:
+            metadata_dict = json.loads(metadata) if metadata else None
+
+            console.print(f"[bold blue]Ingesting text content[/bold blue]")
+
+            # Initialize Knowledge Graph components (lazy initialization within async context)
+            local_graph_store, local_unified_mediator = await initialize_graph_components()
+
+            # Use unified mediator if available (match MCP server logic)
+            if local_unified_mediator:
+                logger.info("Using unified mediator for text ingestion")
+
+                result = await local_unified_mediator.ingest_text(
+                    content=content,
+                    collection_name=collection,
+                    document_title=title or "text_input",
+                    metadata=metadata_dict or {}
+                )
+
+                console.print(
+                    f"[bold green]✓ Ingested text (ID: {result['source_document_id']}) "
+                    f"with {result['num_chunks']} chunks to collection '{collection}'[/bold green]"
+                )
+                console.print(f"[dim]Entities extracted: {result.get('entities_extracted', 0)}[/dim]")
+
+            # Fallback: RAG-only mode
+            else:
+                logger.info("Using RAG-only mode for text ingestion")
+                source_id, chunk_ids = doc_store.ingest_text(content, collection, title or "text_input", metadata_dict)
+                console.print(
+                    f"[bold green]✓ Ingested text (ID: {source_id}) with {len(chunk_ids)} chunks to collection '{collection}'[/bold green]"
+                )
+                console.print("[dim]Knowledge Graph not available - RAG-only mode[/dim]")
+
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+    asyncio.run(run_ingest())
+
+
 @ingest.command("file")
 @click.argument("path", type=click.Path(exists=True))
 @click.option("--collection", required=True, help="Collection name")
@@ -1486,12 +1541,14 @@ def graph():
 @graph.command("query-relationships")
 @click.argument("query")
 @click.option("--limit", default=5, help="Maximum number of relationships to return")
-def graph_query_relationships(query, limit):
+@click.option("--verbose", is_flag=True, help="Show detailed metadata (id, source/target nodes, established date)")
+def graph_query_relationships(query, limit, verbose):
     """
     Search for entity relationships using natural language.
 
     Example:
         rag graph query-relationships "How does quantum computing relate to cryptography?" --limit 5
+        rag graph query-relationships "How does quantum computing relate to cryptography?" --verbose
     """
     try:
         from graphiti_core import Graphiti
@@ -1529,9 +1586,17 @@ def graph_query_relationships(query, limit):
         for i, rel in enumerate(result["relationships"], 1):
             console.print(f"[bold cyan]{i}. {rel['relationship_type']}[/bold cyan]")
             console.print(f"   {rel['fact']}")
-            console.print(f"   Valid from: {rel.get('valid_from', 'N/A')}")
-            if rel.get("valid_until"):
-                console.print(f"   Valid until: {rel['valid_until']}")
+
+            if verbose:
+                if rel.get("id"):
+                    console.print(f"   [dim]ID: {rel['id']}[/dim]")
+                if rel.get("source_node_id"):
+                    console.print(f"   [dim]Source node: {rel['source_node_id']}[/dim]")
+                if rel.get("target_node_id"):
+                    console.print(f"   [dim]Target node: {rel['target_node_id']}[/dim]")
+                if rel.get("valid_from"):
+                    console.print(f"   [dim]Established: {rel['valid_from']}[/dim]")
+
             console.print()
 
     except ImportError:
