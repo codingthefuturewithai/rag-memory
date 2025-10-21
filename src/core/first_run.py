@@ -98,9 +98,9 @@ def prompt_for_missing_variables() -> bool:
 def _get_prompt_text(var_name: str) -> str:
     """Get user-friendly prompt text for a variable."""
     prompts = {
-        'DATABASE_URL': 'PostgreSQL/Supabase Database URL',
+        'DATABASE_URL': 'PostgreSQL Database URL',
         'OPENAI_API_KEY': 'OpenAI API Key',
-        'NEO4J_URI': 'Neo4j Aura Connection URI',
+        'NEO4J_URI': 'Neo4j Connection URI',
         'NEO4J_USER': 'Neo4j Username',
         'NEO4J_PASSWORD': 'Neo4j Password',
     }
@@ -108,10 +108,12 @@ def _get_prompt_text(var_name: str) -> str:
 
 
 def _get_default_value(var_name: str) -> str:
-    """Get default value suggestion for a variable."""
+    """Get default value suggestion for a variable (LOCAL defaults)."""
     defaults = {
         'DATABASE_URL': 'postgresql://raguser:ragpassword@localhost:54320/rag_memory',
+        'NEO4J_URI': 'bolt://localhost:7687',
         'NEO4J_USER': 'neo4j',
+        'NEO4J_PASSWORD': 'graphiti-password',
     }
     return defaults.get(var_name, '')
 

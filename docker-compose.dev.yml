@@ -24,7 +24,7 @@ services:
   # ============================================================================
   postgres-dev:
     image: pgvector/pgvector:pg17
-    container_name: rag-memory-dev
+    container_name: rag-memory-postgres-dev
     environment:
       POSTGRES_USER: raguser
       POSTGRES_PASSWORD: ragpassword
@@ -45,13 +45,15 @@ services:
     labels:
       description: "RAG Memory - Development PostgreSQL Instance"
       environment: "development"
+    networks:
+      - rag-memory-dev
 
   # ============================================================================
   # Neo4j - Development Instance
   # ============================================================================
   neo4j-dev:
     image: neo4j:5.26-community
-    container_name: neo4j-dev
+    container_name: rag-memory-neo4j-dev
     ports:
       - "${DEV_NEO4J_HTTP_PORT:-7474}:7474"  # HTTP - Neo4j Browser UI
       - "${DEV_NEO4J_BOLT_PORT:-7687}:7687"  # Bolt - Database protocol
@@ -85,6 +87,8 @@ services:
     labels:
       description: "RAG Memory - Development Neo4j Instance"
       environment: "development"
+    networks:
+      - rag-memory-dev
 
 volumes:
   pgvector_data_dev:
@@ -97,3 +101,7 @@ volumes:
     driver: local
   neo4j_plugins_dev:
     driver: local
+
+networks:
+  rag-memory-dev:
+    driver: bridge

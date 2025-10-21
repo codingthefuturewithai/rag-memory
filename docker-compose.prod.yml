@@ -3,6 +3,7 @@ version: '3.9'
 services:
   postgres:
     image: pgvector/pgvector:pg16
+    container_name: rag-memory-postgres
     environment:
       POSTGRES_USER: raguser
       POSTGRES_PASSWORD: ragpassword
@@ -20,6 +21,7 @@ services:
 
   neo4j:
     image: neo4j:5-community
+    container_name: rag-memory-neo4j
     environment:
       NEO4J_AUTH: neo4j/graphiti-password
       NEO4J_PLUGINS: '["apoc"]'
@@ -41,6 +43,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    container_name: rag-memory-mcp
     environment:
       DATABASE_URL: postgresql://raguser:ragpassword@postgres:5432/rag_memory
       NEO4J_URI: bolt://neo4j:7687

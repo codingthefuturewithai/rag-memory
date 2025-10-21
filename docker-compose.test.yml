@@ -29,7 +29,7 @@ services:
   # ============================================================================
   postgres-test:
     image: pgvector/pgvector:pg17
-    container_name: rag-memory-test
+    container_name: rag-memory-postgres-test
     environment:
       POSTGRES_USER: raguser
       POSTGRES_PASSWORD: ragpassword
@@ -51,13 +51,15 @@ services:
       description: "RAG Memory - Test PostgreSQL Instance (Ephemeral)"
       environment: "test"
       cleanup: "docker-compose -f docker-compose.test.yml down -v"
+    networks:
+      - rag-memory-test
 
   # ============================================================================
   # Neo4j - Test Instance
   # ============================================================================
   neo4j-test:
     image: neo4j:5.26-community
-    container_name: neo4j-test
+    container_name: rag-memory-neo4j-test
     ports:
       - "${TEST_NEO4J_HTTP_PORT:-7476}:7474"  # HTTP - Neo4j Browser UI
       - "${TEST_NEO4J_BOLT_PORT:-7689}:7687"  # Bolt - Database protocol
@@ -92,6 +94,8 @@ services:
       description: "RAG Memory - Test Neo4j Instance (Ephemeral)"
       environment: "test"
       cleanup: "docker-compose -f docker-compose.test.yml down -v"
+    networks:
+      - rag-memory-test
 
 volumes:
   pgvector_data_test:
@@ -104,6 +108,10 @@ volumes:
     driver: local
   neo4j_plugins_test:
     driver: local
+
+networks:
+  rag-memory-test:
+    driver: bridge
 
 # ================================================================================
 # CLEANUP INSTRUCTIONS
