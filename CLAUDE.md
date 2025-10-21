@@ -97,6 +97,78 @@ docker-compose restart         # Restart
 docker-compose down -v         # Reset (deletes data!)
 ```
 
+## Deployment Strategy
+
+**Distribution Approach: git clone (NOT PyPI)**
+
+RAG Memory is distributed via git clone, not PyPI. This is intentional:
+
+- Users get the full codebase to deploy/modify
+- Clear, straightforward setup process
+- Reliable for both local and cloud deployments
+- Standard practice for Python projects requiring deployment (FastAPI, Django, etc.)
+
+**Three Deployment Scenarios (All Supported):**
+
+### 1. Local MCP Server (No Cloud)
+- **Setup:** `git clone` → `docker-compose up -d` → Configure AI agent
+- **Storage:** PostgreSQL + Neo4j in Docker containers (local machine)
+- **MCP Server:** Runs on localhost:8000
+- **CLI Tool:** `uv run rag search "query"` (same local databases)
+- **Use case:** Users want knowledge base on their own machine only
+
+### 2. Cloud MCP Server (Full Cloud)
+- **Setup:** `git clone` → `scripts/deploy-to-fly.sh` → Configure AI agent
+- **Storage:** Supabase PostgreSQL + Neo4j Aura (managed cloud)
+- **MCP Server:** Deployed to Fly.io (rag-memory-mcp.fly.dev)
+- **CLI Tool:** `uv run rag search "query"` (optional, connects to cloud if configured)
+- **Use case:** Users want access from multiple machines and AI agents
+
+### 3. Local CLI Tool (Development/Testing)
+- **Setup:** `git clone` → CLI usage within repo environment
+- **Storage:** PostgreSQL + Neo4j in Docker containers (local)
+- **Usage:** `uv run rag ingest url "..."`, `uv run rag search "query"`, etc.
+- **Config:** Single active environment (local or cloud, never both)
+- **Use case:** Developers testing, or users wanting CLI without MCP server
+
+**Key Design Principles:**
+
+1. **One Knowledge Store at a Time**
+   - Users pick: local OR cloud
+   - Configuration via `.env` file specifies DATABASE_URL and NEO4J_URI
+   - No automatic switching between environments
+   - Clear, explicit, safe
+
+2. **MCP Server is Independent of CLI Tool**
+   - MCP server connects to one database (local or cloud)
+   - CLI tool connects to one database (local or cloud)
+   - Both can exist but must target same database
+   - No cross-environment access
+
+3. **Optional: Global CLI Installation** (nice-to-have)
+   - `uv tool install rag-memory` makes `rag` available globally
+   - Not required for main workflow
+   - Config file still determines which database to use
+
+4. **Data Migration (Future Feature)**
+   - Users can migrate local data to cloud via guided process
+   - `/rag-migrate` custom command in Claude Code
+   - See `.reference/DATA_MIGRATION.md` for detailed guide
+
+**Deployment Decision Points:**
+
+| Aspect | Local | Cloud |
+|--------|-------|-------|
+| Distribution | git clone | git clone |
+| PostgreSQL | Docker (local) | Supabase (managed) |
+| Neo4j | Docker (local) | Neo4j Aura (managed) |
+| MCP Server | localhost:8000 | Fly.io (rag-memory-mcp.fly.dev) |
+| Backups | Docker volume sidecar | Vendor automatic |
+| CLI Tool | `uv run rag` | `uv run rag` (cloud-configured) |
+| Configuration | `.env` (local) | `.env` (cloud URLs) |
+| Development | `docker-compose up -d` | N/A (use local for dev) |
+| Deployment | N/A | `scripts/deploy-to-fly.sh` |
+
 ## Architecture
 
 ### Core Components
