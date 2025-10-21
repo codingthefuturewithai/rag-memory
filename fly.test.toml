@@ -1,4 +1,4 @@
-# fly.toml file for rag-memory-test deployment
+# fly.toml file for rag-memory deployment
 # This is a SEPARATE test app from the production rag-memory-mcp
 # Use with: flyctl deploy --config fly.test.toml --app rag-memory-test
 
@@ -23,6 +23,12 @@ primary_region = "iad"
   [[services.ports]]
     port = 80
     handlers = ["http"]
+
+# Note: Using dedicated-cpu machine type to support multiple volumes
+# shared-cpu-1x only supports 1 volume, but we need 3 (PostgreSQL, Neo4j data, Neo4j logs)
+[[vm]]
+  memory = "1gb"
+  cpus = 1
 
 [[mounts]]
   source = "postgres_data"
