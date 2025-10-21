@@ -988,15 +988,149 @@ MATCH (n) WHERE toLower(n.name) CONTAINS 'quantum' RETURN n
 ### Future Work (Phase 4+)
 
 **Critical:**
-1. ✅ Implement Graph cleanup in `update_document()`
-2. ✅ Implement Graph cleanup in `delete_document()`
-3. ✅ Implement Graph cleanup in recrawl logic
-4. ✅ Add two-phase commit for atomicity
+1. ❌ Implement Graph cleanup in `update_document()`
+2. ✅ Implement Graph cleanup in `delete_collection()` (Gap 1.1 - COMPLETE)
+3. ❌ Implement Graph cleanup in `delete_document()`
+4. ❌ Implement Graph cleanup in recrawl logic
+5. ❌ Add two-phase commit for atomicity
 
 **Nice to have:**
-5. Optimize entity extraction for large documents
-6. Batch entity extraction for directory ingestion
-7. Add Graph-specific search filters to `search_documents()`
-8. Implement Graph deduplication (merge similar entities)
-9. Add Graph visualization tools
-10. Performance profiling for Graph ingestion
+6. Optimize entity extraction for large documents
+7. Batch entity extraction for directory ingestion
+8. Add Graph-specific search filters to `search_documents()`
+9. Implement Graph deduplication (merge similar entities)
+10. Add Graph visualization tools
+11. Performance profiling for Graph ingestion
+
+---
+
+## Implementation Gaps & Roadmap
+
+**Full documentation:** `docs/IMPLEMENTATION_GAPS_AND_ROADMAP.md`
+
+This document captures critical gaps and design issues identified during development. The gaps are prioritized by impact and complexity, with a clear roadmap for addressing them.
+
+### Gap Status Summary (as of 2025-10-21)
+
+| Gap # | Category | Issue | Priority | Status |
+|-------|----------|-------|----------|--------|
+| **1.1** | **Tools** | **delete_collection missing** | **HIGH** | **✅ COMPLETE** |
+| 1.2 | Tools | Tool count discrepancy | HIGH | Documentation Updated |
+| 2.1 | Architecture | Graph optionality complex | CRITICAL | Decision Needed |
+| 2.2 | Installation | Setup too complex | HIGH | Decision Needed |
+| 3.1 | Sync | delete_document → graph not cleaned | CRITICAL | Research ✓, Impl Needed |
+| 3.2 | Sync | update_document → graph not synced | CRITICAL | Impl Needed |
+| 3.3 | Sync | recrawl → graph orphans accumulate | CRITICAL | Impl Needed |
+| 4.1 | Config | GPT-5 Nano model support | MEDIUM | Investigation Needed |
+| 5.1 | Docs | Episode metadata not documented | HIGH | Doc Update Needed |
+| 5.2 | Docs | RAG metadata incomplete | HIGH | Doc Update Needed |
+| 6.1 | Architecture | Docker Compose clarity | MEDIUM | Audit Needed |
+| 6.2 | Docs | Phase 4 terminology unclear | LOW | Clarification Needed |
+| 7.0 | Audit | MCP tool graph assumptions | CRITICAL | Audit Needed |
+| 8.1 | Planning | mcp_servers_workflow evaluation | HIGH | Review Needed |
+
+### Completed Work: Gap 1.1 - Delete Collection Tool
+
+**Status:** ✅ **COMPLETE** (2025-10-21)
+
+**Requirements Met:**
+
+1. ✅ **MCP Tool Created & Registered**
+   - Tool name: `delete_collection`
+   - Location: `src/mcp/server.py` + `src/mcp/tools.py`
+   - Parameters: `name` (str, required), `confirm` (bool, default=False)
+   - Returns: `{deleted, name, message, documents_affected}`
+
+2. ✅ **Safety Implementation**
+   - Strong warning in docstring: "⚠️ DANGEROUS OPERATION"
+   - Two-step confirmation process:
+     - `confirm=False`: Returns error "Confirmation required"
+     - `confirm=True`: Actually deletes
+   - Prevention of accidental deletion through explicit confirmation
+   - Comprehensive docstring documenting what gets deleted
+
+3. ✅ **Knowledge Graph Cleanup** (Phase 4 Implementation)
+   - Queries `source_document_ids` BEFORE RAG deletion
+   - Calls `graph_store.delete_episode_by_name(f"doc_{doc_id}")` for each document
+   - Episodes verified deleted via Neo4j query in tests
+   - Graceful error handling: RAG deletion always succeeds, graph cleanup is best-effort
+   - Success message includes count: "N graph episodes cleaned"
+
+4. ✅ **Testing Complete**
+   - 5 MCP collection management tests (delete scenarios): **ALL PASS**
+   - 1 comprehensive graph cleanup verification test: **PASS**
+   - Test verifies episodes deleted from Neo4j via actual queries (not just message)
+   - Test flow:
+     1. Create collection + ingest 2 documents
+     2. Query Neo4j to verify episodes exist (get UUIDs)
+     3. Call delete_collection_impl
+     4. Query Neo4j again with SAME method to verify episodes gone
+     5. Assert `episodes_after == []`
+
+5. ✅ **Documentation Updated**
+   - Tool count: 15 → 17 tools
+   - Updated: `.reference/MCP_QUICK_START.md`
+   - Updated: `.reference/OVERVIEW.md`
+   - Updated: Collection Management section (2 → 3 tools)
+
+6. ✅ **Commits Made**
+   - `c370b13` - Implement delete_collection MCP tool with safety confirmations
+   - `cfa8728` - Add graph episode cleanup to delete_collection (Phase 4)
+   - `a95c9bc` - Add comprehensive graph cleanup verification test
+   - `7af4811` - Fix test fixture compatibility with pytest.mark.asyncio
+
+**Key Implementation Details:**
+
+- **Episode naming convention:** `doc_{source_document_id}` (e.g., `doc_378`, `doc_379`)
+- **Graph cleanup implementation:** `src/mcp/tools.py:delete_collection_impl()` (lines 148-265)
+- **Test file:** `tests/integration/test_delete_collection_graph_cleanup.py`
+- **MCP registration:** `src/mcp/server.py:delete_collection()` (async wrapper with graph_store parameter)
+
+**Test Verification (Latest Run):**
+```
+✅ Created 2 documents: [382, 383]
+✅ Found episode: doc_382 (UUID: 46094128-...)
+✅ Found episode: doc_383 (UUID: 8c313cd5-...)
+✅ Collection deleted: Collection 'graph_cleanup_test_4697160272' and 2 document(s) permanently deleted. (2 graph episodes cleaned)
+✅ Graph cleanup verified - all 2 episodes deleted
+PASSED
+```
+
+### Next Priorities (Recommended Order)
+
+**Phase A: Critical Blockers (Do Next)**
+
+1. **Gap 3.1-3.3:** Fix delete/update/recrawl graph sync
+   - Similar implementation to Gap 1.1 (delete_collection)
+   - Blocking: Production use of document management
+   - Effort: Medium
+
+2. **Gap 7.0:** Audit MCP tools for graph assumptions
+   - Verify all tools handle graph unavailability gracefully
+   - Blocking: Confident release
+   - Effort: High
+
+3. **Gap 2.1:** Decide Knowledge Graph optionality
+   - Choose: Mandatory vs Optional vs Hidden
+   - Blocking: Setup documentation
+   - Effort: Medium (decision + code)
+
+**Phase B: Important (Do Second)**
+
+4. **Gap 2.2:** Solve setup complexity
+   - Choose path: Docker Compose vs Vendor MCP
+   - Effort: High
+
+5. **Gap 5.1-5.2:** Complete metadata documentation
+   - Low effort, high value for users
+   - Effort: Low
+
+6. **Gap 6.1:** Clarify Docker Compose files
+   - Improve setup experience
+   - Effort: Medium
+
+**Phase C: Nice-to-Have (Do Later)**
+
+7. **Gap 4.1:** GPT-5 Nano support (cost optimization)
+8. **Gap 6.2:** Phase terminology clarification
+9. **Gap 8.1:** Evaluate vendor MCP servers
