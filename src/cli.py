@@ -35,8 +35,6 @@ from src.core.database import get_database
 from src.ingestion.document_store import get_document_store
 from src.core.embeddings import get_embedding_generator
 from src.retrieval.search import get_similarity_search
-from src.retrieval.hybrid_search import get_hybrid_search
-from src.retrieval.multi_query import get_multi_query_search
 from src.ingestion.web_crawler import crawl_single_page, WebCrawler
 from src.ingestion.website_analyzer import analyze_website
 from src.unified import GraphStore, UnifiedIngestionMediator
@@ -1208,30 +1206,15 @@ def recrawl(url, collection, headless, verbose, chunk_size, chunk_overlap, follo
 @click.option("--metadata", help="Filter by metadata (JSON string)")
 @click.option("--verbose", is_flag=True, help="Show full chunk content")
 @click.option("--show-source", is_flag=True, help="Include full source document content")
-@click.option("--hybrid", is_flag=True, help="Use hybrid search (vector + keyword with RRF)")
-@click.option("--multi-query", is_flag=True, help="Use multi-query retrieval (query expansion + RRF)")
-def search(query, collection, limit, threshold, metadata, verbose, show_source, hybrid, multi_query):
+def search(query, collection, limit, threshold, metadata, verbose, show_source):
     """Search for similar document chunks."""
     try:
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
 
-        # Check for conflicting flags
-        if hybrid and multi_query:
-            console.print("[bold red]Error: Cannot use both --hybrid and --multi-query flags[/bold red]")
-            sys.exit(1)
-
-        # Choose search method
-        if multi_query:
-            searcher = get_multi_query_search(db, embedder, coll_mgr)
-            search_method = "multi-query (query expansion + RRF)"
-        elif hybrid:
-            searcher = get_hybrid_search(db, embedder, coll_mgr)
-            search_method = "hybrid (vector + keyword with RRF)"
-        else:
-            searcher = get_similarity_search(db, embedder, coll_mgr)
-            search_method = "vector-only"
+        # Create searcher using baseline vector-only search
+        searcher = get_similarity_search(db, embedder, coll_mgr)
 
         # Parse metadata filter if provided
         metadata_filter = None
@@ -1243,31 +1226,13 @@ def search(query, collection, limit, threshold, metadata, verbose, show_source, 
                 sys.exit(1)
 
         console.print(f"[bold blue]Searching for: {query}[/bold blue]")
-        console.print(f"[dim]Method: {search_method}[/dim]")
         if metadata_filter:
             console.print(f"[dim]Metadata filter: {metadata_filter}[/dim]")
 
-        # Execute search based on method
-        if multi_query:
-            results = searcher.multi_query_search(
-                query=query,
-                limit=limit,
-                collection_name=collection,
-                metadata_filter=metadata_filter,
-                include_source=show_source
-            )
-        elif hybrid:
-            results = searcher.hybrid_search(
-                query=query,
-                limit=limit,
-                collection_name=collection,
-                metadata_filter=metadata_filter,
-                include_source=show_source
-            )
-        else:
-            results = searcher.search_chunks(
-                query, limit, threshold, collection, include_source=show_source, metadata_filter=metadata_filter
-            )
+        # Execute vector-only search
+        results = searcher.search_chunks(
+            query, limit, threshold, collection, include_source=show_source, metadata_filter=metadata_filter
+        )
 
         if not results:
             console.print("[yellow]No results found[/yellow]")

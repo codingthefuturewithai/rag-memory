@@ -18,6 +18,22 @@ import pytest
 from src.core.config_loader import load_environment_variables
 
 # ============================================================================
+# CRITICAL: Enable coverage tracking in subprocesses
+# ============================================================================
+
+# Set coverage environment variable before any tests run
+os.environ["COVERAGE_PROCESS_START"] = ".coveragerc"
+
+
+@pytest.fixture(autouse=True)
+def ensure_coverage_tracking():
+    """Ensure coverage tracking is enabled for all tests."""
+    # This fixture runs for every test, keeping the env var set
+    assert os.environ.get("COVERAGE_PROCESS_START") == ".coveragerc"
+    yield
+
+
+# ============================================================================
 # CRITICAL: Load .env.test to ensure tests use test servers
 # ============================================================================
 
@@ -237,3 +253,90 @@ def initialize_test_postgres():
         print("⏭️  Skipping PostgreSQL initialization (Database class not available)")
     except Exception as e:
         print(f"⚠️  Warning: Unexpected error during PostgreSQL initialization: {e}")
+
+
+# ============================================================================
+# SHARED FIXTURES: Available to all test suites
+# ============================================================================
+
+import pytest_asyncio
+import uuid
+from src.core.database import Database
+from src.core.embeddings import EmbeddingGenerator
+from src.core.collections import CollectionManager
+from src.retrieval.search import SimilaritySearch
+
+
+@pytest_asyncio.fixture
+async def test_db():
+    """Create a test database connection with cleanup.
+
+    Scope: function (fresh database connection per test)
+    Available to: all test suites (backend integration, MCP integration)
+    """
+    db = Database()
+    yield db
+    try:
+        db.close()
+    except Exception:
+        pass
+
+
+@pytest_asyncio.fixture
+async def embedder():
+    """Create embedding generator for tests.
+
+    Scope: function
+    Available to: all test suites
+    """
+    return EmbeddingGenerator()
+
+
+@pytest_asyncio.fixture
+async def collection_mgr(test_db):
+    """Create collection manager using test database.
+
+    Scope: function
+    Available to: all test suites
+    """
+    return CollectionManager(test_db)
+
+
+@pytest_asyncio.fixture
+async def searcher(test_db, embedder, collection_mgr):
+    """Create similarity search using test components.
+
+    Scope: function
+    Available to: all test suites
+    """
+    return SimilaritySearch(test_db, embedder, collection_mgr)
+
+
+@pytest_asyncio.fixture
+async def test_collection_name():
+    """Generate unique test collection name to avoid conflicts.
+
+    Scope: function
+    """
+    return f"test_collection_{uuid.uuid4().hex[:8]}"
+
+
+@pytest_asyncio.fixture
+async def setup_test_collection(collection_mgr, test_collection_name):
+    """Create and return a test collection with cleanup.
+
+    Scope: function
+    """
+    # Create collection
+    collection_mgr.create_collection(
+        name=test_collection_name,
+        description="Test collection"
+    )
+
+    yield test_collection_name
+
+    # Cleanup
+    try:
+        collection_mgr.delete_collection(test_collection_name)
+    except Exception:
+        pass
