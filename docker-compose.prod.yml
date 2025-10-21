@@ -18,6 +18,8 @@ services:
       retries: 5
     ports:
       - "5432"
+    labels:
+      - docker-volume-backup.stop-during-backup=true
 
   neo4j:
     image: neo4j:5-community
@@ -38,6 +40,8 @@ services:
     ports:
       - "7687"
       - "7474"
+    labels:
+      - docker-volume-backup.stop-during-backup=true
 
   rag-mcp:
     build:
@@ -58,6 +62,29 @@ services:
       neo4j:
         condition: service_healthy
     restart: on-failure
+
+  # ============================================================================
+  # Automated Backups - Creates daily TAR archives of database volumes
+  # ============================================================================
+  backup:
+    image: offen/docker-volume-backup:latest
+    container_name: rag-memory-backup
+    restart: always
+    env_file: ./backup.env
+    volumes:
+      - postgres_data:/backup/postgres:ro
+      - neo4j_data:/backup/neo4j:ro
+      - neo4j_logs:/backup/neo4j_logs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./backups:/archive
+    depends_on:
+      - postgres
+      - neo4j
+    environment:
+      BACKUP_SOURCES=/backup
+      BACKUP_FILENAME_EXPAND=true
+    labels:
+      description: "RAG Memory - Automated Daily Backups"
 
 volumes:
   postgres_data:
