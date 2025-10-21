@@ -8,10 +8,12 @@ This module abstracts Graphiti complexity, providing a simple interface for:
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Optional, Any
 from graphiti_core import Graphiti
 from graphiti_core.nodes import EpisodeType
+from neo4j import exceptions
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +29,88 @@ class GraphStore:
             graphiti: Initialized Graphiti instance (already connected to Neo4j)
         """
         self.graphiti = graphiti
+
+    async def health_check(self, timeout_ms: int = 2000) -> dict:
+        """
+        Lightweight Neo4j liveness check via Graphiti driver.
+
+        Performs a simple RETURN 1 query to verify Neo4j is reachable and responsive.
+
+        Returns:
+            Dictionary with health status:
+                {
+                    "status": "healthy" | "unhealthy" | "unavailable",
+                    "latency_ms": float or None,
+                    "error": str or None
+                }
+
+        Note:
+            - Returns "unavailable" if Graphiti not initialized (graceful degradation allowed)
+            - Returns "unhealthy" if Neo4j connection fails
+            - Latency: ~1-10ms local, ~10-30ms cloud, ~20-50ms Fly.io
+            - Designed to fail-fast on unreachable Neo4j before expensive operations
+        """
+        # Check if Graphiti is initialized at all
+        if self.graphiti is None:
+            return {
+                "status": "unavailable",
+                "latency_ms": None,
+                "error": "Graphiti not initialized",
+            }
+
+        start = time.perf_counter()
+
+        try:
+            # Simple query to verify Neo4j is reachable
+            result = await self.graphiti.driver.execute_query("RETURN 1 AS num")
+
+            # Verify we got a result
+            if not result.records or result.records[0]["num"] != 1:
+                latency = (time.perf_counter() - start) * 1000
+                return {
+                    "status": "unhealthy",
+                    "latency_ms": round(latency, 2),
+                    "error": "Unexpected query result (expected 1)",
+                }
+
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "healthy",
+                "latency_ms": round(latency, 2),
+                "error": None,
+            }
+
+        except exceptions.ServiceUnavailable as e:
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "unhealthy",
+                "latency_ms": round(latency, 2),
+                "error": f"Neo4j service unavailable: {str(e)}",
+            }
+
+        except exceptions.AuthError as e:
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "unhealthy",
+                "latency_ms": round(latency, 2),
+                "error": f"Neo4j authentication failed: {str(e)}",
+            }
+
+        except exceptions.SessionExpired as e:
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "unhealthy",
+                "latency_ms": round(latency, 2),
+                "error": f"Neo4j session expired: {str(e)}",
+            }
+
+        except Exception as e:
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "unhealthy",
+                "latency_ms": round(latency, 2),
+                "error": f"Unexpected error: {str(e)}",
+            }
 
     async def add_knowledge(
         self,

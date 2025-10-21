@@ -85,7 +85,7 @@ async def lifespan(app: FastMCP):
     doc_store = get_document_store(db, embedder, coll_mgr)
     logger.info("RAG components initialized")
 
-    # Initialize Knowledge Graph components
+    # Initialize Knowledge Graph components (MANDATORY per Gap 2.1, Option B: All or Nothing)
     logger.info("Initializing Knowledge Graph components...")
     try:
         from graphiti_core import Graphiti
@@ -104,12 +104,14 @@ async def lifespan(app: FastMCP):
 
         graph_store = GraphStore(graphiti)
         unified_mediator = UnifiedIngestionMediator(db, embedder, coll_mgr, graph_store)
-        logger.info("Knowledge Graph components initialized")
+        logger.info("Knowledge Graph components initialized successfully")
     except Exception as e:
-        logger.warning(f"Failed to initialize Knowledge Graph: {e}")
-        logger.warning("Knowledge Graph features will be disabled. RAG-only mode.")
-        graph_store = None
-        unified_mediator = None
+        # FAIL-FAST per Gap 2.1 (Option B): Knowledge Graph is mandatory
+        # Do not start server if Neo4j is unreachable
+        logger.error(f"FATAL: Knowledge Graph initialization failed (Neo4j unavailable): {e}")
+        logger.error("Gap 2.1 (Option B: Mandatory Graph) requires both PostgreSQL and Neo4j to be operational.")
+        logger.error("Please ensure Neo4j is running and accessible, then restart the server.")
+        raise SystemExit(1)
 
     yield {}  # Server runs here
 
@@ -330,58 +332,53 @@ def update_collection_description(name: str, description: str) -> dict:
 @mcp.tool()
 async def delete_collection(name: str, confirm: bool = False) -> dict:
     """
-    ⚠️  DANGEROUS OPERATION - Delete a collection and all its documents permanently.
+    ⚠️ DESTRUCTIVE: Permanently delete a collection and all its documents.
 
-    This operation CANNOT be undone. The collection, all associated documents, and
-    all their chunks are permanently deleted from the database.
+    This operation CANNOT be undone. Deletes the collection, all associated documents,
+    and all their indexed content.
 
-    **REQUIRED CONFIRMATION:** You MUST explicitly set confirm=True to proceed.
-    Without this confirmation, the operation will fail. This extra step prevents
-    accidental data loss.
+    **REQUIRED: Two-Step Confirmation**
+    1. Call with `confirm=False` (default) → Returns error requiring explicit confirmation
+    2. Call with `confirm=True` → Actually deletes (prevents accidental deletion)
 
     **What gets deleted:**
-    1. The collection itself
-    2. All documents in this collection
-    3. All chunks (paragraphs) from those documents
-    4. All metadata associated with those chunks
-    5. All graph episodes linked to those documents (automatically cleaned)
+    - The collection itself
+    - All documents in this collection
+    - All indexed content from those documents
+    - All associated metadata
 
     **What stays:**
     - Other collections (unaffected)
-    - Documents in other collections (unaffected)
-    - Knowledge graph relationships and temporal data (NOT cleaned - may need refinement)
+    - Documents also in other collections (collection link removed, documents preserved)
 
     **Important Notes:**
-    - If a document is only in this collection, it and all its chunks are deleted
-    - If a document is in multiple collections, only the collection link is removed
-    - The confirmation parameter exists specifically to prevent accidents
+    - If a document only belongs to this collection, it is completely removed
+    - If a document is in multiple collections, only this collection link is removed
+    - The two-step confirmation process exists specifically to prevent accidents
 
     Args:
-        name: (REQUIRED) Unique name of the collection to delete.
-              This must be an existing collection.
-        confirm: (REQUIRED) Must be exactly True to proceed.
-                If False or missing, the operation will fail.
-                This prevents accidental deletion - be explicit!
+        name: Collection name to delete (must exist)
+        confirm: Must be exactly True to proceed. Default False.
+                 False → Returns error. True → Performs deletion.
 
     Returns:
+        On success:
         {
-            "name": str,           # Collection name that was deleted
-            "deleted": bool,       # Always True on success
-            "message": str         # Human-readable confirmation with document count
+            "name": str,      # Collection that was deleted
+            "deleted": bool,  # True
+            "message": str    # Confirmation message with operation details
         }
 
     Raises:
-        ValueError: If confirm != True or collection doesn't exist.
-                   Error message explains why and what's required.
+        ValueError: If confirm != True or collection doesn't exist
 
-    Example (DANGEROUS - be careful):
-        # This will PERMANENTLY delete the collection and all its documents
-        result = delete_collection(
-            name="old-docs",
-            confirm=True  # Explicit confirmation required
-        )
-        print(f"Deleted: {result['message']}")
-        # Output: "Deleted: Collection 'old-docs' and 123 document(s) permanently deleted. (45 graph episodes cleaned)"
+    Example:
+        # Step 1: Get confirmation requirement
+        result = delete_collection(name="old-docs")  # Returns error, requires confirm=True
+
+        # Step 2: Explicit deletion
+        result = delete_collection(name="old-docs", confirm=True)  # Permanently deletes
+        print(result["message"])  # Confirmation with details
     """
     return await delete_collection_impl(coll_mgr, name, confirm, graph_store, db)
 

@@ -2,9 +2,11 @@
 
 import logging
 import os
+import time
 from typing import Optional
 
 import psycopg
+from psycopg import OperationalError, DatabaseError
 
 # Note: Environment variables are loaded by CLI (via first_run.py) or provided by MCP client.
 # No automatic config loading at module import to avoid issues with MCP server usage.
@@ -79,6 +81,66 @@ class Database:
         except Exception as e:
             logger.error(f"Database connection test failed: {e}")
             return False
+
+    async def health_check(self, timeout_ms: int = 2000) -> dict:
+        """
+        Lightweight PostgreSQL liveness check for use before write operations.
+
+        Performs two checks:
+        1. Property check (instant) - verifies connection object state
+        2. Network validation (1-10ms) - executes SELECT 1 query
+
+        Returns:
+            Dictionary with health status:
+                {
+                    "status": "healthy" | "unhealthy",
+                    "latency_ms": float,
+                    "error": str or None
+                }
+
+        Note:
+            - This is a best-effort check, not a guarantee of operation success
+            - Latency: ~0-5ms local, ~5-20ms cloud, ~20-50ms Fly.io
+            - Designed to fail-fast on unreachable databases before expensive operations
+        """
+        start = time.perf_counter()
+
+        # Step 1: Property check (instant, no network)
+        if self._connection and (self._connection.closed or self._connection.broken):
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "unhealthy",
+                "latency_ms": round(latency, 2),
+                "error": "Connection closed or broken",
+            }
+
+        # Step 2: SELECT 1 network validation
+        try:
+            conn = self.connect()
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+                cur.fetchone()
+
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "healthy",
+                "latency_ms": round(latency, 2),
+                "error": None,
+            }
+        except (OperationalError, DatabaseError) as e:
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "unhealthy",
+                "latency_ms": round(latency, 2),
+                "error": str(e),
+            }
+        except Exception as e:
+            latency = (time.perf_counter() - start) * 1000
+            return {
+                "status": "unhealthy",
+                "latency_ms": round(latency, 2),
+                "error": f"Unexpected error: {str(e)}",
+            }
 
     def get_stats(self) -> dict:
         """

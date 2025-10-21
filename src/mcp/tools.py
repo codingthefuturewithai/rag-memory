@@ -17,8 +17,75 @@ from src.retrieval.search import SimilaritySearch
 from src.ingestion.document_store import DocumentStore
 from src.ingestion.web_crawler import WebCrawler, crawl_single_page
 from src.ingestion.website_analyzer import analyze_website
+from src.unified.graph_store import GraphStore
 
 logger = logging.getLogger(__name__)
+
+
+async def ensure_databases_healthy(
+    db: Database, graph_store: Optional[GraphStore] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Check both PostgreSQL and Neo4j are reachable before any write operation.
+
+    This middleware function provides fail-fast validation with clear error
+    messages when databases are unavailable.
+
+    Args:
+        db: Database instance (always required)
+        graph_store: GraphStore instance (required for Option B: Mandatory Graph)
+
+    Returns:
+        None if both databases are healthy (operation can proceed).
+        Otherwise returns error response dict for MCP client:
+            {
+                "error": str,                    # Error category
+                "status": str,                   # MCP status code
+                "message": str,                  # Human-readable message
+                "details": {                     # Debug info (internal use)
+                    "postgres": {...},           # PostgreSQL health result
+                    "neo4j": {...},              # Neo4j health result
+                    "retry_after_seconds": int
+                }
+            }
+
+    Note:
+        - PostgreSQL check is always mandatory
+        - Neo4j check is mandatory per Gap 2.1 (Option B: All or Nothing)
+        - Health check latency: ~5-30ms local, ~50-200ms cloud
+    """
+    # Check PostgreSQL (ALWAYS REQUIRED)
+    pg_health = await db.health_check(timeout_ms=2000)
+    if pg_health["status"] != "healthy":
+        return {
+            "error": "Database unavailable",
+            "status": "service_unavailable",
+            "message": "PostgreSQL is temporarily unavailable. Please try again in 30 seconds.",
+            "details": {
+                "postgres": pg_health,
+                "retry_after_seconds": 30,
+            },
+        }
+
+    # Check Neo4j if initialized (REQUIRED for Option B: Mandatory Graph)
+    if graph_store is not None:
+        graph_health = await graph_store.health_check(timeout_ms=2000)
+
+        # "unavailable" status = Graphiti not initialized (graceful, not an error)
+        # "unhealthy" status = Neo4j reachable but not responding (ERROR)
+        if graph_health["status"] == "unhealthy":
+            return {
+                "error": "Knowledge graph unavailable",
+                "status": "service_unavailable",
+                "message": "Neo4j is temporarily unavailable. Please try again in 30 seconds.",
+                "details": {
+                    "postgres": pg_health,
+                    "neo4j": graph_health,
+                    "retry_after_seconds": 30,
+                },
+            }
+
+    return None  # All checks passed, operation can proceed
 
 
 def search_documents_impl(
@@ -266,8 +333,10 @@ async def delete_collection_impl(
 
 
 async def ingest_text_impl(
+    db: Database,
     doc_store: DocumentStore,
     unified_mediator,
+    graph_store: Optional[GraphStore],
     content: str,
     collection_name: str,
     document_title: Optional[str],
@@ -277,10 +346,15 @@ async def ingest_text_impl(
     """
     Implementation of ingest_text tool.
 
-    Now routes through unified mediator to update both RAG and Knowledge Graph.
-    Falls back to RAG-only mode if mediator is not available.
+    Routes through unified mediator to update both RAG and Knowledge Graph.
+    Performs health checks on both databases before ingestion (Option B: Mandatory).
     """
     try:
+        # Health check: both PostgreSQL and Neo4j must be reachable
+        health_error = await ensure_databases_healthy(db, graph_store)
+        if health_error:
+            return health_error
+
         # Auto-generate title if not provided
         if not document_title:
             document_title = f"Agent-Text-{datetime.now().isoformat()}"
@@ -294,40 +368,18 @@ async def ingest_text_impl(
                 f"Create it first using create_collection('{collection_name}', 'description')."
             )
 
-        # Route through unified mediator if available (RAG + Graph)
-        if unified_mediator:
-            logger.info("Using unified mediator (RAG + Graph ingestion)")
-            result = await unified_mediator.ingest_text(
-                content=content,
-                collection_name=collection_name,
-                document_title=document_title,
-                metadata=metadata
-            )
-
-            # Remove chunk_ids if not requested (minimize response size)
-            if not include_chunk_ids:
-                result.pop("chunk_ids", None)
-
-            return result
-
-        # Fallback: RAG-only mode
-        logger.info("Using RAG-only mode (Knowledge Graph not available)")
-        source_id, chunk_ids = doc_store.ingest_document(
+        # Route through unified mediator (RAG + Graph)
+        logger.info("Ingesting text through unified mediator (RAG + Graph)")
+        result = await unified_mediator.ingest_text(
             content=content,
-            filename=document_title,
             collection_name=collection_name,
-            metadata=metadata,
-            file_type="text",
+            document_title=document_title,
+            metadata=metadata
         )
 
-        result = {
-            "source_document_id": source_id,
-            "num_chunks": len(chunk_ids),
-            "collection_name": collection_name,
-        }
-
-        if include_chunk_ids:
-            result["chunk_ids"] = chunk_ids
+        # Remove chunk_ids if not requested (minimize response size)
+        if not include_chunk_ids:
+            result.pop("chunk_ids", None)
 
         return result
     except Exception as e:
@@ -531,28 +583,32 @@ def check_existing_crawl(
 
 
 async def ingest_url_impl(
-    doc_store: DocumentStore,
     db: Database,
+    doc_store: DocumentStore,
     unified_mediator,
+    graph_store: Optional[GraphStore],
     url: str,
     collection_name: str,
     follow_links: bool,
     max_depth: int,
     mode: str,
     include_document_ids: bool,
-    graph_store = None,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_url tool with mode support.
 
-    Now routes through unified mediator to update both RAG and Knowledge Graph.
-    Falls back to RAG-only mode if mediator is not available.
+    Routes through unified mediator to update both RAG and Knowledge Graph.
+    Performs health checks on both databases before crawling (Option B: Mandatory).
 
     Args:
         mode: "crawl" (new crawl, error if exists) or "recrawl" (update existing)
-        graph_store: Optional GraphStore for episode cleanup during recrawl
     """
     try:
+        # Health check: both PostgreSQL and Neo4j must be reachable
+        health_error = await ensure_databases_healthy(db, graph_store)
+        if health_error:
+            return health_error
+
         # Validate mode
         if mode not in ["crawl", "recrawl"]:
             raise ValueError(f"Invalid mode '{mode}'. Must be 'crawl' or 'recrawl'")
@@ -638,33 +694,17 @@ async def ingest_url_impl(
             try:
                 page_title = result.metadata.get("title", result.url)
 
-                # Route through unified mediator if available (RAG + Graph)
-                if unified_mediator:
-                    logger.info(f"Using unified mediator for page: {page_title}")
-                    ingest_result = await unified_mediator.ingest_text(
-                        content=result.content,
-                        collection_name=collection_name,
-                        document_title=page_title,
-                        metadata=result.metadata
-                    )
-                    document_ids.append(ingest_result["source_document_id"])
-                    total_chunks += ingest_result["num_chunks"]
-                    total_entities += ingest_result.get("entities_extracted", 0)
-                    successful_ingests += 1
-
-                # Fallback: RAG-only mode
-                else:
-                    logger.info(f"Using RAG-only mode for page: {page_title}")
-                    source_id, chunk_ids = doc_store.ingest_document(
-                        content=result.content,
-                        filename=page_title,
-                        collection_name=collection_name,
-                        metadata=result.metadata,
-                        file_type="web_page",
-                    )
-                    document_ids.append(source_id)
-                    total_chunks += len(chunk_ids)
-                    successful_ingests += 1
+                logger.info(f"Ingesting page through unified mediator: {page_title}")
+                ingest_result = await unified_mediator.ingest_text(
+                    content=result.content,
+                    collection_name=collection_name,
+                    document_title=page_title,
+                    metadata=result.metadata
+                )
+                document_ids.append(ingest_result["source_document_id"])
+                total_chunks += ingest_result["num_chunks"]
+                total_entities += ingest_result.get("entities_extracted", 0)
+                successful_ingests += 1
 
             except Exception as e:
                 logger.warning(f"Failed to ingest page {result.url}: {e}")
@@ -675,6 +715,7 @@ async def ingest_url_impl(
             "pages_ingested": successful_ingests,
             "total_chunks": total_chunks,
             "collection_name": collection_name,
+            "entities_extracted": total_entities,
             "crawl_metadata": {
                 "crawl_root_url": url,
                 "crawl_session_id": (
@@ -683,10 +724,6 @@ async def ingest_url_impl(
                 "crawl_timestamp": datetime.now().isoformat(),
             },
         }
-
-        # Include entities_extracted if unified mediator was used
-        if unified_mediator:
-            response["entities_extracted"] = total_entities
 
         if mode == "recrawl":
             response["old_pages_deleted"] = old_pages_deleted
@@ -701,8 +738,10 @@ async def ingest_url_impl(
 
 
 async def ingest_file_impl(
+    db: Database,
     doc_store: DocumentStore,
     unified_mediator,
+    graph_store: Optional[GraphStore],
     file_path: str,
     collection_name: str,
     metadata: Optional[Dict[str, Any]],
@@ -711,10 +750,15 @@ async def ingest_file_impl(
     """
     Implementation of ingest_file tool.
 
-    Now routes through unified mediator to update both RAG and Knowledge Graph.
-    Falls back to RAG-only mode if mediator is not available.
+    Routes through unified mediator to update both RAG and Knowledge Graph.
+    Performs health checks on both databases before ingestion (Option B: Mandatory).
     """
     try:
+        # Health check: both PostgreSQL and Neo4j must be reachable
+        health_error = await ensure_databases_healthy(db, graph_store)
+        if health_error:
+            return health_error
+
         path = Path(file_path)
 
         if not path.exists():
@@ -732,52 +776,30 @@ async def ingest_file_impl(
         file_size = path.stat().st_size
         file_type = path.suffix.lstrip(".").lower() or "text"
 
-        # Route through unified mediator if available (RAG + Graph)
-        if unified_mediator:
-            logger.info(f"Using unified mediator for file: {path.name}")
+        logger.info(f"Ingesting file through unified mediator: {path.name}")
 
-            # Read file content
-            with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
+        # Read file content
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+            content = f.read()
 
-            # Merge file metadata with user metadata
-            file_metadata = metadata.copy() if metadata else {}
-            file_metadata.update({
-                "file_type": file_type,
-                "file_size": file_size,
-            })
+        # Merge file metadata with user metadata
+        file_metadata = metadata.copy() if metadata else {}
+        file_metadata.update({
+            "file_type": file_type,
+            "file_size": file_size,
+        })
 
-            ingest_result = await unified_mediator.ingest_text(
-                content=content,
-                collection_name=collection_name,
-                document_title=path.name,
-                metadata=file_metadata
-            )
-
-            result = {
-                "source_document_id": ingest_result["source_document_id"],
-                "num_chunks": ingest_result["num_chunks"],
-                "entities_extracted": ingest_result.get("entities_extracted", 0),
-                "filename": path.name,
-                "file_type": file_type,
-                "file_size": file_size,
-                "collection_name": collection_name,
-            }
-
-            if include_chunk_ids:
-                result["chunk_ids"] = ingest_result.get("chunk_ids", [])
-
-            return result
-
-        # Fallback: RAG-only mode
-        logger.info(f"Using RAG-only mode for file: {path.name}")
-        source_id, chunk_ids = doc_store.ingest_file(
-            file_path=file_path, collection_name=collection_name, metadata=metadata
+        ingest_result = await unified_mediator.ingest_text(
+            content=content,
+            collection_name=collection_name,
+            document_title=path.name,
+            metadata=file_metadata
         )
 
         result = {
-            "source_document_id": source_id,
-            "num_chunks": len(chunk_ids),
+            "source_document_id": ingest_result["source_document_id"],
+            "num_chunks": ingest_result["num_chunks"],
+            "entities_extracted": ingest_result.get("entities_extracted", 0),
             "filename": path.name,
             "file_type": file_type,
             "file_size": file_size,
@@ -785,7 +807,7 @@ async def ingest_file_impl(
         }
 
         if include_chunk_ids:
-            result["chunk_ids"] = chunk_ids
+            result["chunk_ids"] = ingest_result.get("chunk_ids", [])
 
         return result
     except Exception as e:
@@ -794,8 +816,10 @@ async def ingest_file_impl(
 
 
 async def ingest_directory_impl(
+    db: Database,
     doc_store: DocumentStore,
     unified_mediator,
+    graph_store: Optional[GraphStore],
     directory_path: str,
     collection_name: str,
     file_extensions: Optional[List[str]],
@@ -805,10 +829,15 @@ async def ingest_directory_impl(
     """
     Implementation of ingest_directory tool.
 
-    Now routes through unified mediator to update both RAG and Knowledge Graph.
-    Falls back to RAG-only mode if mediator is not available.
+    Routes through unified mediator to update both RAG and Knowledge Graph.
+    Performs health checks on both databases before ingestion (Option B: Mandatory).
     """
     try:
+        # Health check: both PostgreSQL and Neo4j must be reachable
+        health_error = await ensure_databases_healthy(db, graph_store)
+        if health_error:
+            return health_error
+
         path = Path(directory_path)
 
         if not path.exists() or not path.is_dir():
@@ -837,7 +866,7 @@ async def ingest_directory_impl(
 
         files = sorted(set(files))
 
-        # Ingest each file (route through unified mediator if available)
+        # Ingest each file through unified mediator
         document_ids = []
         total_chunks = 0
         total_entities = 0
@@ -848,38 +877,27 @@ async def ingest_directory_impl(
                 file_size = file_path.stat().st_size
                 file_type = file_path.suffix.lstrip(".").lower() or "text"
 
-                # Route through unified mediator if available (RAG + Graph)
-                if unified_mediator:
-                    logger.info(f"Using unified mediator for file: {file_path.name}")
+                logger.info(f"Ingesting file through unified mediator: {file_path.name}")
 
-                    # Read file content
-                    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                        content = f.read()
+                # Read file content
+                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
 
-                    # Build metadata
-                    file_metadata = {
-                        "file_type": file_type,
-                        "file_size": file_size,
-                    }
+                # Build metadata
+                file_metadata = {
+                    "file_type": file_type,
+                    "file_size": file_size,
+                }
 
-                    ingest_result = await unified_mediator.ingest_text(
-                        content=content,
-                        collection_name=collection_name,
-                        document_title=file_path.name,
-                        metadata=file_metadata
-                    )
-                    document_ids.append(ingest_result["source_document_id"])
-                    total_chunks += ingest_result["num_chunks"]
-                    total_entities += ingest_result.get("entities_extracted", 0)
-
-                # Fallback: RAG-only mode
-                else:
-                    logger.info(f"Using RAG-only mode for file: {file_path.name}")
-                    source_id, chunk_ids = doc_store.ingest_file(
-                        file_path=str(file_path), collection_name=collection_name
-                    )
-                    document_ids.append(source_id)
-                    total_chunks += len(chunk_ids)
+                ingest_result = await unified_mediator.ingest_text(
+                    content=content,
+                    collection_name=collection_name,
+                    document_title=file_path.name,
+                    metadata=file_metadata
+                )
+                document_ids.append(ingest_result["source_document_id"])
+                total_chunks += ingest_result["num_chunks"]
+                total_entities += ingest_result.get("entities_extracted", 0)
 
             except Exception as e:
                 failed_files.append({"filename": file_path.name, "error": str(e)})
@@ -890,11 +908,8 @@ async def ingest_directory_impl(
             "files_failed": len(failed_files),
             "total_chunks": total_chunks,
             "collection_name": collection_name,
+            "entities_extracted": total_entities,
         }
-
-        # Include entities_extracted if unified mediator was used
-        if unified_mediator:
-            result["entities_extracted"] = total_entities
 
         if include_document_ids:
             result["document_ids"] = document_ids
@@ -909,21 +924,27 @@ async def ingest_directory_impl(
 
 
 async def update_document_impl(
+    db: Database,
     doc_store: DocumentStore,
     document_id: int,
     content: Optional[str],
     title: Optional[str],
     metadata: Optional[Dict[str, Any]],
-    graph_store = None,
+    graph_store: Optional[GraphStore] = None,
 ) -> Dict[str, Any]:
     """
     Implementation of update_document tool.
 
-    Now includes Graph episode cleanup when content is updated.
-    If graph_store is provided and content is changed, deletes the old
-    Graph episode before re-chunking and re-embedding the document.
+    Updates document content, title, or metadata with health checks.
+    If content changes, Graph episode is cleaned up and re-indexed.
+    Performs health checks on both databases before update (Option B: Mandatory).
     """
     try:
+        # Health check: both PostgreSQL and Neo4j must be reachable
+        health_error = await ensure_databases_healthy(db, graph_store)
+        if health_error:
+            return health_error
+
         if not content and not title and not metadata:
             raise ValueError(
                 "At least one of content, title, or metadata must be provided"
@@ -944,18 +965,25 @@ async def update_document_impl(
 
 
 async def delete_document_impl(
+    db: Database,
     doc_store: DocumentStore,
     document_id: int,
-    graph_store = None
+    graph_store: Optional[GraphStore] = None,
 ) -> Dict[str, Any]:
     """
     Implementation of delete_document tool.
 
-    Now includes Graph episode cleanup. If graph_store is provided,
-    deletes the corresponding Knowledge Graph episode before removing
-    the RAG document.
+    Permanently removes document from RAG store and Graph.
+    Performs health checks on both databases before deletion (Option B: Mandatory).
+
+    ⚠️ WARNING: This operation is permanent and cannot be undone.
     """
     try:
+        # Health check: both PostgreSQL and Neo4j must be reachable
+        health_error = await ensure_databases_healthy(db, graph_store)
+        if health_error:
+            return health_error
+
         result = await doc_store.delete_document(document_id, graph_store=graph_store)
         return result
     except Exception as e:
