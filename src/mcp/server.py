@@ -76,14 +76,22 @@ async def lifespan(app: FastMCP):
     global db, embedder, coll_mgr, searcher, doc_store
     global graph_store, unified_mediator
 
-    # Initialize RAG components when server starts
+    # Initialize RAG components when server starts (MANDATORY per Gap 2.1)
     logger.info("Initializing RAG components...")
-    db = get_database()
-    embedder = get_embedding_generator()
-    coll_mgr = get_collection_manager(db)
-    searcher = get_similarity_search(db, embedder, coll_mgr)
-    doc_store = get_document_store(db, embedder, coll_mgr)
-    logger.info("RAG components initialized")
+    try:
+        db = get_database()
+        embedder = get_embedding_generator()
+        coll_mgr = get_collection_manager(db)
+        searcher = get_similarity_search(db, embedder, coll_mgr)
+        doc_store = get_document_store(db, embedder, coll_mgr)
+        logger.info("RAG components initialized successfully")
+    except Exception as e:
+        # FAIL-FAST per Gap 2.1 (Option B): PostgreSQL is mandatory
+        # Do not start server if PostgreSQL is unreachable
+        logger.error(f"FATAL: RAG initialization failed (PostgreSQL unavailable): {e}")
+        logger.error("Gap 2.1 (Option B: Mandatory Graph) requires both PostgreSQL and Neo4j to be operational.")
+        logger.error("Please ensure PostgreSQL is running and accessible, then restart the server.")
+        raise SystemExit(1)
 
     # Initialize Knowledge Graph components (MANDATORY per Gap 2.1, Option B: All or Nothing)
     logger.info("Initializing Knowledge Graph components...")
