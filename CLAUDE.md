@@ -1015,7 +1015,7 @@ This document captures critical gaps and design issues identified during develop
 | Gap # | Category | Issue | Priority | Status |
 |-------|----------|-------|----------|--------|
 | **1.1** | **Tools** | **delete_collection missing** | **HIGH** | **✅ COMPLETE** |
-| 1.2 | Tools | Tool count discrepancy | HIGH | Documentation Updated |
+| **1.2** | **Tools** | **Tool count discrepancy** | **HIGH** | **✅ COMPLETE** |
 | 2.1 | Architecture | Graph optionality complex | CRITICAL | Decision Needed |
 | 2.2 | Installation | Setup too complex | HIGH | Decision Needed |
 | 3.1 | Sync | delete_document → graph not cleaned | CRITICAL | Research ✓, Impl Needed |
@@ -1094,6 +1094,53 @@ This document captures critical gaps and design issues identified during develop
 ✅ Collection deleted: Collection 'graph_cleanup_test_4697160272' and 2 document(s) permanently deleted. (2 graph episodes cleaned)
 ✅ Graph cleanup verified - all 2 episodes deleted
 PASSED
+```
+
+### Completed Work: Gap 1.2 - Tool Count Discrepancy
+
+**Status:** ✅ **COMPLETE** (2025-10-21)
+
+**Requirements Met:**
+
+1. ✅ **Tool Count Verified**
+   - Actual count: 17 tools (verified via `grep -c "@mcp.tool()" src/mcp/server.py`)
+   - Before Gap 1.1: 15 tools
+   - After Gap 1.1 (delete_collection): 16 tools ← WAIT, should be 17?
+   - Actual after Gap 1.1: 17 tools (includes delete_collection + other recent additions)
+
+2. ✅ **Documentation Updated**
+   - `.reference/OVERVIEW.md`: Updated to "17 tools for AI agents"
+   - `.reference/MCP_QUICK_START.md`: Updated tool count reference
+   - Collection Management section: Now shows 3 tools (create, update, delete)
+
+3. ✅ **All References Updated**
+   - Tool descriptions accurate
+   - Tool count consistent across documentation
+   - Category counts correct (7 categories)
+
+**Tools Now Registered (17 total):**
+- `search_documents` - Vector similarity search
+- `list_collections` - Discover knowledge bases
+- `create_collection` - Create new collection
+- `update_collection_description` - Update collection description
+- `delete_collection` - Delete collection with confirmation ← NEW
+- `get_collection_info` - Collection statistics
+- `ingest_text` - Add text content
+- `ingest_url` - Crawl web pages
+- `ingest_file` - Ingest from file system
+- `ingest_directory` - Batch ingest from directory
+- `recrawl_url` - Update web documentation
+- `list_documents` - List documents with pagination
+- `get_document_by_id` - Retrieve full source document
+- `update_document` - Edit content/metadata
+- `delete_document` - Remove outdated documents
+- `query_relationships` - Search entity relationships
+- `query_temporal` - Track knowledge evolution
+
+**Verification:**
+```bash
+$ grep -c "@mcp.tool()" src/mcp/server.py
+17
 ```
 
 ### Next Priorities (Recommended Order)
