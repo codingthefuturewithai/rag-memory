@@ -174,6 +174,102 @@ class Database:
                 "database_size": db_size,
             }
 
+    async def validate_schema(self) -> dict:
+        """
+        Validate PostgreSQL schema is properly initialized (startup only).
+
+        Performs lightweight checks:
+        1. Required tables exist (source_documents, document_chunks, collections)
+        2. pgvector extension is loaded
+        3. HNSW indexes exist (performance critical)
+
+        Returns:
+            Dictionary with validation status:
+                {
+                    "status": "valid" | "invalid",
+                    "latency_ms": float,
+                    "missing_tables": list[str],
+                    "pgvector_loaded": bool,
+                    "hnsw_indexes": int,
+                    "errors": list[str]
+                }
+
+        Note:
+            - Only called at server startup
+            - Latency: ~4-6ms local, ~10-20ms cloud
+            - Provides early failure if schema not initialized
+        """
+        start = time.perf_counter()
+        errors = []
+        missing_tables = []
+        pgvector_loaded = False
+        hnsw_indexes = 0
+
+        try:
+            conn = self.connect()
+            with conn.cursor() as cur:
+                # Check 1: Required tables exist
+                cur.execute(
+                    """
+                    SELECT table_name FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name IN ('source_documents', 'document_chunks', 'collections');
+                    """
+                )
+                existing_tables = {row[0] for row in cur.fetchall()}
+                required_tables = {"source_documents", "document_chunks", "collections"}
+                missing_tables = list(required_tables - existing_tables)
+
+                if missing_tables:
+                    errors.append(
+                        f"Missing required tables: {', '.join(missing_tables)}. "
+                        "Run 'uv run rag init' to initialize the database."
+                    )
+
+                # Check 2: pgvector extension loaded
+                cur.execute(
+                    "SELECT extversion FROM pg_extension WHERE extname = 'vector';"
+                )
+                pgvector_result = cur.fetchone()
+                pgvector_loaded = pgvector_result is not None
+
+                if not pgvector_loaded:
+                    errors.append(
+                        "pgvector extension not found. "
+                        "Ensure PostgreSQL has pgvector installed and initialized."
+                    )
+
+                # Check 3: HNSW indexes exist (if tables exist)
+                if not missing_tables:
+                    cur.execute(
+                        """
+                        SELECT COUNT(*) FROM pg_indexes
+                        WHERE schemaname = 'public'
+                        AND indexname LIKE '%hnsw%';
+                        """
+                    )
+                    hnsw_indexes = cur.fetchone()[0]
+
+                    if hnsw_indexes < 2:
+                        errors.append(
+                            f"HNSW indexes not found (expected 2, found {hnsw_indexes}). "
+                            "Run 'uv run rag init' to create indexes."
+                        )
+
+        except Exception as e:
+            errors.append(f"Schema validation error: {str(e)}")
+
+        latency = (time.perf_counter() - start) * 1000
+
+        return {
+            "status": "valid" if not errors else "invalid",
+            "latency_ms": round(latency, 2),
+            "missing_tables": missing_tables,
+            "pgvector_loaded": pgvector_loaded,
+            "hnsw_indexes": hnsw_indexes,
+            "errors": errors,
+        }
+
     def initialize_schema(self) -> bool:
         """
         Initialize database schema if not already created.

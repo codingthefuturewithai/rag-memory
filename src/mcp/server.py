@@ -121,6 +121,48 @@ async def lifespan(app: FastMCP):
         logger.error("Please ensure Neo4j is running and accessible, then restart the server.")
         raise SystemExit(1)
 
+    # Validate PostgreSQL schema (only at startup)
+    logger.info("Validating PostgreSQL schema...")
+    try:
+        pg_validation = await db.validate_schema()
+        if pg_validation["status"] != "valid":
+            logger.error("FATAL: PostgreSQL schema validation failed")
+            for error in pg_validation["errors"]:
+                logger.error(f"  - {error}")
+            raise SystemExit(1)
+        logger.info(
+            f"PostgreSQL schema valid ✓ "
+            f"(tables: 3/3, pgvector: {'✓' if pg_validation['pgvector_loaded'] else '✗'}, "
+            f"indexes: {pg_validation['hnsw_indexes']}/2)"
+        )
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error(f"FATAL: PostgreSQL schema validation error: {e}")
+        raise SystemExit(1)
+
+    # Validate Neo4j schema (only at startup)
+    logger.info("Validating Neo4j schema...")
+    try:
+        graph_validation = await graph_store.validate_schema()
+        if graph_validation["status"] != "valid":
+            logger.error("FATAL: Neo4j schema validation failed")
+            for error in graph_validation["errors"]:
+                logger.error(f"  - {error}")
+            raise SystemExit(1)
+        logger.info(
+            f"Neo4j schema valid ✓ "
+            f"(indexes: {graph_validation['indexes_found']}, queryable: "
+            f"{'✓' if graph_validation['can_query_nodes'] else '✗'})"
+        )
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error(f"FATAL: Neo4j schema validation error: {e}")
+        raise SystemExit(1)
+
+    logger.info("All startup validations passed - server ready ✓")
+
     yield {}  # Server runs here
 
     # Cleanup on shutdown

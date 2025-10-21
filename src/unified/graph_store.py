@@ -112,6 +112,86 @@ class GraphStore:
                 "error": f"Unexpected error: {str(e)}",
             }
 
+    async def validate_schema(self) -> dict:
+        """
+        Validate Neo4j graph is properly initialized (startup only).
+
+        Performs lightweight checks:
+        1. Indexes and constraints exist (validates Graphiti initialization)
+        2. Can query nodes (validates graph operability)
+
+        Returns:
+            Dictionary with validation status:
+                {
+                    "status": "valid" | "invalid",
+                    "latency_ms": float,
+                    "indexes_found": int,
+                    "can_query_nodes": bool,
+                    "errors": list[str]
+                }
+
+        Note:
+            - Only called at server startup
+            - Latency: ~5-15ms local, ~20-40ms cloud
+            - Provides early failure if Neo4j not initialized
+        """
+        if self.graphiti is None:
+            return {
+                "status": "invalid",
+                "latency_ms": None,
+                "indexes_found": 0,
+                "can_query_nodes": False,
+                "errors": ["Graphiti not initialized"],
+            }
+
+        start = time.perf_counter()
+        errors = []
+        indexes_found = 0
+        can_query_nodes = False
+
+        try:
+            # Check 1: Indexes and constraints exist
+            try:
+                result = await self.graphiti.driver.execute_query(
+                    "SHOW INDEXES YIELD name"
+                )
+                indexes_found = len(result.records) if result.records else 0
+
+                if indexes_found == 0:
+                    errors.append(
+                        "No Neo4j indexes found. "
+                        "Graphiti schema may not be initialized. "
+                        "Restart the server to trigger Graphiti initialization."
+                    )
+            except Exception as e:
+                errors.append(f"Failed to check indexes: {str(e)}")
+
+            # Check 2: Can query nodes
+            try:
+                result = await self.graphiti.driver.execute_query(
+                    "MATCH (n) RETURN COUNT(n) AS count LIMIT 1"
+                )
+                if result.records:
+                    can_query_nodes = True
+                else:
+                    # Empty graph is still valid (just no data yet)
+                    can_query_nodes = True
+            except Exception as e:
+                errors.append(f"Cannot query Neo4j nodes: {str(e)}")
+
+        except Exception as e:
+            errors.append(f"Schema validation error: {str(e)}")
+
+        latency = (time.perf_counter() - start) * 1000
+
+        return {
+            "status": "valid" if not errors else "invalid",
+            "latency_ms": round(latency, 2),
+            "indexes_found": indexes_found,
+            "can_query_nodes": can_query_nodes,
+            "errors": errors,
+        }
+
     async def add_knowledge(
         self,
         content: str,
