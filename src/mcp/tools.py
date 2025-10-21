@@ -145,6 +145,66 @@ def update_collection_description_impl(
         raise
 
 
+def delete_collection_impl(
+    coll_mgr: CollectionManager, name: str, confirm: bool = False
+) -> Dict[str, Any]:
+    """
+    Implementation of delete_collection tool.
+
+    Deletes a collection and all its documents permanently.
+    Requires explicit confirmation to prevent accidental data loss.
+
+    Args:
+        coll_mgr: CollectionManager instance
+        name: Collection name to delete
+        confirm: MUST be True to proceed (prevents accidental deletion)
+
+    Returns:
+        {
+            "name": str,
+            "deleted": bool,
+            "message": str
+        }
+
+    Raises:
+        ValueError: If collection not found or confirm not set
+    """
+    try:
+        # Require explicit confirmation
+        if not confirm:
+            raise ValueError(
+                f"Deletion requires confirmation. Use confirm=True to proceed. "
+                f"WARNING: This will permanently delete collection '{name}' and all its documents."
+            )
+
+        # First, get collection info to report what's being deleted
+        collection_info = coll_mgr.get_collection(name)
+        if not collection_info:
+            raise ValueError(f"Collection '{name}' not found")
+
+        doc_count = collection_info.get("document_count", 0)
+
+        # Perform the deletion
+        deleted = coll_mgr.delete_collection(name)
+
+        if not deleted:
+            raise ValueError(f"Collection '{name}' not found")
+
+        logger.info(f"Deleted collection '{name}' with {doc_count} documents")
+
+        return {
+            "name": name,
+            "deleted": True,
+            "message": f"Collection '{name}' and {doc_count} document(s) permanently deleted."
+        }
+    except ValueError as e:
+        logger.warning(f"delete_collection failed: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"delete_collection failed: {e}")
+        raise
+
+
 async def ingest_text_impl(
     doc_store: DocumentStore,
     unified_mediator,

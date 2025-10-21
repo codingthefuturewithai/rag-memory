@@ -113,13 +113,14 @@ If missing: "Reference documentation not found. Please ensure .reference/ direct
 
 ---
 
-#### Step 4 - The 14 MCP Tools
+#### Step 4 - The 16 MCP Tools
 
-[Read from .reference/OVERVIEW.md "Why MCP Server?" section - tools list]
+[Read from .reference/MCP_QUICK_START.md "Available Tools (16 Total)" section]
 
 **Present:**
-- Show the 14 tools grouped by category
-- Brief description for each (tool name + one phrase)
+- Show the 16 tools grouped by 7 categories
+- Brief description for each
+- Key point: 2 graph tools are experimental, not for production yet
 - Keep it scannable, not wordy
 
 **STOP and wait for user response before continuing to Step 5**
@@ -403,28 +404,39 @@ rag search "semantic search" --collection test-collection
 "✅ Your RAG Memory setup is complete! What would you like to explore next?"
 
 **Adapt based on their usage choice:**
-- MCP server users: "Your AI agent can now use all 14 RAG tools!"
+- MCP server users: "Your AI agent can now use all 16 RAG tools!"
 - CLI users: "You can now use all CLI commands!"
 - Both: "You have both MCP and CLI access!"
 
+**Advanced Topics Available:**
 1. Ingest real documents (files, directories, websites)
-2. Learn about web crawling
-3. Understand document chunking
-4. See complete MCP tools reference
-5. Learn CLI commands
-6. Troubleshooting
-7. Ask specific questions
+2. Learn about web crawling and re-crawl for updates
+3. Understand document chunking strategy
+4. Explore search optimization (vector-only is optimal)
+5. Learn CLI commands (25+ available)
+6. Advanced topics:
+   - Knowledge graph & entity relationships (Experimental)
+   - Similarity score tuning
+   - Metadata filtering
+   - Collections organization
+   - Deployment options
+7. Troubleshooting
 
 **WAIT FOR RESPONSE**
 
 **Based on choice:**
-1. [Read from CLAUDE.md ingestion commands section]
-2. [Read from .reference/OVERVIEW.md web crawling section]
-3. [Read from .reference/OVERVIEW.md chunking section]
-4. [Point to .reference/MCP_QUICK_START.md tools section or docs/MCP_SERVER_GUIDE.md]
-5. [Read from CLAUDE.md CLI commands section]
-6. [Read from .reference/MCP_QUICK_START.md troubleshooting section]
-7. [Answer from documentation as needed]
+1. [Read from CLAUDE.md ingestion section]
+2. [Read from .reference/OVERVIEW.md "Web Crawling & Link Following" + "Re-Crawl for Updates"]
+3. [Read from .reference/OVERVIEW.md "Document Chunking"]
+4. [Read from .reference/SEARCH_OPTIMIZATION.md "Baseline Search - RECOMMENDED"]
+5. [Read from CLAUDE.md CLI Commands section]
+6. **Advanced topics:**
+   - Knowledge graph: [Read from .reference/KNOWLEDGE_GRAPH.md intro + use cases]
+   - Similarity tuning: [Read from .reference/SEARCH_OPTIMIZATION.md "Threshold Tuning Guide"]
+   - Metadata: [Read from .reference/OVERVIEW.md "Key Features Explained" - #4]
+   - Collections: [Read from .reference/OVERVIEW.md "Collections (Organization Layer)"]
+   - Deployment: [Read from .reference/OVERVIEW.md "Deployment Options"]
+7. [Read from .reference/MCP_QUICK_START.md troubleshooting section]
 
 ---
 

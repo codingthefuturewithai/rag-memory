@@ -1,6 +1,7 @@
 """MCP collection management tool integration tests.
 
-Tests create_collection, list_collections, update_collection_description, get_collection_info.
+Tests create_collection, list_collections, update_collection_description, get_collection_info,
+and delete_collection.
 """
 
 import json
@@ -124,3 +125,125 @@ class TestCollections:
         assert data.get("description") == "Test collection"
         assert "document_count" in data or "chunk_count" in data
         # Note: Collection persists in test database - this is acceptable for integration tests
+
+    async def test_delete_collection_requires_confirmation(self, mcp_session):
+        """Test that delete_collection requires confirm=True."""
+        session, transport = mcp_session
+
+        collection_name = f"test_delete_no_confirm_{id(session)}"
+
+        # Create collection
+        await session.call_tool("create_collection", {
+            "name": collection_name,
+            "description": "Collection to test deletion without confirmation"
+        })
+
+        # Try to delete without confirmation (should fail)
+        result = await session.call_tool("delete_collection", {
+            "name": collection_name,
+            "confirm": False
+        })
+
+        # Should error
+        assert result.isError, "delete_collection should require confirm=True"
+
+        # Verify collection still exists
+        verify_result = await session.call_tool("get_collection_info", {
+            "collection_name": collection_name
+        })
+        assert not verify_result.isError, "Collection should still exist after failed deletion"
+
+    async def test_delete_collection_with_confirmation(self, mcp_session):
+        """Test successful delete_collection with confirm=True."""
+        session, transport = mcp_session
+
+        collection_name = f"test_delete_with_confirm_{id(session)}"
+
+        # Create collection
+        await session.call_tool("create_collection", {
+            "name": collection_name,
+            "description": "Collection to delete with confirmation"
+        })
+
+        # Delete with confirmation
+        result = await session.call_tool("delete_collection", {
+            "name": collection_name,
+            "confirm": True
+        })
+
+        assert not result.isError, f"delete_collection with confirm=True failed: {result}"
+        text = extract_text_content(result)
+        data = json.loads(text)
+        assert data.get("deleted") is True
+        assert data.get("name") == collection_name
+        assert "permanently deleted" in data.get("message", "").lower()
+
+        # Verify collection no longer exists
+        verify_result = await session.call_tool("get_collection_info", {
+            "collection_name": collection_name
+        })
+        assert verify_result.isError, "Collection should not exist after deletion"
+
+    async def test_delete_collection_with_documents(self, mcp_session):
+        """Test delete_collection removes associated documents."""
+        session, transport = mcp_session
+
+        collection_name = f"test_delete_with_docs_{id(session)}"
+
+        # Create collection
+        await session.call_tool("create_collection", {
+            "name": collection_name,
+            "description": "Collection with documents to delete"
+        })
+
+        # Add documents
+        for i in range(3):
+            await session.call_tool("ingest_text", {
+                "content": f"Test document {i} with some content",
+                "collection_name": collection_name,
+                "document_title": f"Doc{i}"
+            })
+
+        # Get collection info to see document count
+        info_result = await session.call_tool("get_collection_info", {
+            "collection_name": collection_name
+        })
+        assert not info_result.isError
+        info_text = extract_text_content(info_result)
+        info_data = json.loads(info_text)
+        initial_doc_count = info_data.get("document_count", 0)
+        assert initial_doc_count > 0, "Should have at least 1 document"
+
+        # Delete collection with all its documents
+        result = await session.call_tool("delete_collection", {
+            "name": collection_name,
+            "confirm": True
+        })
+
+        assert not result.isError, "delete_collection should succeed"
+        text = extract_text_content(result)
+        data = json.loads(text)
+        assert data.get("deleted") is True
+        assert str(initial_doc_count) in str(data.get("message", "")), \
+            f"Message should mention document count {initial_doc_count}"
+
+        # Verify collection is gone
+        verify_result = await session.call_tool("get_collection_info", {
+            "collection_name": collection_name
+        })
+        assert verify_result.isError, "Collection should be deleted"
+
+    async def test_delete_nonexistent_collection(self, mcp_session):
+        """Test delete_collection on nonexistent collection fails gracefully."""
+        session, transport = mcp_session
+
+        collection_name = f"nonexistent_{id(session)}"
+
+        # Try to delete nonexistent collection
+        result = await session.call_tool("delete_collection", {
+            "name": collection_name,
+            "confirm": True
+        })
+
+        # Should error because collection doesn't exist
+        assert result.isError, "Should error when collection doesn't exist"

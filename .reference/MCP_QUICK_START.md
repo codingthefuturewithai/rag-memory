@@ -274,29 +274,146 @@ rag ingest text "Test document" --collection test-collection
 rag search "test" --collection test-collection
 ```
 
-## Available Tools (14 Total)
+## Available Tools (17 Total)
 
-### Core RAG (3 tools)
-1. **search_documents** - Semantic search with vector similarity
-2. **list_collections** - Discover available knowledge bases
-3. **ingest_text** - Add text content with auto-chunking
+### 1. Search & Discovery (4 tools)
 
-### Collection Management (2 tools)
-4. **create_collection** ⭐ - Create new collections with required descriptions
-5. **update_collection_description** ⭐ - Update existing collection descriptions
+**search_documents** - Semantic vector similarity search
+- Parameters: query, collection_name (optional), limit, threshold (optional), include_source (bool)
+- Returns: List of chunks with similarity scores (0.0-1.0)
+- Example: "Find docs about PostgreSQL performance"
+- Similarity Interpretation: 0.7+ = high confidence, 0.5-0.7 = related, 0.3-0.5 = marginal
 
-### Document Management (4 tools)
-6. **list_documents** - Browse documents with pagination
-7. **get_document_by_id** - Retrieve full source document
-8. **update_document** ⭐ - Edit existing documents
-9. **delete_document** ⭐ - Remove outdated content
+**list_collections** - Discover all knowledge bases
+- Parameters: None
+- Returns: List of collections with document counts and descriptions
+- Example: "What knowledge bases do I have?"
 
-### Advanced Ingestion (5 tools)
-10. **get_collection_info** - Collection stats + crawl history
-11. **analyze_website** ⭐ - Sitemap analysis for planning crawls
-12. **ingest_url** - Crawl web pages with duplicate prevention
-13. **ingest_file** - Ingest text files from filesystem
-14. **ingest_directory** ⭐ - Batch ingest from directories
+**get_collection_info** - Detailed collection statistics
+- Parameters: collection_name
+- Returns: Document count, chunk count, creation date, crawl metadata
+- Example: "Show me stats for my AI documentation"
+
+**analyze_website** - Parse sitemap and understand site structure
+- Parameters: url, timeout (optional), include_url_lists (bool), max_urls_per_pattern (int)
+- Returns: URL patterns, statistics, sample URLs
+- Example: "How many pages on docs.python.org?" (helps plan crawls)
+
+### 2. Document Management - Read Operations (3 tools)
+
+**list_documents** - Browse documents with pagination
+- Parameters: collection_name (optional), limit, offset
+- Returns: Document IDs, filenames, titles, metadata, created dates
+- Example: "Show me the documents in my collection"
+- Use Case: Inventory management, finding duplicate documents
+
+**get_document_by_id** - Retrieve full source document
+- Parameters: document_id, include_chunks (bool)
+- Returns: Full document content, metadata, chunk details (if requested)
+- Example: "Show me the full content of document 42"
+- Use Case: Reviewing full source after chunk search finds it
+
+**ingest_text** - Add text content with auto-chunking
+- Parameters: content (string), collection_name, metadata (JSON)
+- Returns: source_document_id, num_chunks, entities_extracted
+- Example: "Store this PostgreSQL guide in my tech docs"
+- Auto-chunks: 1000 chars per chunk, 200 char overlap
+- Auto-embeds to both RAG (pgvector) and Graph (Graphiti) if available
+
+### 3. Document Management - Write Operations (2 tools)
+
+**update_document** - Edit document content/metadata (re-embeds)
+- Parameters: document_id, content (optional), title (optional), metadata (JSON)
+- Returns: Updated document_id, new chunk count
+- Example: "Update document 42 with corrected content"
+- ⚠️ WARNING: Graph not updated until Phase 4 - Graph will have stale data
+- Use Case: Fixing errors, adding new information
+
+**delete_document** - Remove documents
+- Parameters: document_id
+- Returns: Confirmation, deleted document_id
+- Example: "Remove the outdated guide (doc 15)"
+- ⚠️ WARNING: Graph not cleaned until Phase 4 - Orphaned episodes accumulate
+- Use Case: Removing incorrect or duplicate documents
+
+### 4. Collection Management (3 tools)
+
+**create_collection** - Create new named collection
+- Parameters: name, description (required)
+- Returns: collection_id, name, created status
+- Example: "Create a collection called 'Python Docs' for Python documentation"
+- Description is MANDATORY (not optional)
+- Use Case: Organizing knowledge by topic/domain
+
+**update_collection_description** - Update collection metadata
+- Parameters: collection_name, description
+- Returns: collection_name, new description, updated status
+- Example: "Update the AI docs description to add version info"
+- Use Case: Keeping metadata current as collection evolves
+
+**delete_collection** - ⚠️ DANGEROUS - Delete collection and all documents
+- Parameters: name, confirm (REQUIRED: must be True)
+- Returns: name, deleted status, message with document count
+- Example: "Delete 'old-docs' (with confirm=True)"
+- ⚠️ WARNING: This permanently deletes the collection and ALL its documents
+- ⚠️ WARNING: Confirmation required (confirm=True) to prevent accidents
+- ⚠️ WARNING: Graph episodes NOT cleaned until Phase 4 - cleanup planned
+- Use Case: Removing obsolete collections and associated knowledge
+
+### 5. Advanced Ingestion - Web Crawling (3 tools)
+
+**ingest_url** - Crawl single web page or follow links
+- Parameters: url, collection_name, follow_links (bool), max_depth (int), chunk_size (optional), chunk_overlap (optional)
+- Returns: source_document_id, num_chunks, pages_crawled
+- Examples:
+  - Single page: "Ingest https://docs.example.com/intro"
+  - Multi-page: "Crawl https://docs.example.com with link following, depth 2"
+- Metadata: Tracks crawl_root_url, crawl_session_id, crawl_depth
+- Use Case: Building knowledge bases from documentation sites
+
+**ingest_file** - Add document from filesystem
+- Parameters: file_path, collection_name, metadata (JSON, optional)
+- Returns: source_document_id, num_chunks
+- Supports: .txt, .md, .json, .pdf (and others)
+- Auto-chunks by default (configurable)
+- Example: "Add /docs/guide.md to my collection"
+- Use Case: Ingesting local files, corporate documents
+
+**ingest_directory** - Batch ingest entire directory
+- Parameters: directory_path, collection_name, extensions (list), recursive (bool)
+- Returns: List of (source_id, num_chunks) tuples
+- Example: "Ingest all .md and .txt files from /my-docs recursively"
+- Extensions filter: only matching files ingested
+- Recursive: whether to descend into subdirectories
+- Use Case: Bulk document import, building from existing libraries
+
+### 6. Specialized Operations (2 tools)
+
+**recrawl_url** - Update web documentation (delete old, re-crawl new)
+- Parameters: url, collection_name, follow_links (bool), max_depth (int)
+- Returns: documents_deleted, documents_created, updated_at
+- Example: "Re-crawl https://docs.example.com with link following to update to latest version"
+- Strategy: Finds docs by crawl_root_url, deletes them, re-crawls fresh
+- ⚠️ WARNING: Graph not cleaned until Phase 4 - Orphaned episodes accumulate
+- Use Case: Keeping documentation current after updates
+
+### 7. Knowledge Graph Queries (2 tools - Optional, Experimental)
+
+**query_relationships** - Search for entity relationships using natural language
+- Parameters: query, num_results (optional, default 5)
+- Returns: List of relationships with descriptions, types, timestamps
+- Example: "Which projects depend on the authentication service?"
+- Status: "available" (Neo4j running) or "unavailable" (fell back to RAG)
+- Use Case: Understanding how entities connect, multi-hop reasoning
+- ⚠️ EXPERIMENTAL: Phase 3 complete, Phase 4 in progress
+
+**query_temporal** - Track how knowledge evolved over time
+- Parameters: query, num_results (optional, default 10)
+- Returns: Timeline with entities, facts, valid_from/until timestamps
+- Example: "How has the API design changed?"
+- Status: "available" or "unavailable"
+- Use Case: Understanding system evolution, compliance tracking
+- ⚠️ EXPERIMENTAL: Phase 3 complete, Phase 4 in progress
 
 ## Complete Documentation
 

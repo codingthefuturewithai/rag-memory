@@ -23,6 +23,7 @@ from src.mcp.tools import (
     list_collections_impl,
     create_collection_impl,
     update_collection_description_impl,
+    delete_collection_impl,
     ingest_text_impl,
     get_document_by_id_impl,
     get_collection_info_impl,
@@ -324,6 +325,65 @@ def update_collection_description(name: str, description: str) -> dict:
         )
     """
     return update_collection_description_impl(coll_mgr, name, description)
+
+
+@mcp.tool()
+def delete_collection(name: str, confirm: bool = False) -> dict:
+    """
+    ⚠️  DANGEROUS OPERATION - Delete a collection and all its documents permanently.
+
+    This operation CANNOT be undone. The collection, all associated documents, and
+    all their chunks are permanently deleted from the database.
+
+    **REQUIRED CONFIRMATION:** You MUST explicitly set confirm=True to proceed.
+    Without this confirmation, the operation will fail. This extra step prevents
+    accidental data loss.
+
+    **What gets deleted:**
+    1. The collection itself
+    2. All documents in this collection
+    3. All chunks (paragraphs) from those documents
+    4. All metadata associated with those chunks
+    5. All graph episodes linked to those documents (Phase 4: will be cleaned)
+
+    **What stays:**
+    - Other collections (unaffected)
+    - Documents in other collections (unaffected)
+    - Knowledge graph relationships and temporal data (Phase 4: planned for cleanup)
+
+    **Important Notes:**
+    - If a document is only in this collection, it and all its chunks are deleted
+    - If a document is in multiple collections, only the collection link is removed
+    - The confirmation parameter exists specifically to prevent accidents
+
+    Args:
+        name: (REQUIRED) Unique name of the collection to delete.
+              This must be an existing collection.
+        confirm: (REQUIRED) Must be exactly True to proceed.
+                If False or missing, the operation will fail.
+                This prevents accidental deletion - be explicit!
+
+    Returns:
+        {
+            "name": str,           # Collection name that was deleted
+            "deleted": bool,       # Always True on success
+            "message": str         # Human-readable confirmation with document count
+        }
+
+    Raises:
+        ValueError: If confirm != True or collection doesn't exist.
+                   Error message explains why and what's required.
+
+    Example (DANGEROUS - be careful):
+        # This will PERMANENTLY delete the collection and all its documents
+        result = delete_collection(
+            name="old-docs",
+            confirm=True  # Explicit confirmation required
+        )
+        print(f"Deleted: {result['message']}")
+        # Output: "Deleted: Collection 'old-docs' and 123 document(s) permanently deleted."
+    """
+    return delete_collection_impl(coll_mgr, name, confirm)
 
 
 @mcp.tool()
