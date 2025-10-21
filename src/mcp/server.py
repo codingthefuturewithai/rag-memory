@@ -14,6 +14,7 @@ from mcp.server.fastmcp import FastMCP
 from src.core.database import get_database
 from src.core.embeddings import get_embedding_generator
 from src.core.collections import get_collection_manager
+from src.core.first_run import ensure_config_or_exit
 from src.retrieval.search import get_similarity_search
 from src.ingestion.document_store import get_document_store
 from src.unified import GraphStore, UnifiedIngestionMediator
@@ -1235,6 +1236,9 @@ def main():
     )
     def run_cli(port: int, transport: str):
         """Run the RAG memory MCP server with specified transport."""
+        # Ensure all required configuration is set up before starting
+        ensure_config_or_exit()
+
         async def run_server():
             """Inner async function to run the server and manage the event loop."""
             try:

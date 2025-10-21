@@ -15,6 +15,17 @@ from typing import Optional
 
 from dotenv import load_dotenv
 
+# List of required environment variables
+# This is the source of truth for what's needed
+# If you add new features requiring env vars, add them here
+REQUIRED_VARIABLES = [
+    'DATABASE_URL',
+    'OPENAI_API_KEY',
+    'NEO4J_URI',
+    'NEO4J_USER',
+    'NEO4J_PASSWORD',
+]
+
 
 def get_global_config_path() -> Path:
     """
@@ -155,17 +166,45 @@ def load_environment_variables():
 
 def ensure_config_exists() -> bool:
     """
-    Check if global config file exists and contains required variables.
+    Check if global config file exists and contains all required variables.
+
+    This checks for ALL required variables, not just old ones. This allows
+    the system to detect when new features are added and prompt for their
+    configuration on upgrade.
 
     Returns:
-        True if config exists and has DATABASE_URL and OPENAI_API_KEY
+        True if config exists and has all required variables (from REQUIRED_VARIABLES)
     """
     config_path = get_global_config_path()
     if not config_path.exists():
         return False
 
     env_vars = load_env_file(config_path)
-    return 'DATABASE_URL' in env_vars and 'OPENAI_API_KEY' in env_vars
+
+    # Check if all required variables are present (either in file or already in environment)
+    for var in REQUIRED_VARIABLES:
+        if var not in env_vars and var not in os.environ:
+            return False
+
+    return True
+
+
+def get_missing_variables() -> list[str]:
+    """
+    Get list of required variables that are missing from config and environment.
+
+    Returns:
+        List of missing variable names. Empty list if all variables present.
+    """
+    config_path = get_global_config_path()
+    env_vars = load_env_file(config_path) if config_path.exists() else {}
+
+    missing = []
+    for var in REQUIRED_VARIABLES:
+        if var not in env_vars and var not in os.environ:
+            missing.append(var)
+
+    return missing
 
 
 def create_default_config() -> bool:
@@ -182,10 +221,14 @@ def create_default_config() -> bool:
             f.write("# RAG Memory - Configuration File\n")
             f.write("# This file is automatically managed by rag-memory\n")
             f.write("# You can edit or delete this file anytime\n\n")
-            f.write("# PostgreSQL connection for RAG Memory (default Docker setup)\n")
+            f.write("# PostgreSQL connection for RAG Memory (Supabase or local)\n")
             f.write("DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory\n\n")
             f.write("# OpenAI API key for embeddings\n")
-            f.write("OPENAI_API_KEY=your-api-key-here\n")
+            f.write("OPENAI_API_KEY=your-api-key-here\n\n")
+            f.write("# Neo4j Aura connection for Knowledge Graph (Graphiti)\n")
+            f.write("NEO4J_URI=neo4j+s://your-instance.neo4jdb.com\n")
+            f.write("NEO4J_USER=neo4j\n")
+            f.write("NEO4J_PASSWORD=your-neo4j-password\n")
 
         # Set restrictive permissions on Unix-like systems
         try:

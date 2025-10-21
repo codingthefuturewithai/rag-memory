@@ -12,9 +12,108 @@ from .config_loader import (
     ensure_config_exists,
     save_env_var,
     create_default_config,
+    get_missing_variables,
+    REQUIRED_VARIABLES,
 )
 
 console = Console()
+
+
+def prompt_for_missing_variables() -> bool:
+    """
+    Detect and prompt for any missing required environment variables.
+
+    This is called on every startup to handle:
+    - Fresh installations (all variables missing)
+    - Upgrades (new variables added but not in config)
+    - User edits (if user deletes a variable)
+
+    Returns:
+        True if all variables are now configured, False if user declined
+    """
+    missing = get_missing_variables()
+
+    if not missing:
+        return True  # All variables present, nothing to do
+
+    # User is missing some variables - need to prompt
+    config_path = get_global_config_path()
+
+    console.print("\n[bold yellow]⚠️  Missing Configuration[/bold yellow]\n")
+
+    if config_path.exists():
+        # This is an upgrade or partial config
+        console.print(
+            f"[yellow]Your configuration file is missing {len(missing)} required variables.[/yellow]\n"
+        )
+        console.print("[dim]This typically happens when RAG Memory is upgraded with new features.[/dim]\n")
+    else:
+        # First-time setup
+        console.print(f"[yellow]Configuration file not found at {config_path}[/yellow]\n")
+        console.print("[dim]RAG Memory needs the following information:[/dim]\n")
+
+    console.print(f"[dim]Missing variables: {', '.join(missing)}[/dim]\n")
+
+    # Ask if they want to provide them
+    proceed = Confirm.ask("Would you like to configure these now?", default=True)
+
+    if not proceed:
+        console.print("\n[yellow]Configuration incomplete. You can configure manually by editing:[/yellow]")
+        console.print(f"[cyan]{config_path}[/cyan]\n")
+        return False
+
+    console.print()
+
+    # Prompt for each missing variable
+    for var_name in missing:
+        prompt_text = _get_prompt_text(var_name)
+        default_value = _get_default_value(var_name)
+
+        if var_name in ['OPENAI_API_KEY', 'NEO4J_PASSWORD']:
+            # Password fields - hide input
+            value = Prompt.ask(prompt_text, password=True)
+        else:
+            # Regular input, possibly with default
+            if default_value:
+                value = Prompt.ask(prompt_text, default=default_value)
+            else:
+                value = Prompt.ask(prompt_text)
+
+        # Validate that value is not empty
+        if not value or value.strip() == "":
+            console.print(f"[red]✗ {var_name} cannot be empty[/red]")
+            return False
+
+        save_env_var(var_name, value.strip())
+
+    console.print(f"\n[bold green]✓ Configuration saved to {config_path}[/bold green]\n")
+
+    # Reload environment variables
+    from .config_loader import load_environment_variables
+    load_environment_variables()
+
+    return True
+
+
+def _get_prompt_text(var_name: str) -> str:
+    """Get user-friendly prompt text for a variable."""
+    prompts = {
+        'DATABASE_URL': 'PostgreSQL/Supabase Database URL',
+        'OPENAI_API_KEY': 'OpenAI API Key',
+        'NEO4J_URI': 'Neo4j Aura Connection URI',
+        'NEO4J_USER': 'Neo4j Username',
+        'NEO4J_PASSWORD': 'Neo4j Password',
+    }
+    return prompts.get(var_name, var_name)
+
+
+def _get_default_value(var_name: str) -> str:
+    """Get default value suggestion for a variable."""
+    defaults = {
+        'DATABASE_URL': 'postgresql://raguser:ragpassword@localhost:54320/rag_memory',
+        'NEO4J_USER': 'neo4j',
+    }
+    return defaults.get(var_name, '')
 
 
 def check_and_setup_config() -> bool:
@@ -105,17 +204,22 @@ def check_and_setup_config() -> bool:
 
 def ensure_config_or_exit():
     """
-    Ensure configuration exists, or run first-time setup.
+    Ensure all required configuration exists, or prompt user to provide it.
     Exits the program if setup fails or user declines.
 
-    Also loads environment variables using the three-tier system.
+    Also loads environment variables using the priority system.
+
+    This function handles:
+    - Fresh installations (no config file)
+    - Upgrades (new variables added)
+    - Partial configurations (user deleted variables)
     """
-    # First, load environment variables (three-tier: env vars → .env → ~/.rag-memory-env)
+    # First, load environment variables (priority: shell env vars → ~/.rag-memory-env)
     from .config_loader import load_environment_variables
     load_environment_variables()
 
-    # Then check if config exists (or run setup wizard)
-    if not check_and_setup_config():
+    # Check for missing variables and prompt if needed
+    if not prompt_for_missing_variables():
         console.print("[yellow]⚠ Configuration is required to use RAG Memory[/yellow]")
-        console.print("[dim]Run any command again to restart the setup wizard.[/dim]\n")
+        console.print("[dim]Run any command again to restart the configuration wizard.[/dim]\n")
         sys.exit(1)
