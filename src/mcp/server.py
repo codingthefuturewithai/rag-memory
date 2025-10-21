@@ -328,7 +328,7 @@ def update_collection_description(name: str, description: str) -> dict:
 
 
 @mcp.tool()
-def delete_collection(name: str, confirm: bool = False) -> dict:
+async def delete_collection(name: str, confirm: bool = False) -> dict:
     """
     ⚠️  DANGEROUS OPERATION - Delete a collection and all its documents permanently.
 
@@ -344,12 +344,12 @@ def delete_collection(name: str, confirm: bool = False) -> dict:
     2. All documents in this collection
     3. All chunks (paragraphs) from those documents
     4. All metadata associated with those chunks
-    5. All graph episodes linked to those documents (Phase 4: will be cleaned)
+    5. All graph episodes linked to those documents (automatically cleaned)
 
     **What stays:**
     - Other collections (unaffected)
     - Documents in other collections (unaffected)
-    - Knowledge graph relationships and temporal data (Phase 4: planned for cleanup)
+    - Knowledge graph relationships and temporal data (NOT cleaned - may need refinement)
 
     **Important Notes:**
     - If a document is only in this collection, it and all its chunks are deleted
@@ -381,9 +381,9 @@ def delete_collection(name: str, confirm: bool = False) -> dict:
             confirm=True  # Explicit confirmation required
         )
         print(f"Deleted: {result['message']}")
-        # Output: "Deleted: Collection 'old-docs' and 123 document(s) permanently deleted."
+        # Output: "Deleted: Collection 'old-docs' and 123 document(s) permanently deleted. (45 graph episodes cleaned)"
     """
-    return delete_collection_impl(coll_mgr, name, confirm)
+    return await delete_collection_impl(coll_mgr, name, confirm, graph_store, db)
 
 
 @mcp.tool()

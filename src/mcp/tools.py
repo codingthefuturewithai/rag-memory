@@ -145,8 +145,12 @@ def update_collection_description_impl(
         raise
 
 
-def delete_collection_impl(
-    coll_mgr: CollectionManager, name: str, confirm: bool = False
+async def delete_collection_impl(
+    coll_mgr: CollectionManager,
+    name: str,
+    confirm: bool = False,
+    graph_store = None,
+    db = None,
 ) -> Dict[str, Any]:
     """
     Implementation of delete_collection tool.
@@ -154,10 +158,15 @@ def delete_collection_impl(
     Deletes a collection and all its documents permanently.
     Requires explicit confirmation to prevent accidental data loss.
 
+    If graph_store is provided, also cleans up all episode nodes linked to documents
+    in this collection (Phase 4 cleanup).
+
     Args:
         coll_mgr: CollectionManager instance
         name: Collection name to delete
         confirm: MUST be True to proceed (prevents accidental deletion)
+        graph_store: Optional GraphStore for episode cleanup
+        db: Optional Database instance (needed if graph_store provided)
 
     Returns:
         {
@@ -184,7 +193,31 @@ def delete_collection_impl(
 
         doc_count = collection_info.get("document_count", 0)
 
-        # Perform the deletion
+        # Get source document IDs for graph cleanup BEFORE deletion
+        source_doc_ids = []
+        if graph_store and db:
+            try:
+                conn = db.connect()
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        SELECT DISTINCT dc.source_document_id
+                        FROM document_chunks dc
+                        INNER JOIN chunk_collections cc ON dc.id = cc.chunk_id
+                        INNER JOIN collections c ON cc.collection_id = c.id
+                        WHERE c.name = %s
+                        """,
+                        (name,),
+                    )
+                    source_doc_ids = [row[0] for row in cur.fetchall()]
+                logger.info(
+                    f"Found {len(source_doc_ids)} source documents to clean from graph"
+                )
+            except Exception as e:
+                logger.warning(f"Could not fetch source_doc_ids for graph cleanup: {e}")
+                source_doc_ids = []
+
+        # Perform RAG deletion
         deleted = coll_mgr.delete_collection(name)
 
         if not deleted:
@@ -192,10 +225,37 @@ def delete_collection_impl(
 
         logger.info(f"Deleted collection '{name}' with {doc_count} documents")
 
+        # Clean up graph episodes (Phase 4 implementation)
+        deleted_episodes = 0
+        if graph_store and source_doc_ids:
+            try:
+                logger.info(f"Cleaning up {len(source_doc_ids)} episodes from graph...")
+                for doc_id in source_doc_ids:
+                    episode_name = f"doc_{doc_id}"
+                    deleted = await graph_store.delete_episode_by_name(episode_name)
+                    if deleted:
+                        deleted_episodes += 1
+                logger.info(
+                    f"✅ Graph cleanup complete - {deleted_episodes} episodes deleted"
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Graph cleanup encountered issues: {e}. "
+                    "RAG data is clean, but some graph episodes may remain."
+                )
+
+        message = (
+            f"Collection '{name}' and {doc_count} document(s) permanently deleted."
+        )
+        if deleted_episodes > 0:
+            message += f" ({deleted_episodes} graph episodes cleaned)"
+        elif graph_store and source_doc_ids:
+            message += " (⚠️ Graph cleanup attempted but may have issues)"
+
         return {
             "name": name,
             "deleted": True,
-            "message": f"Collection '{name}' and {doc_count} document(s) permanently deleted."
+            "message": message,
         }
     except ValueError as e:
         logger.warning(f"delete_collection failed: {e}")
