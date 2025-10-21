@@ -1016,7 +1016,7 @@ This document captures critical gaps and design issues identified during develop
 |-------|----------|-------|----------|--------|
 | **1.1** | **Tools** | **delete_collection missing** | **HIGH** | **✅ COMPLETE** |
 | **1.2** | **Tools** | **Tool count discrepancy** | **HIGH** | **✅ COMPLETE** |
-| **2.1** | **Architecture** | **Graph optionality complex** | **CRITICAL** | **✅ COMPLETE** |
+| **2.1** | **Architecture** | **Mandatory Knowledge Graph (All or Nothing)** | **CRITICAL** | **✅ COMPLETE** |
 | **2.1.A** | **Architecture** | **Startup validation checks** | **HIGH** | **✅ COMPLETE** |
 | 2.2 | Installation | Setup too complex | HIGH | Decision Needed |
 | 3.1 | Sync | delete_document → graph not cleaned | CRITICAL | Research ✓, Impl Needed |
@@ -1330,6 +1330,48 @@ Gap 2.1 (Option B) was chosen because:
 2025-10-21T14:30:47 - src.mcp.server - INFO - Neo4j schema valid ✓ (indexes: 7, queryable: ✓)
 2025-10-21T14:30:47 - src.mcp.server - INFO - All startup validations passed - server ready ✓
 ```
+
+### Gap 2.1 Completion Summary
+
+**Overall Status:** ✅ **COMPLETE** (2025-10-21)
+
+**What was delivered:**
+
+1. **Architectural Decision:** Both PostgreSQL and Neo4j are MANDATORY ("All or Nothing")
+   - Server refuses to start if either database is unavailable
+   - No graceful degradation or RAG-only fallback modes
+   - Ensures knowledge graph and RAG are always in sync
+
+2. **Runtime Health Checks:**
+   - Both databases checked before every write operation
+   - Fast (~5-30ms) using lightweight queries (SELECT 1, RETURN 1)
+   - Designed to fail-fast on unreachable databases
+
+3. **Startup Schema Validation:**
+   - PostgreSQL validates: required tables, pgvector extension, HNSW indexes
+   - Neo4j validates: Graphiti schema (indexes), graph queryability
+   - Server won't start if validation fails
+   - User-friendly error messages guide to resolution
+
+4. **Code Quality:**
+   - Symmetric enforcement: PostgreSQL and Neo4j treated equally
+   - Clean MCP docstrings (no implementation details leaked to LLMs)
+   - All RAG-only fallback paths removed
+   - Unified ingestion mediator used for all operations
+
+5. **Documentation & Testing:**
+   - Standalone validation test script
+   - Complete technical documentation (STARTUP_VALIDATION_IMPLEMENTATION.md)
+   - Updated CLAUDE.md with all implementation details
+   - Example error messages and success output
+
+**Files Delivered:**
+- Modified: src/core/database.py, src/unified/graph_store.py, src/mcp/server.py, CLAUDE.md
+- Created: test_startup_validations.py, docs/STARTUP_VALIDATION_IMPLEMENTATION.md
+
+**Commits:** 3 commits totaling full Gap 2.1 implementation
+
+**Ready for:** Production deployment (with caveat about Gap 3.1-3.3 regarding document cleanup)
 
 ### Next Priorities (Recommended Order)
 
