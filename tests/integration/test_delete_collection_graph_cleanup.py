@@ -6,6 +6,7 @@ actually removed from Neo4j, not just from the RAG store.
 
 import os
 import pytest
+import pytest_asyncio
 import asyncio
 from src.core.database import Database
 from src.core.collections import CollectionManager
@@ -14,13 +15,13 @@ from src.ingestion.document_store import DocumentStore
 from src.unified import GraphStore, UnifiedIngestionMediator
 from src.mcp.tools import delete_collection_impl
 
-pytestmark = [pytest.mark.anyio]
+pytestmark = pytest.mark.asyncio
 
 
 class TestDeleteCollectionGraphCleanup:
     """Test graph episode cleanup during collection deletion."""
 
-    @pytest.fixture
+    @pytest_asyncio.fixture
     async def setup(self):
         """Set up database, collections, and graph store."""
         db = Database()
