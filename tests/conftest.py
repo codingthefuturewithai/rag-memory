@@ -59,9 +59,8 @@ elif env_dev_path.exists():
 else:
     print("⚠️  No environment file found, using shell environment variables")
 
-# Load environment variables from .env files, but NOT from system config file
-# Tests should be isolated and use only .env.test or .env.dev, not ~/.config/rag-memory/config.yaml
-load_environment_variables(use_config_file=False)
+# Also load from ~/.rag-memory-env for credentials if it exists
+load_environment_variables()
 
 # ============================================================================
 # PRODUCTION PROTECTION: Verify we're using test servers
