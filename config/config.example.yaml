@@ -1,0 +1,28 @@
+# RAG Memory Configuration Template
+#
+# This file shows the structure of config files for different environments.
+# Copy this to config.dev.yaml or config.test.yaml and fill in your values.
+#
+# NOTE: Secrets like OPENAI_API_KEY should come from environment variables,
+# not from this file. This allows config files to be safely source-controlled.
+
+server:
+  # Database connection (include credentials for local dev/test only)
+  database_url: postgresql://raguser:ragpassword@localhost:54320/rag_memory
+
+  # Neo4j connection
+  neo4j_uri: bolt://localhost:7687
+  neo4j_user: neo4j
+  neo4j_password: graphiti-password
+
+  # OpenAI API key - SET VIA ENVIRONMENT VARIABLE, NOT HERE
+  # export OPENAI_API_KEY="sk-..."
+
+mounts:
+  # List of directories accessible to the MCP server (for file/directory ingestion)
+  # Each mount is read-only for security
+  - path: /Users/timkitchens
+    read_only: true
+  # Add more directories as needed:
+  # - path: /path/to/another/directory
+  #   read_only: true

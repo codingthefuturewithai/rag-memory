@@ -1,0 +1,21 @@
+# RAG Memory Test Configuration
+#
+# Used by automated tests (pytest)
+# Safe to commit - no real secrets, uses test database containers
+
+server:
+  # Test database (port 54323 from docker-compose.test.yml)
+  database_url: postgresql://raguser:ragpassword@localhost:54323/rag_memory
+
+  # Test Neo4j (port 7689 from docker-compose.test.yml)
+  neo4j_uri: bolt://localhost:7689
+  neo4j_user: neo4j
+  neo4j_password: graphiti-password
+
+  # Test API key - will be overridden by conftest.py if needed
+  openai_api_key: sk-test-key-for-automated-tests
+
+mounts:
+  # Tests use a test directory structure
+  - path: /tmp/rag-memory-test-mounts
+    read_only: true

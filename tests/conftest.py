@@ -34,11 +34,16 @@ def ensure_coverage_tracking():
 
 
 # ============================================================================
-# CRITICAL: Load .env.test to ensure tests use test servers
+# CRITICAL: Configure test environment to use repo-local configs
 # ============================================================================
 
 # Get repo root (parent of tests directory)
 repo_root = Path(__file__).parent.parent
+
+# Set RAG_CONFIG_PATH to use test config from repo
+# This ensures tests use config/config.test.yaml, NOT system-level config
+os.environ['RAG_CONFIG_PATH'] = str(repo_root / 'config')
+print(f"✅ Using repo-local config: {os.environ['RAG_CONFIG_PATH']}")
 
 # Try to load .env.test first (primary test config)
 env_test_path = repo_root / ".env.test"
@@ -59,7 +64,7 @@ elif env_dev_path.exists():
 else:
     print("⚠️  No environment file found, using shell environment variables")
 
-# Also load from ~/.rag-memory-env for credentials if it exists
+# Load config - will use config/config.test.yaml automatically
 load_environment_variables()
 
 # ============================================================================

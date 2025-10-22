@@ -34,11 +34,13 @@ REQUIRED_SERVER_KEYS = [
 
 def get_config_dir() -> Path:
     """
-    Get the OS-appropriate configuration directory for RAG Memory.
+    Get the configuration directory for RAG Memory.
 
-    Detection logic:
-    1. If running in Docker container (MCP server): Use /app/.config/rag-memory
-    2. Otherwise (CLI tool): Use platformdirs for OS-standard locations:
+    Detection logic (in order of priority):
+    1. If RAG_CONFIG_PATH env var is set: use that directory
+    2. If repo-local config exists (./config/): use that (dev/test scenarios)
+    3. If running in Docker container: use /app/.config/rag-memory
+    4. Otherwise (system CLI): use platformdirs for OS-standard locations:
        - macOS: ~/Library/Application Support/rag-memory
        - Linux: ~/.config/rag-memory (respects $XDG_CONFIG_HOME)
        - Windows: %LOCALAPPDATA%\rag-memory
@@ -46,13 +48,18 @@ def get_config_dir() -> Path:
     Returns:
         Path to configuration directory
     """
-    # Check if running in Docker container (MCP server scenario)
-    # Docker containers have /.dockerenv file that exists only inside containers
-    if Path('/.dockerenv').exists():
+    # 1. Check environment variable override
+    if env_override := os.getenv('RAG_CONFIG_PATH'):
+        config_dir = Path(env_override)
+    # 2. Check for repo-local config (when running from within repo)
+    elif (repo_local := Path('./config')).exists():
+        config_dir = repo_local
+    # 3. Check if running in Docker container (MCP server scenario)
+    elif Path('/.dockerenv').exists():
         # Inside Docker: config mounted at /app/.config/rag-memory
         config_dir = Path('/app/.config/rag-memory')
     else:
-        # Local development or CLI: use OS-standard locations
+        # 4. System-level CLI: use OS-standard locations
         config_dir = Path(platformdirs.user_config_dir('rag-memory', appauthor=False))
 
     config_dir.mkdir(parents=True, exist_ok=True)

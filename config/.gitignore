@@ -1,0 +1,10 @@
+# Local configuration files with credentials
+# These are too sensitive to commit, but the .example.yaml and config.test.yaml
+# show the structure and are safe to version control
+
+# Ignore local dev config (has credentials)
+config.dev.yaml
+
+# Keep these safe files in version control:
+# - config.example.yaml (template)
+# - config.test.yaml (test config, no real secrets)
