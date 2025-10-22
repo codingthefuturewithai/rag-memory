@@ -17,7 +17,7 @@ services:
       timeout: 5s
       retries: 5
     ports:
-      - "5432"
+      - "${PROD_POSTGRES_PORT:-54320}:5432"
     labels:
       - docker-volume-backup.stop-during-backup=true
 
@@ -38,8 +38,8 @@ services:
       timeout: 5s
       retries: 5
     ports:
-      - "7687"
-      - "7474"
+      - "${PROD_NEO4J_BOLT_PORT:-7687}:7687"  # Bolt - Database protocol
+      - "${PROD_NEO4J_HTTP_PORT:-7474}:7474"  # HTTP - Neo4j Browser UI
     labels:
       - docker-volume-backup.stop-during-backup=true
 
@@ -55,7 +55,7 @@ services:
       NEO4J_PASSWORD: graphiti-password
       OPENAI_API_KEY: ${OPENAI_API_KEY}
     ports:
-      - "8000:8000"
+      - "${PROD_MCP_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
