@@ -36,15 +36,25 @@ def get_config_dir() -> Path:
     """
     Get the OS-appropriate configuration directory for RAG Memory.
 
-    Uses platformdirs to respect OS conventions:
-    - macOS: ~/Library/Application Support/rag-memory
-    - Linux: ~/.config/rag-memory (respects $XDG_CONFIG_HOME)
-    - Windows: %LOCALAPPDATA%\rag-memory
+    Detection logic:
+    1. If running in Docker container (MCP server): Use /app/.config/rag-memory
+    2. Otherwise (CLI tool): Use platformdirs for OS-standard locations:
+       - macOS: ~/Library/Application Support/rag-memory
+       - Linux: ~/.config/rag-memory (respects $XDG_CONFIG_HOME)
+       - Windows: %LOCALAPPDATA%\rag-memory
 
     Returns:
         Path to configuration directory
     """
-    config_dir = Path(platformdirs.user_config_dir('rag-memory', appauthor=False))
+    # Check if running in Docker container (MCP server scenario)
+    # Docker containers have /.dockerenv file that exists only inside containers
+    if Path('/.dockerenv').exists():
+        # Inside Docker: config mounted at /app/.config/rag-memory
+        config_dir = Path('/app/.config/rag-memory')
+    else:
+        # Local development or CLI: use OS-standard locations
+        config_dir = Path(platformdirs.user_config_dir('rag-memory', appauthor=False))
+
     config_dir.mkdir(parents=True, exist_ok=True)
     return config_dir
 
