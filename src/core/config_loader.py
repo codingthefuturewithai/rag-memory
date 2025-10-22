@@ -1,239 +1,115 @@
-"""Configuration loader for RAG Memory with two-tier priority system.
+"""Configuration loader for RAG Memory with OS-standard locations.
 
 This module provides cross-platform configuration loading that checks:
 1. Environment variables (highest priority)
-2. Global user config file ~/.rag-memory-env (fallback)
+2. OS-standard config file (user-specific, platform-aware)
 
-For local development, developers should set environment variables in their shell
-or use the global config file. The CLI does not use .env files.
+Config locations:
+- macOS: ~/Library/Application Support/rag-memory/config.yaml
+- Linux: ~/.config/rag-memory/config.yaml
+- Windows: %LOCALAPPDATA%\rag-memory\config.yaml
+
+The configuration file is YAML format containing:
+- server settings (API keys, database URLs)
+- mount configuration (read-only directories for file ingestion)
 """
 
 import os
 import stat
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
-from dotenv import load_dotenv
+import platformdirs
+import yaml
 
-# List of required environment variables
-# This is the source of truth for what's needed
-# If you add new features requiring env vars, add them here
-REQUIRED_VARIABLES = [
-    'DATABASE_URL',
-    'OPENAI_API_KEY',
-    'NEO4J_URI',
-    'NEO4J_USER',
-    'NEO4J_PASSWORD',
+# List of required configuration keys in server section
+REQUIRED_SERVER_KEYS = [
+    'openai_api_key',
+    'database_url',
+    'neo4j_uri',
+    'neo4j_user',
+    'neo4j_password',
 ]
 
 
-def get_global_config_path() -> Path:
+def get_config_dir() -> Path:
     """
-    Get the path to the global user configuration file.
+    Get the OS-appropriate configuration directory for RAG Memory.
+
+    Uses platformdirs to respect OS conventions:
+    - macOS: ~/Library/Application Support/rag-memory
+    - Linux: ~/.config/rag-memory (respects $XDG_CONFIG_HOME)
+    - Windows: %LOCALAPPDATA%\rag-memory
 
     Returns:
-        Path to ~/.rag-memory-env (cross-platform)
+        Path to configuration directory
     """
-    return Path.home() / ".rag-memory-env"
+    config_dir = Path(platformdirs.user_config_dir('rag-memory', appauthor=False))
+    config_dir.mkdir(parents=True, exist_ok=True)
+    return config_dir
 
 
-def load_env_file(file_path: Optional[Path] = None) -> dict[str, str]:
+def get_config_path() -> Path:
     """
-    Load and parse environment variables from a KEY=VALUE file.
+    Get the path to the RAG Memory configuration file.
+
+    Returns:
+        Path to config.yaml in OS-appropriate location
+    """
+    return get_config_dir() / 'config.yaml'
+
+
+def load_config(file_path: Optional[Path] = None) -> dict[str, Any]:
+    """
+    Load configuration from YAML file.
 
     Args:
-        file_path: Path to config file. Defaults to global config.
+        file_path: Path to config file. Defaults to OS-standard location.
 
     Returns:
-        Dictionary of environment variables from the file.
+        Dictionary with 'server' and 'mounts' sections, or empty dict if not found.
     """
     if file_path is None:
-        file_path = get_global_config_path()
-
-    env_vars = {}
+        file_path = get_config_path()
 
     if not file_path.exists():
-        return env_vars
+        return {}
 
     try:
         with open(file_path, 'r') as f:
-            for line in f:
-                line = line.strip()
-                # Skip empty lines and comments
-                if not line or line.startswith('#'):
-                    continue
-
-                # Parse KEY=VALUE format
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    key = key.strip()
-                    value = value.strip()
-                    # Remove quotes if present
-                    if value.startswith('"') and value.endswith('"'):
-                        value = value[1:-1]
-                    elif value.startswith("'") and value.endswith("'"):
-                        value = value[1:-1]
-                    env_vars[key] = value
+            config = yaml.safe_load(f) or {}
+        return config
     except Exception as e:
-        # Fail silently - config loading shouldn't break the app
-        pass
-
-    return env_vars
+        # Log error but don't crash - config loading shouldn't break the app
+        return {}
 
 
-def save_env_var(key: str, value: str, file_path: Optional[Path] = None) -> bool:
+def save_config(config: dict[str, Any], file_path: Optional[Path] = None) -> bool:
     """
-    Save or update an environment variable in the global config file.
+    Save configuration to YAML file.
 
     Args:
-        key: Environment variable name
-        value: Environment variable value
-        file_path: Path to config file. Defaults to global config.
+        config: Configuration dictionary with 'server' and 'mounts' sections
+        file_path: Path to config file. Defaults to OS-standard location.
 
     Returns:
         True if saved successfully, False otherwise.
     """
     if file_path is None:
-        file_path = get_global_config_path()
+        file_path = get_config_path()
 
     try:
-        # Load existing vars
-        existing_vars = load_env_file(file_path)
+        # Ensure directory exists
+        file_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Update or add the new variable
-        existing_vars[key] = value
-
-        # Write all variables back
+        # Write YAML config
         with open(file_path, 'w') as f:
-            f.write("# RAG Memory - Configuration File\n")
-            f.write("# This file is automatically managed by rag-memory\n")
-            f.write("# You can edit or delete this file anytime\n\n")
-
-            for k, v in existing_vars.items():
-                f.write(f"{k}={v}\n")
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
         # Set restrictive permissions on Unix-like systems (chmod 0o600)
-        # Windows handles file permissions differently through the OS
-        try:
-            if os.name != 'nt':  # Not Windows
-                os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:
-            pass  # Permissions not critical, continue anyway
-
-        return True
-    except Exception as e:
-        return False
-
-
-def get_env_var_from_file(key: str, file_path: Optional[Path] = None) -> Optional[str]:
-    """
-    Retrieve a specific environment variable from the global config file.
-
-    Args:
-        key: Environment variable name
-        file_path: Path to config file. Defaults to global config.
-
-    Returns:
-        Value if found, None otherwise.
-    """
-    env_vars = load_env_file(file_path)
-    return env_vars.get(key)
-
-
-def load_environment_variables():
-    """
-    Load environment variables using two-tier priority system.
-
-    Priority order (highest to lowest):
-    1. Environment variables (already set in shell)
-    2. Global ~/.rag-memory-env file (user-specific)
-
-    Note: For local development, set environment variables in your shell or use
-    the global config file. The CLI should not depend on .env files in arbitrary
-    directories.
-    """
-    # 1. Environment variables - highest priority, already in os.environ
-
-    # 2. Global user config file - only fallback
-    global_config = get_global_config_path()
-    if global_config.exists():
-        env_vars = load_env_file(global_config)
-        for key, value in env_vars.items():
-            # Only set if not already in environment
-            if key not in os.environ:
-                os.environ[key] = value
-
-
-def ensure_config_exists() -> bool:
-    """
-    Check if global config file exists and contains all required variables.
-
-    This checks for ALL required variables, not just old ones. This allows
-    the system to detect when new features are added and prompt for their
-    configuration on upgrade.
-
-    Returns:
-        True if config exists and has all required variables (from REQUIRED_VARIABLES)
-    """
-    config_path = get_global_config_path()
-    if not config_path.exists():
-        return False
-
-    env_vars = load_env_file(config_path)
-
-    # Check if all required variables are present (either in file or already in environment)
-    for var in REQUIRED_VARIABLES:
-        if var not in env_vars and var not in os.environ:
-            return False
-
-    return True
-
-
-def get_missing_variables() -> list[str]:
-    """
-    Get list of required variables that are missing from config and environment.
-
-    Returns:
-        List of missing variable names. Empty list if all variables present.
-    """
-    config_path = get_global_config_path()
-    env_vars = load_env_file(config_path) if config_path.exists() else {}
-
-    missing = []
-    for var in REQUIRED_VARIABLES:
-        if var not in env_vars and var not in os.environ:
-            missing.append(var)
-
-    return missing
-
-
-def create_default_config() -> bool:
-    """
-    Create a default global config file with placeholder values.
-
-    Returns:
-        True if created successfully
-    """
-    config_path = get_global_config_path()
-
-    try:
-        with open(config_path, 'w') as f:
-            f.write("# RAG Memory - Configuration File\n")
-            f.write("# This file is automatically managed by rag-memory\n")
-            f.write("# You can edit or delete this file anytime\n\n")
-            f.write("# PostgreSQL connection for RAG Memory (Supabase or local)\n")
-            f.write("DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory\n\n")
-            f.write("# OpenAI API key for embeddings\n")
-            f.write("OPENAI_API_KEY=your-api-key-here\n\n")
-            f.write("# Neo4j Aura connection for Knowledge Graph (Graphiti)\n")
-            f.write("NEO4J_URI=neo4j+s://your-instance.neo4jdb.com\n")
-            f.write("NEO4J_USER=neo4j\n")
-            f.write("NEO4J_PASSWORD=your-neo4j-password\n")
-
-        # Set restrictive permissions on Unix-like systems
         try:
             if os.name != 'nt':
-                os.chmod(config_path, stat.S_IRUSR | stat.S_IWUSR)
+                os.chmod(file_path, stat.S_IRUSR | stat.S_IWUSR)
         except Exception:
             pass
 
@@ -242,6 +118,97 @@ def create_default_config() -> bool:
         return False
 
 
-# Note: Environment variables are NOT loaded at module import.
-# For CLI usage: load_environment_variables() is called by first_run.py (ensure_config_or_exit)
-# For MCP usage: Environment variables are provided by the MCP client in JSON config
+def load_environment_variables():
+    """
+    Load environment variables using two-tier priority system.
+
+    Priority order (highest to lowest):
+    1. Environment variables (already set in shell)
+    2. Config file in OS-standard location
+
+    Reads from 'server' section of config.yaml and sets environment variables.
+    """
+    # Load config from OS-standard location
+    config = load_config()
+    server_config = config.get('server', {})
+
+    # Map config keys to environment variable names
+    key_mapping = {
+        'openai_api_key': 'OPENAI_API_KEY',
+        'database_url': 'DATABASE_URL',
+        'neo4j_uri': 'NEO4J_URI',
+        'neo4j_user': 'NEO4J_USER',
+        'neo4j_password': 'NEO4J_PASSWORD',
+    }
+
+    for config_key, env_var in key_mapping.items():
+        if config_key in server_config and env_var not in os.environ:
+            os.environ[env_var] = str(server_config[config_key])
+
+
+def get_mounts() -> list[dict[str, Any]]:
+    """
+    Get the list of read-only directory mounts from config.
+
+    Returns:
+        List of mount configurations, each with 'path' and 'read_only' keys.
+        Empty list if no mounts configured.
+    """
+    config = load_config()
+    mounts = config.get('mounts', [])
+    return mounts if isinstance(mounts, list) else []
+
+
+def ensure_config_exists() -> bool:
+    """
+    Check if config file exists and contains all required server settings.
+
+    Returns:
+        True if config exists and has all required keys
+    """
+    config_path = get_config_path()
+    if not config_path.exists():
+        return False
+
+    config = load_config(config_path)
+    server_config = config.get('server', {})
+
+    # Check if all required keys are present (either in file or in environment)
+    for key in REQUIRED_SERVER_KEYS:
+        env_var = _config_key_to_env_var(key)
+        if key not in server_config and env_var not in os.environ:
+            return False
+
+    return True
+
+
+def get_missing_config_keys() -> list[str]:
+    """
+    Get list of required configuration keys that are missing.
+
+    Returns:
+        List of missing key names. Empty list if all keys present.
+    """
+    config_path = get_config_path()
+    config = load_config(config_path) if config_path.exists() else {}
+    server_config = config.get('server', {})
+
+    missing = []
+    for key in REQUIRED_SERVER_KEYS:
+        env_var = _config_key_to_env_var(key)
+        if key not in server_config and env_var not in os.environ:
+            missing.append(key)
+
+    return missing
+
+
+def _config_key_to_env_var(config_key: str) -> str:
+    """Convert config key to environment variable name."""
+    mapping = {
+        'openai_api_key': 'OPENAI_API_KEY',
+        'database_url': 'DATABASE_URL',
+        'neo4j_uri': 'NEO4J_URI',
+        'neo4j_user': 'NEO4J_USER',
+        'neo4j_password': 'NEO4J_PASSWORD',
+    }
+    return mapping.get(config_key, config_key.upper())

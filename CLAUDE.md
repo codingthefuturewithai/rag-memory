@@ -204,6 +204,30 @@ PostgreSQL: **54320** (not 5432 or 5433, to avoid conflicts with local PostgreSQ
 
 ---
 
+## PyPI Distribution & CLI Tool Management (2025-10-22)
+
+**Research Findings on `uv tool install` with Git:**
+- ✅ Can specify git URLs and tags: `uv tool install git+https://github.com/user/rag-memory@v1.0.0`
+- ❌ Installation can be flaky (observed malformed tool environments in testing)
+- ❌ `uv tool upgrade` does NOT work with git-installed tools (documented limitation)
+- ❌ Users would need to manually reinstall with new tags each time
+- **Conclusion:** Git-based tool installation is NOT reliable for production upgrades
+
+**Decision: Use PyPI for CLI Tool Distribution**
+- MCP server code and Docker files stay in git repo (users git clone)
+- CLI tool ONLY distributed via PyPI for reliable system-wide installation
+- User workflow:
+  1. `git clone` repo once
+  2. `python scripts/setup.py` runs setup from repo
+  3. `uv tool install rag-memory` installs CLI system-wide from PyPI (optional convenience)
+  4. Later: `git pull` upgrades MCP server code, Docker files
+  5. Later: `uv tool upgrade rag-memory` upgrades CLI tool
+- Config file (`~/.config/rag-memory/config.yaml`) is portable, shared between both
+
+**Key Principle:** Config file is the single source of truth, separate from both repo and PyPI distribution.
+
+---
+
 ## Session Memory
 
 **Important Lessons Learned (for future sessions):**

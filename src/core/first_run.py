@@ -1,227 +1,77 @@
-"""First-run configuration wizard for RAG Memory."""
+"""Configuration validation for RAG Memory.
+
+This module validates that required configuration exists at startup.
+For CLI usage, provides helpful error messages pointing to setup scripts.
+Does NOT create configuration - that's the setup script's responsibility.
+"""
 
 import os
 import sys
 from pathlib import Path
 
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
 
 from .config_loader import (
-    get_global_config_path,
+    get_config_path,
     ensure_config_exists,
-    save_env_var,
-    create_default_config,
-    get_missing_variables,
-    REQUIRED_VARIABLES,
+    get_missing_config_keys,
+    load_environment_variables,
 )
 
 console = Console()
 
 
-def prompt_for_missing_variables() -> bool:
+def validate_config_exists() -> bool:
     """
-    Detect and prompt for any missing required environment variables.
+    Validate that configuration file exists and is complete.
 
-    This is called on every startup to handle:
-    - Fresh installations (all variables missing)
-    - Upgrades (new variables added but not in config)
-    - User edits (if user deletes a variable)
+    For CLI usage: Exits with helpful error message if config is missing or incomplete.
+    For MCP usage: Can be checked before server startup.
 
     Returns:
-        True if all variables are now configured, False if user declined
+        True if config is valid, False if invalid (CLI will have exited)
     """
-    missing = get_missing_variables()
+    config_path = get_config_path()
 
-    if not missing:
-        return True  # All variables present, nothing to do
-
-    # User is missing some variables - need to prompt
-    config_path = get_global_config_path()
-
-    console.print("\n[bold yellow]⚠️  Missing Configuration[/bold yellow]\n")
-
-    if config_path.exists():
-        # This is an upgrade or partial config
-        console.print(
-            f"[yellow]Your configuration file is missing {len(missing)} required variables.[/yellow]\n"
-        )
-        console.print("[dim]This typically happens when RAG Memory is upgraded with new features.[/dim]\n")
-    else:
-        # First-time setup
-        console.print(f"[yellow]Configuration file not found at {config_path}[/yellow]\n")
-        console.print("[dim]RAG Memory needs the following information:[/dim]\n")
-
-    console.print(f"[dim]Missing variables: {', '.join(missing)}[/dim]\n")
-
-    # Ask if they want to provide them
-    proceed = Confirm.ask("Would you like to configure these now?", default=True)
-
-    if not proceed:
-        console.print("\n[yellow]Configuration incomplete. You can configure manually by editing:[/yellow]")
-        console.print(f"[cyan]{config_path}[/cyan]\n")
+    # Check if config file exists
+    if not config_path.exists():
+        console.print("\n[bold red]✗ Configuration not found[/bold red]")
+        console.print(f"[yellow]Expected location: {config_path}[/yellow]\n")
+        console.print("[cyan]To set up RAG Memory, run:[/cyan]")
+        console.print("[bold]  python scripts/setup.py[/bold]\n")
+        console.print("[dim]This will:[/dim]")
+        console.print("[dim]  - Create Docker containers (PostgreSQL + Neo4j)[/dim]")
+        console.print("[dim]  - Generate configuration file[/dim]")
+        console.print("[dim]  - Optionally install CLI tool system-wide[/dim]\n")
         return False
 
-    console.print()
-
-    # Prompt for each missing variable
-    for var_name in missing:
-        prompt_text = _get_prompt_text(var_name)
-        default_value = _get_default_value(var_name)
-
-        if var_name in ['OPENAI_API_KEY', 'NEO4J_PASSWORD']:
-            # Password fields - hide input
-            value = Prompt.ask(prompt_text, password=True)
-        else:
-            # Regular input, possibly with default
-            if default_value:
-                value = Prompt.ask(prompt_text, default=default_value)
-            else:
-                value = Prompt.ask(prompt_text)
-
-        # Validate that value is not empty
-        if not value or value.strip() == "":
-            console.print(f"[red]✗ {var_name} cannot be empty[/red]")
-            return False
-
-        save_env_var(var_name, value.strip())
-
-    console.print(f"\n[bold green]✓ Configuration saved to {config_path}[/bold green]\n")
-
-    # Reload environment variables
-    from .config_loader import load_environment_variables
-    load_environment_variables()
+    # Check if all required configuration is present
+    missing = get_missing_config_keys()
+    if missing:
+        console.print("\n[bold red]✗ Configuration is incomplete[/bold red]")
+        console.print(f"[yellow]Missing settings: {', '.join(missing)}[/yellow]")
+        console.print(f"[dim]Configuration file: {config_path}[/dim]\n")
+        console.print("[cyan]To update configuration, run:[/cyan]")
+        console.print("[bold]  python scripts/update-config.py[/bold]\n")
+        console.print("[dim]Then rebuild Docker containers:[/dim]")
+        console.print("[dim]  docker-compose -f docker-compose.local.yml up -d --build[/dim]\n")
+        return False
 
     return True
 
 
-def _get_prompt_text(var_name: str) -> str:
-    """Get user-friendly prompt text for a variable."""
-    prompts = {
-        'DATABASE_URL': 'PostgreSQL Database URL',
-        'OPENAI_API_KEY': 'OpenAI API Key',
-        'NEO4J_URI': 'Neo4j Connection URI',
-        'NEO4J_USER': 'Neo4j Username',
-        'NEO4J_PASSWORD': 'Neo4j Password',
-    }
-    return prompts.get(var_name, var_name)
-
-
-def _get_default_value(var_name: str) -> str:
-    """Get default value suggestion for a variable (LOCAL defaults)."""
-    defaults = {
-        'DATABASE_URL': 'postgresql://raguser:ragpassword@localhost:54320/rag_memory',
-        'NEO4J_URI': 'bolt://localhost:7687',
-        'NEO4J_USER': 'neo4j',
-        'NEO4J_PASSWORD': 'graphiti-password',
-    }
-    return defaults.get(var_name, '')
-
-
-def check_and_setup_config() -> bool:
-    """
-    Check if configuration exists, and if not, guide user through setup.
-
-    Returns:
-        True if config is ready to use (exists or was created), False if user declined setup.
-    """
-    # Check if config already exists with required variables
-    if ensure_config_exists():
-        return True  # Config is good, proceed
-
-    config_path = get_global_config_path()
-
-    # First-run setup needed
-    console.print("\n[bold yellow]🔧 First-Time Setup Required[/bold yellow]\n")
-    console.print(
-        f"RAG Memory needs to create a configuration file: [cyan]{config_path}[/cyan]\n"
-    )
-    console.print("[dim]This will store your database connection and API key settings.[/dim]")
-    console.print("[dim]The file will be created with user-only permissions (chmod 0o600).[/dim]\n")
-
-    # Ask if they want to proceed
-    proceed = Confirm.ask("Would you like to set this up now?", default=True)
-
-    if not proceed:
-        console.print("\n[yellow]Setup cancelled. You can configure manually by creating:[/yellow]")
-        console.print(f"[cyan]{config_path}[/cyan]\n")
-        console.print("[dim]With the following content:[/dim]")
-        console.print("[dim]DATABASE_URL=postgresql://raguser:ragpassword@localhost:54320/rag_memory[/dim]")
-        console.print("[dim]OPENAI_API_KEY=your-api-key-here[/dim]\n")
-        return False
-
-    console.print()
-
-    # Get DATABASE_URL
-    console.print("[bold cyan]1. Database Configuration[/bold cyan]")
-    console.print(
-        "[dim]If you're using the default Docker setup, press Enter to accept the default.[/dim]"
-    )
-
-    default_db_url = "postgresql://raguser:ragpassword@localhost:54320/rag_memory"
-    database_url = Prompt.ask(
-        "Database URL",
-        default=default_db_url,
-    )
-
-    # Get OPENAI_API_KEY
-    console.print("\n[bold cyan]2. OpenAI API Key[/bold cyan]")
-    console.print(
-        "[dim]Your API key will be stored securely with user-only file permissions.[/dim]"
-    )
-    console.print(
-        "[dim]Get your key from: https://platform.openai.com/api-keys[/dim]"
-    )
-
-    api_key = Prompt.ask(
-        "OpenAI API Key",
-        password=True,  # Hide input
-    )
-
-    if not api_key or api_key.strip() == "":
-        console.print("[bold red]✗ API key cannot be empty[/bold red]")
-        return False
-
-    # Save configuration
-    console.print("\n[bold blue]Saving configuration...[/bold blue]")
-
-    success = True
-    success = success and save_env_var("DATABASE_URL", database_url)
-    success = success and save_env_var("OPENAI_API_KEY", api_key.strip())
-
-    if success:
-        console.print(f"[bold green]✓ Configuration saved to {config_path}[/bold green]\n")
-        console.print("[dim]You can edit this file anytime to update your settings.[/dim]\n")
-
-        # Reload environment variables
-        from .config_loader import load_environment_variables
-        load_environment_variables()
-
-        return True
-    else:
-        console.print(f"[bold red]✗ Failed to save configuration to {config_path}[/bold red]")
-        console.print("[yellow]Make sure the directory is writable[/yellow]\n")
-        return False
-
-
 def ensure_config_or_exit():
     """
-    Ensure all required configuration exists, or prompt user to provide it.
-    Exits the program if setup fails or user declines.
+    Ensure configuration exists and is valid, or exit with helpful message.
 
-    Also loads environment variables using the priority system.
+    This is called by CLI and MCP server at startup.
+    Loads environment variables into os.environ for use by the application.
 
-    This function handles:
-    - Fresh installations (no config file)
-    - Upgrades (new variables added)
-    - Partial configurations (user deleted variables)
+    Exits the program if configuration is missing or incomplete.
     """
-    # First, load environment variables (priority: shell env vars → ~/.rag-memory-env)
-    from .config_loader import load_environment_variables
+    # Load environment variables from config file
     load_environment_variables()
 
-    # Check for missing variables and prompt if needed
-    if not prompt_for_missing_variables():
-        console.print("[yellow]⚠ Configuration is required to use RAG Memory[/yellow]")
-        console.print("[dim]Run any command again to restart the configuration wizard.[/dim]\n")
+    # Validate configuration is complete
+    if not validate_config_exists():
         sys.exit(1)
