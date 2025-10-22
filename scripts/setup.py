@@ -115,7 +115,7 @@ def check_existing_containers() -> bool:
     """Check if RAG Memory containers are already running"""
     print_header("STEP 3: Checking for Existing RAG Memory Containers")
 
-    code, stdout, _ = run_command(["docker-compose", "-f", "docker-compose.yml", "ps"])
+    code, stdout, _ = run_command(["docker-compose", "-f", "docker-compose.local.yml", "ps"])
 
     if code != 0:
         print_info("No existing containers found")
@@ -133,7 +133,7 @@ def check_existing_containers() -> bool:
             return True
 
         print_info("Stopping and removing existing containers...")
-        run_command(["docker-compose", "-f", "docker-compose.yml", "down", "-v"])
+        run_command(["docker-compose", "-f", "docker-compose.local.yml", "down", "-v"])
         print_success("Existing containers removed")
         return False
 
@@ -272,7 +272,7 @@ def build_and_start_containers() -> bool:
     print_header("STEP 8: Building and Starting Containers")
 
     print_info("Building Docker images...")
-    code, _, stderr = run_command(["docker-compose", "-f", "docker-compose.yml", "build"])
+    code, _, stderr = run_command(["docker-compose", "-f", "docker-compose.local.yml", "build"])
 
     if code != 0:
         print_error(f"Build failed: {stderr}")
@@ -281,7 +281,7 @@ def build_and_start_containers() -> bool:
     print_success("Build completed")
 
     print_info("Starting containers...")
-    code, _, stderr = run_command(["docker-compose", "-f", "docker-compose.yml", "up", "-d"])
+    code, _, stderr = run_command(["docker-compose", "-f", "docker-compose.local.yml", "up", "-d"])
 
     if code != 0:
         print_error(f"Failed to start containers: {stderr}")

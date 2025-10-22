@@ -3,12 +3,12 @@ version: '3.9'
 # ================================================================================
 # Environment Configuration
 # ================================================================================
-# Load environment variables from .env.prod
+# Load environment variables from .env.local
 # Usage:
-#   docker-compose --env-file .env.prod -f docker-compose.prod.yml up -d
+#   docker-compose -f docker-compose.local.yml up -d
 #
 # Or set COMPOSE_FILE environment variable to auto-load:
-#   export COMPOSE_FILE=docker-compose.prod.yml
+#   export COMPOSE_FILE=docker-compose.local.yml
 #   docker-compose up -d
 # ================================================================================
 
