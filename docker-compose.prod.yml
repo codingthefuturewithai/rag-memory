@@ -93,8 +93,8 @@ services:
       - postgres
       - neo4j
     environment:
-      BACKUP_SOURCES=/backup
-      BACKUP_FILENAME_EXPAND=true
+      BACKUP_SOURCES: /backup
+      BACKUP_FILENAME_EXPAND: "true"
       # Default backup schedule: 2:05 AM daily (override in .env.prod)
       BACKUP_CRON_SCHEDULE: "${BACKUP_CRON_SCHEDULE:-5 2 * * *}"
       # Default: compress backups (override in .env.prod)
