@@ -59,6 +59,8 @@ dev = [
     "anyio>=4.0.0",
     "black>=24.0.0",
     "ruff>=0.6.0",
+    "build>=1.0.0",
+    "twine>=6.0.0",
 ]
 jupyter = [
     "jupyter>=1.1.0",
@@ -90,6 +92,8 @@ dev-dependencies = [
     "black>=24.0.0",
     "ruff>=0.6.0",
     "anyio>=4.0.0",
+    "build>=1.0.0",
+    "twine>=6.0.0",
 ]
 
 [tool.ruff]
