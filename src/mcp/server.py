@@ -183,12 +183,12 @@ mcp = FastMCP("rag-memory", lifespan=lifespan)
 @mcp.tool()
 def search_documents(
     query: str,
-    collection_name: str = None,
+    collection_name: str | None = None,
     limit: int = 5,
     threshold: float = 0.35,
     include_source: bool = False,
     include_metadata: bool = False,
-    metadata_filter: dict = None,
+    metadata_filter: dict | None = None,
 ) -> list[dict]:
     """
     Search for relevant document chunks using vector similarity.
@@ -437,8 +437,8 @@ async def delete_collection(name: str, confirm: bool = False) -> dict:
 async def ingest_text(
     content: str,
     collection_name: str,
-    document_title: str = None,
-    metadata: dict = None,
+    document_title: str | None = None,
+    metadata: dict | None = None,
     include_chunk_ids: bool = False,
 ) -> dict:
     """
@@ -503,8 +503,10 @@ async def ingest_text(
     Note: This triggers OpenAI API calls for embeddings (~$0.00003 per document).
     """
     return await ingest_text_impl(
+        db,
         doc_store,
         unified_mediator,
+        graph_store,
         content,
         collection_name,
         document_title,
@@ -812,7 +814,7 @@ async def ingest_url(
 async def ingest_file(
     file_path: str,
     collection_name: str,
-    metadata: dict = None,
+    metadata: dict | None = None,
     include_chunk_ids: bool = False,
 ) -> dict:
     """
@@ -894,7 +896,7 @@ async def ingest_file(
         )
     """
     return await ingest_file_impl(
-        doc_store, unified_mediator, file_path, collection_name, metadata, include_chunk_ids
+        db, doc_store, unified_mediator, graph_store, file_path, collection_name, metadata, include_chunk_ids
     )
 
 
@@ -902,7 +904,7 @@ async def ingest_file(
 async def ingest_directory(
     directory_path: str,
     collection_name: str,
-    file_extensions: list = None,
+    file_extensions: list | None = None,
     recursive: bool = False,
     include_document_ids: bool = False,
 ) -> dict:
@@ -992,8 +994,10 @@ async def ingest_directory(
         print(f"Ingested {result['files_ingested']} files with {result['total_chunks']} chunks")
     """
     return await ingest_directory_impl(
+        db,
         doc_store,
         unified_mediator,
+        graph_store,
         directory_path,
         collection_name,
         file_extensions,
@@ -1005,9 +1009,9 @@ async def ingest_directory(
 @mcp.tool()
 async def update_document(
     document_id: int,
-    content: str = None,
-    title: str = None,
-    metadata: dict = None,
+    content: str | None = None,
+    title: str | None = None,
+    metadata: dict | None = None,
 ) -> dict:
     """
     Update an existing document's content, title, or metadata.
@@ -1056,7 +1060,7 @@ async def update_document(
     Note: Metadata is merged with existing values. To remove a key,
     use delete_document and re-ingest instead.
     """
-    return await update_document_impl(doc_store, document_id, content, title, metadata, graph_store)
+    return await update_document_impl(db, doc_store, document_id, content, title, metadata, graph_store)
 
 
 @mcp.tool()
@@ -1095,12 +1099,12 @@ async def delete_document(document_id: int) -> dict:
     Note: This does NOT delete collections, only removes the document from them.
     Use with caution - deletion is permanent.
     """
-    return await delete_document_impl(doc_store, document_id, graph_store)
+    return await delete_document_impl(db, doc_store, document_id, graph_store)
 
 
 @mcp.tool()
 def list_documents(
-    collection_name: str = None,
+    collection_name: str | None = None,
     limit: int = 50,
     offset: int = 0,
     include_details: bool = False,

@@ -96,7 +96,7 @@ def search_documents_impl(
     threshold: float,
     include_source: bool,
     include_metadata: bool,
-    metadata_filter: dict = None,
+    metadata_filter: dict | None = None,
 ) -> List[Dict[str, Any]]:
     """Implementation of search_documents tool."""
     try:
@@ -339,9 +339,9 @@ async def ingest_text_impl(
     graph_store: Optional[GraphStore],
     content: str,
     collection_name: str,
-    document_title: Optional[str],
-    metadata: Optional[Dict[str, Any]],
-    include_chunk_ids: bool,
+    document_title: Optional[str] = None,
+    metadata: Optional[Dict[str, Any]] = None,
+    include_chunk_ids: bool = False,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_text tool.
@@ -589,10 +589,10 @@ async def ingest_url_impl(
     graph_store: Optional[GraphStore],
     url: str,
     collection_name: str,
-    follow_links: bool,
-    max_depth: int,
-    mode: str,
-    include_document_ids: bool,
+    follow_links: bool = False,
+    max_depth: int = 1,
+    mode: str = "crawl",
+    include_document_ids: bool = False,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_url tool with mode support.
@@ -744,8 +744,8 @@ async def ingest_file_impl(
     graph_store: Optional[GraphStore],
     file_path: str,
     collection_name: str,
-    metadata: Optional[Dict[str, Any]],
-    include_chunk_ids: bool,
+    metadata: Optional[Dict[str, Any]] = None,
+    include_chunk_ids: bool = False,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_file tool.
@@ -822,9 +822,9 @@ async def ingest_directory_impl(
     graph_store: Optional[GraphStore],
     directory_path: str,
     collection_name: str,
-    file_extensions: Optional[List[str]],
-    recursive: bool,
-    include_document_ids: bool,
+    file_extensions: Optional[List[str]] = None,
+    recursive: bool = False,
+    include_document_ids: bool = False,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_directory tool.
@@ -993,10 +993,10 @@ async def delete_document_impl(
 
 def list_documents_impl(
     doc_store: DocumentStore,
-    collection_name: Optional[str],
-    limit: int,
-    offset: int,
-    include_details: bool,
+    collection_name: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+    include_details: bool = False,
 ) -> Dict[str, Any]:
     """
     Implementation of list_documents tool.
