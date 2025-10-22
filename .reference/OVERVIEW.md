@@ -467,15 +467,12 @@ rag search "query" --threshold 0.3
 
 **Setup:**
 ```bash
-# Install globally
-uv tool install rag-memory
+# Clone and run setup script
+git clone https://github.com/yourusername/rag-memory.git
+cd rag-memory
+python scripts/setup.py
 
-# Start database from cloned repo
-cd /path/to/rag-memory
-docker-compose up -d
-
-# Configure environment
-rag status  # Interactive setup wizard
+# Setup handles everything: Docker, config, CLI installation, verification
 ```
 
 **Cost:** Free (self-hosted)
@@ -643,22 +640,14 @@ rag status  # Interactive setup wizard
 
 ### 5-Minute Setup
 
-1. **Install:**
+1. **Clone and setup:**
    ```bash
-   uv tool install rag-memory
+   git clone https://github.com/yourusername/rag-memory.git
+   cd rag-memory
+   python scripts/setup.py
    ```
 
-2. **Start database:** (from cloned repo)
-   ```bash
-   docker-compose up -d
-   ```
-
-3. **Initialize:**
-   ```bash
-   rag status  # Interactive setup
-   ```
-
-4. **Create collection:**
+2. **Create collection:**
    ```bash
    rag collection create my-docs --description "My Documentation"
    ```

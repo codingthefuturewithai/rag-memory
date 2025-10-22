@@ -49,47 +49,46 @@ Both databases work together automatically - when you ingest a document, it's in
 - Full document lifecycle (create, read, update, delete)
 - Cross-platform configuration system
 
-### 📦 Manual Installation
+### 📦 Installation
 
-**For end users (install from PyPI):**
+The recommended way to install RAG Memory is to clone the repository and run the setup script:
 
 ```bash
-# Install globally
-uv tool install rag-memory
-
-# Start database (requires cloning repo for docker-compose.yml)
-git clone https://github.com/YOUR-USERNAME/rag-memory.git
+# Clone repository from PyPI
+git clone https://github.com/yourusername/rag-memory.git
 cd rag-memory
-docker-compose up -d
 
-# Run any command - first-run wizard will prompt for config
-rag status
+# Run the setup script (handles everything)
+python scripts/setup.py
 ```
 
-The first time you run any `rag` command, an interactive wizard will prompt you for:
-- `DATABASE_URL` (defaults to local Docker: `postgresql://raguser:ragpass@localhost:54320/rag_poc`)
-- `OPENAI_API_KEY` (get from https://platform.openai.com/api-keys)
+The `setup.py` script will:
+1. Check that Docker is installed
+2. Start PostgreSQL and Neo4j containers
+3. Create your local configuration
+4. Ask for your OpenAI API key
+5. Initialize the databases
+6. Install the `rag` CLI tool globally
+7. Test that everything works
 
-Configuration is saved to `~/.rag-memory-env` with secure permissions.
+**That's it!** After setup.py completes, you can use `rag` commands from anywhere.
 
-**For developers (clone and develop):**
+For **developers** who want to modify the code:
 
 ```bash
 # Clone repository
-git clone https://github.com/YOUR-USERNAME/rag-memory.git
+git clone https://github.com/yourusername/rag-memory.git
 cd rag-memory
 
 # Install dependencies
 uv sync
 
-# Configure environment
+# Copy environment template
 cp .env.example .env
-# Edit .env with your DATABASE_URL and OPENAI_API_KEY
+# Edit .env with your OPENAI_API_KEY
 
-# Start database
-docker-compose up -d
-
-# Run CLI (uses .env in current directory)
+# Run tests or development commands
+uv run pytest
 uv run rag status
 ```
 
@@ -168,45 +167,43 @@ rag document delete <ID> [--confirm]
 
 ## MCP Server for AI Agents
 
-RAG Memory exposes 14 tools via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for AI agent integration.
+RAG Memory exposes 17 tools via [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) for AI agent integration.
 
 ### Quick Setup
 
-**1. Install globally:**
+**1. Run the setup script:**
 ```bash
-uv tool install rag-memory
-```
-
-**2. Start database:**
-```bash
-git clone https://github.com/YOUR-USERNAME/rag-memory.git
+git clone https://github.com/yourusername/rag-memory.git
 cd rag-memory
-docker-compose up -d
+python scripts/setup.py
 ```
 
-**3. Configure your AI agent:**
+After setup, RAG Memory's MCP server is automatically running in Docker on port 8000.
 
-**Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+**2. Connect to Claude Code:**
+```bash
+claude mcp add rag-memory --type sse --url http://localhost:8000/sse
+```
+
+**3. Connect to Claude Desktop** (optional):
+
+Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
     "rag-memory": {
       "command": "rag-mcp-stdio",
-      "args": [],
-      "env": {
-        "OPENAI_API_KEY": "sk-your-api-key-here",
-        "DATABASE_URL": "postgresql://raguser:ragpass@localhost:54320/rag_poc"
-      }
+      "args": []
     }
   }
 }
 ```
 
-**4. Restart your AI agent** (quit and reopen)
+Then restart Claude Desktop.
 
-**5. Test:** Ask your agent "List available RAG collections"
+**4. Test:** Ask your agent "List RAG Memory collections"
 
-### Available MCP Tools (14 Total)
+### Available MCP Tools (17 Total)
 
 **Core RAG (3 tools):**
 - `search_documents` - Semantic search across knowledge base

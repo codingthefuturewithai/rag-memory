@@ -2,22 +2,13 @@
 
 ## Prerequisites
 
-Before configuring the MCP server, ensure:
+Before configuring the MCP server, ensure you've completed the setup:
 
-1. **RAG Memory installed globally:**
+1. **Run the setup script:**
    ```bash
-   # Install from PyPI (recommended)
-   uv tool install rag-memory
-
-   # Or install from cloned repo (for development)
-   # cd /path/to/rag-memory && uv tool install -e .
-   ```
-
-2. **Database is running:**
-   ```bash
-   # Clone repo to get docker-compose.yml
-   git clone https://github.com/YOUR-USERNAME/rag-memory.git
+   git clone https://github.com/yourusername/rag-memory.git
    cd rag-memory
+   python scripts/setup.py
 
    # Start database
    docker-compose up -d
@@ -96,9 +87,8 @@ uv run python -m src.mcp.server --transport streamable-http --port 3001
 2. The DATABASE_URL is pre-configured for the default Docker setup (port 54320)
 3. If you changed Docker settings, update the DATABASE_URL accordingly
 4. Ensure JSON syntax is correct (no trailing commas!)
-5. This assumes you installed globally with `uv tool install rag-memory`
 
-**Note:** The `rag-mcp-stdio` command is available globally after installation. No need to specify paths to the cloned repository.
+**Note:** The `rag-mcp-stdio` command is available globally after running `python scripts/setup.py`. No need to specify paths to the cloned repository.
 
 ### Claude Code
 
