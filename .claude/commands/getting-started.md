@@ -56,9 +56,11 @@ If you later want to move to cloud (Supabase + Neo4j Aura + Fly.io), you'll have
 ### Step 4: Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/rag-memory.git
+git clone https://github.com/yourusername/rag-memory.git
 cd rag-memory
 ```
+
+Replace `yourusername` with your GitHub username if you're using a fork, or use the official repository.
 
 This gives you the Docker Compose files and everything else you need.
 
@@ -66,140 +68,66 @@ This gives you the Docker Compose files and everything else you need.
 
 ---
 
-### Step 5: Start the Docker Containers
+### Step 5: Run the Setup Script
 
-The Docker Compose setup includes:
-- PostgreSQL database
-- Neo4j graph database
-- MCP server (runs on port 8000)
-- Automated daily backups (saved to ./backups/)
-
-Let me start these for you:
+RAG Memory provides a single setup script that handles everything:
 
 ```bash
-docker-compose -f docker-compose.dev.yml up -d
+python scripts/setup.py
 ```
 
-This will take 30-60 seconds. It downloads container images, initializes databases, and starts everything.
+This script will:
+1. Check if Docker is installed and running
+2. Start PostgreSQL and Neo4j containers
+3. Create your local configuration file
+4. Ask for your OpenAI API key
+5. Initialize the databases
+6. Install the CLI tool globally
+7. Verify everything works
 
-**Wait for it to complete, then continue.**
+**Follow the prompts. If you don't have Docker running, the script will guide you through that first.**
+
+**Completed setup.py? Continue to next step.**
 
 ---
 
-### Step 6: Verify Containers Are Running
+### Step 6: Verify Everything Works
 
-Let me check that everything started correctly:
-
-```bash
-docker-compose -f docker-compose.dev.yml ps
-```
-
-You should see three containers:
-- `rag-memory-postgres-dev` (UP, healthy)
-- `rag-memory-neo4j-dev` (UP, healthy)
-- (MCP server runs inside rag-memory-postgres-dev)
-
-**See all three healthy? Good! Continue to next step.**
-
----
-
-### Step 7: Install the CLI Tool Globally
-
-The `rag` command needs to be installed on your system so you can use it from anywhere:
-
-```bash
-uv tool install .
-```
-
-This installs the `rag` command globally to `~/.local/bin/` (same place system tools live).
-
-**Done? Continue to next step.**
-
----
-
-### Step 8: Verify CLI Installation
-
-```bash
-which rag
-```
-
-Should print: `/Users/YOUR-USERNAME/.local/bin/rag`
-
-**See that path? Good! Continue to next step.**
-
----
-
-## PHASE 3: FIRST-RUN CONFIGURATION - Set Up Your API Key
-
-### Step 9: Create Configuration File
-
-The first time you run the `rag` command, it will ask for configuration. Let's do that now:
-
-```bash
-rag status
-```
-
-You'll be prompted for:
-1. **PostgreSQL Database URL** (default: `postgresql://raguser:ragpassword@localhost:54320/rag_memory_dev`)
-   - Press Enter to accept default (you're using local Docker)
-
-2. **Neo4j Connection URI** (default: `bolt://localhost:7687`)
-   - Press Enter to accept default (Neo4j is running locally)
-
-3. **Neo4j Username** (default: `neo4j`)
-   - Press Enter to accept default
-
-4. **Neo4j Password** (default: `graphiti-password`)
-   - Press Enter to accept default
-
-5. **OpenAI API Key** (no default - YOU MUST PROVIDE THIS)
-   - Get your key: https://platform.openai.com/api-keys
-   - Paste it here (it won't be displayed)
-
-**Important:** The configuration is saved to `~/.rag-memory-env` with user-only permissions (chmod 600).
-
-This is a one-time setup. Future runs will read from this file automatically.
-
-**Completed the first-run wizard? Continue to next step.**
-
----
-
-### Step 10: Verify Configuration
-
-Let's verify everything works:
+Let's verify the setup completed successfully:
 
 ```bash
 rag status
 ```
 
 Should show:
-- Database connection: OK
+- PostgreSQL connection: ✅ OK
+- Neo4j connection: ✅ OK
 - Collections: 0 (empty for now, that's normal)
 - Documents: 0
 
-**See success? Continue to next step.**
+**See success for both databases? Good! Continue to next step.**
 
 ---
 
 ## PHASE 4: CONNECT YOUR MCP SERVER - Use from Claude Code/Desktop
 
-### Step 11: Add MCP Server to Claude Code
+### Step 7: Connect RAG Memory to Claude Code
 
-The MCP server is already running in Docker on port 8000. Now add it to Claude Code:
+RAG Memory includes an MCP server that's already running in Docker. Now connect it to Claude Code:
 
 ```bash
-claude mcp add-json --scope user rag-memory '{"type":"sse","url":"http://localhost:8000/sse"}'
+claude mcp add rag-memory --type sse --url http://localhost:8000/sse
 ```
 
-This registers RAG Memory as an MCP server. The `--scope user` flag makes it available globally (from any project).
+This registers RAG Memory as an available MCP server in Claude Code.
 
-**Note:** After running this, you may need to restart Claude Code for it to recognize the new server.
+**Note:** You may need to restart Claude Code for it to recognize the new server.
 
 **Done? Continue to next step.**
 
 ---
 
-### Step 12: Add MCP Server to Claude Desktop (Optional)
+### Step 8: Connect RAG Memory to Claude Desktop (Optional)
 
 If you also use Claude Desktop, add it there too:
 
@@ -211,10 +139,7 @@ If you also use Claude Desktop, add it there too:
   "mcpServers": {
     "rag-memory": {
       "command": "rag-mcp-stdio",
-      "args": [],
-      "env": {
-        "OPENAI_API_KEY": "your-api-key-here"
-      }
+      "args": []
     }
   }
 }
@@ -222,7 +147,7 @@ If you also use Claude Desktop, add it there too:
 
 Then restart Claude Desktop.
 
-**Note:** Claude Desktop uses stdio transport (different from Claude Code's SSE), but both work with the same local databases.
+**Note:** Claude Desktop runs RAG Memory as a subprocess (stdio transport), while Claude Code connects via HTTP (SSE transport). Both access the same local databases.
 
 **Done? Continue to testing.**
 
@@ -346,17 +271,25 @@ Look for errors in the output.
 
 ## WHAT HAPPENS NEXT?
 
-For cloud deployment (later, when you're ready):
+Now that RAG Memory is running locally, check out the documentation:
+
+**For detailed CLI commands:**
+- Run: `rag --help`
+- Or see `.reference/OVERVIEW.md` for complete reference
+
+**For MCP tool reference:**
+- See `.reference/MCP_QUICK_START.md`
+- Lists all 17 tools available for AI agents
+
+**For cloud deployment (when ready):**
 - See `.reference/CLOUD_DEPLOYMENT.md`
 - Covers Supabase PostgreSQL, Neo4j Aura, Fly.io MCP server
 - Data migration guide (move your local documents to cloud)
 
-For detailed CLI command reference:
-- See `.reference/OVERVIEW.md`
-
-For MCP tool reference:
-- See `.reference/MCP_QUICK_START.md`
+**For architecture details:**
+- See `CLAUDE.md` for development reference
+- Explains PostgreSQL + Neo4j dual storage, vector normalization, etc.
 
 ---
 
-**You're all set! Start ingesting documents and exploring your knowledge base.**
+**You're all set! Start ingesting documents and exploring your knowledge base with AI agents.**

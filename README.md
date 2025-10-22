@@ -4,38 +4,50 @@
 [![Python](https://img.shields.io/pypi/pyversions/rag-memory?color=blue)](https://pypi.org/project/rag-memory/)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A production-ready PostgreSQL + pgvector RAG (Retrieval-Augmented Generation) system that works as both an **MCP server for AI agents** and a **standalone CLI tool**.
+A production-ready **PostgreSQL + pgvector + Neo4j** knowledge management system with dual storage for semantic search (RAG) and knowledge graphs. Works as an **MCP server for AI agents** and a **standalone CLI tool**.
+
+## ⚡ Quick Start
+
+### For Claude Code Users
+
+If you have Claude Code installed, the absolute easiest way to get started:
+
+```
+/getting-started
+```
+
+This interactive guide will walk you through:
+- Understanding what RAG Memory does
+- Setting up local Docker containers
+- Configuring your API keys
+- Connecting to Claude Code or Claude Desktop
+- Testing with sample data
+
+**Estimated time: 30-40 minutes**
+
+---
 
 ## What Is This?
 
-RAG Memory gives AI agents and developers a powerful memory system for storing and retrieving documents semantically. It combines vector search with full document retrieval, allowing you to find the right information and get the complete context.
+RAG Memory combines two powerful databases for knowledge management:
+
+- **PostgreSQL + pgvector** - Semantic search across document content (RAG layer)
+- **Neo4j** - Entity relationships and knowledge graphs (KG layer)
+
+Both databases work together automatically - when you ingest a document, it's indexed in both systems simultaneously.
 
 **Two ways to use it:**
-1. **MCP Server** - Connect AI agents (Claude Desktop, Claude Code, Cursor) with 14 tools
+1. **MCP Server** - Connect AI agents (Claude Desktop, Claude Code, Cursor) with 17 MCP tools
 2. **CLI Tool** - Direct command-line access for testing, automation, and bulk operations
 
 **Key capabilities:**
-- Semantic search across documents with vector embeddings
+- Semantic search with vector embeddings (pgvector + HNSW indexing)
+- Knowledge graph queries for relationships and entities
 - Web crawling and documentation ingestion
 - Document chunking for large files
 - Collection management for organizing knowledge
 - Full document lifecycle (create, read, update, delete)
 - Cross-platform configuration system
-
-## Getting Started
-
-### 🚀 Recommended: Use the Claude Code Slash Command
-
-**If you have Claude Code or Claude Desktop:**
-
-1. Run the command: `/getting-started`
-2. Follow the interactive guide that will:
-   - Explain what RAG Memory does
-   - Help you choose MCP server, CLI, or both
-   - Guide you through installation and configuration
-   - Test your setup with sample data
-
-This is the easiest way to get started!
 
 ### 📦 Manual Installation
 
