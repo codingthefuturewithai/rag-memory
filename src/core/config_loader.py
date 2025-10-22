@@ -128,18 +128,26 @@ def save_config(config: dict[str, Any], file_path: Optional[Path] = None) -> boo
         return False
 
 
-def load_environment_variables():
+def load_environment_variables(use_config_file: bool = True):
     """
     Load environment variables using two-tier priority system.
 
     Priority order (highest to lowest):
     1. Environment variables (already set in shell)
-    2. Config file in OS-standard location
+    2. Config file in OS-standard location (if use_config_file=True)
+
+    Args:
+        use_config_file: If False, skip loading from system config file.
+                        Useful for tests that should only use .env files.
 
     Reads from 'server' section of config.yaml and sets environment variables.
     """
-    # Load config from OS-standard location
-    config = load_config()
+    # Load config from OS-standard location if allowed
+    if use_config_file:
+        config = load_config()
+    else:
+        config = {}
+
     server_config = config.get('server', {})
 
     # Map config keys to environment variable names
