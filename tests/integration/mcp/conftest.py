@@ -103,6 +103,16 @@ async def mcp_session(request) -> AsyncGenerator[Tuple[ClientSession, str], None
             if var in os.environ:
                 env[var] = os.environ[var]
 
+        # Add config path environment variables (critical for test config to be found)
+        config_vars = [
+            "RAG_CONFIG_PATH",
+            "RAG_CONFIG_FILE",
+        ]
+
+        for var in config_vars:
+            if var in os.environ:
+                env[var] = os.environ[var]
+
         # Add coverage environment variables if present
         coverage_vars = [
             "COVERAGE_PROCESS_START",

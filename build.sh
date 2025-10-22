@@ -61,11 +61,11 @@ fi
 
 # Build the package using UV
 echo "🔨 Building package with UV..."
-uv build
+uv run python -m build
 
 # Check the build
 echo "✅ Checking build..."
-uv tool run twine check dist/*
+uv run python -m twine check dist/*
 
 echo "📋 Build complete! Files created:"
 ls -lh dist/
@@ -78,7 +78,7 @@ echo ""
 read -p "Do you want to upload to PyPI now? (yes/no): " response
 if [[ "$response" == "yes" || "$response" == "y" ]]; then
     echo "📤 Uploading to PyPI..."
-    uv tool run twine upload dist/*
+    uv run python -m twine upload dist/*
     if [ $? -eq 0 ]; then
         echo "✅ Successfully uploaded to PyPI!"
         
@@ -111,7 +111,7 @@ if [[ "$response" == "yes" || "$response" == "y" ]]; then
 else
     echo "⏭️  Skipping upload."
     echo "To upload later, run:"
-    echo "  uv tool run twine upload dist/*"
+    echo "  uv run python -m twine upload dist/*"
     echo ""
     echo "Or just run this script again!"
 fi
