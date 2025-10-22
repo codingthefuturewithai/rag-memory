@@ -66,6 +66,10 @@ services:
       NEO4J_USER: neo4j
       NEO4J_PASSWORD: graphiti-password
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      # Mount config directory so MCP server can read config.yaml
+      # Config includes server settings and directory mount specifications
+      - ~/.config/rag-memory:/app/.config/rag-memory:ro
     ports:
       - "${PROD_MCP_PORT:-8000}:8000"
     depends_on:
