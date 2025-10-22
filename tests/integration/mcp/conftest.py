@@ -163,8 +163,12 @@ async def mcp_session(request) -> AsyncGenerator[Tuple[ClientSession, str], None
                 # These happen when pytest-anyio tears down the loop before cleanup completes
                 if "Event loop is closed" not in str(e):
                     print(f"Cleanup error: {e}", file=sys.stderr)
-            except Exception as e:
-                print(f"Cleanup error: {e}", file=sys.stderr)
+            except BaseException as e:
+                # Catch ExceptionGroup from httpx background task cleanup
+                # These are harmless "Event loop is closed" errors from connection cleanup
+                error_str = str(e)
+                if "Event loop is closed" not in error_str:
+                    print(f"Cleanup error: {e}", file=sys.stderr)
 
 
 # Helper functions for extracting MCP response content
