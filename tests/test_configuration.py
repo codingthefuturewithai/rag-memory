@@ -43,12 +43,23 @@ class TestConfigDirectory:
                 assert config_dir.is_dir()
 
     def test_get_config_path_returns_yaml_file(self):
-        """Test that get_config_path returns path to config.yaml."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch('platformdirs.user_config_dir', return_value=os.path.join(tmpdir, 'rag-memory')):
-                config_path = get_config_path()
-                assert config_path.name == 'config.yaml'
-                assert config_path.parent.exists()
+        """Test that get_config_path returns path to config.yaml (or config.test.yaml if RAG_CONFIG_FILE set)."""
+        # Save original env var
+        original_config_file = os.environ.get('RAG_CONFIG_FILE')
+        try:
+            # Clear the env var for this test (it may be set by conftest)
+            if 'RAG_CONFIG_FILE' in os.environ:
+                del os.environ['RAG_CONFIG_FILE']
+
+            with tempfile.TemporaryDirectory() as tmpdir:
+                with patch('platformdirs.user_config_dir', return_value=os.path.join(tmpdir, 'rag-memory')):
+                    config_path = get_config_path()
+                    assert config_path.name == 'config.yaml'
+                    assert config_path.parent.exists()
+        finally:
+            # Restore original env var
+            if original_config_file is not None:
+                os.environ['RAG_CONFIG_FILE'] = original_config_file
 
 
 class TestConfigLoading:

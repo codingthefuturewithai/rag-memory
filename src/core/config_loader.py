@@ -71,9 +71,15 @@ def get_config_path() -> Path:
     Get the path to the RAG Memory configuration file.
 
     Returns:
-        Path to config.yaml in OS-appropriate location
+        Path to config.yaml (or config.test.yaml for tests) in OS-appropriate location
     """
-    return get_config_dir() / 'config.yaml'
+    config_dir = get_config_dir()
+
+    # Check if a specific config filename is requested (for tests)
+    # Environment variable: RAG_CONFIG_FILE (e.g., 'config.test.yaml')
+    config_filename = os.getenv('RAG_CONFIG_FILE', 'config.yaml')
+
+    return config_dir / config_filename
 
 
 def load_config(file_path: Optional[Path] = None) -> dict[str, Any]:

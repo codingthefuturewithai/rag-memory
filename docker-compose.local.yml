@@ -86,7 +86,7 @@ services:
     image: offen/docker-volume-backup:latest
     container_name: rag-memory-backup
     restart: always
-    env_file: ./.env.prod
+    env_file: ./.env.local
     volumes:
       - postgres_data:/backup/postgres:ro
       - neo4j_data:/backup/neo4j:ro
@@ -99,12 +99,12 @@ services:
     environment:
       BACKUP_SOURCES: /backup
       BACKUP_FILENAME_EXPAND: "true"
-      # Backup schedule: 2:05 AM daily by default (override in .env.prod)
+      # Backup schedule: 2:05 AM daily by default (override in .env.local)
       BACKUP_CRON_SCHEDULE: "${BACKUP_CRON_SCHEDULE:-5 2 * * *}"
     labels:
       description: "RAG Memory - Automated Daily Backups"
       backup_location: "./backups"
-      backup_schedule: "Daily (configurable via BACKUP_CRON_SCHEDULE in .env.prod)"
+      backup_schedule: "Daily (configurable via BACKUP_CRON_SCHEDULE in .env.local)"
 
 volumes:
   postgres_data:

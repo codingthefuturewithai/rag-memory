@@ -10,7 +10,7 @@ RAG Memory is a **PostgreSQL pgvector + Neo4j + MCP server** system for managing
 
 - **Purpose:** Replace ChromaDB with pgvector for better similarity accuracy (0.7-0.95 vs ChromaDB's 0.3)
 - **Architecture:** Dual storage (RAG + Knowledge Graph)
-- **Distribution:** git clone (NOT PyPI)
+- **Distribution:** Published to PyPI (via `uv publish`), users install with `uv tool install rag-memory`
 
 **Key Achievement:** Proper vector normalization + HNSW indexing achieves 0.73 similarity for near-identical content.
 
@@ -18,17 +18,26 @@ RAG Memory is a **PostgreSQL pgvector + Neo4j + MCP server** system for managing
 
 ## Deployment Strategy (CRITICAL DECISION)
 
-**Distribution:** Users `git clone` the repo (NOT `uv tool install`).
+**Distribution:** Published to PyPI. Users install with `uv tool install rag-memory`.
 
 **Three Supported Scenarios:**
 
-1. **Local MCP Server:** Docker Compose (PostgreSQL + Neo4j local) → AI agents connect to localhost:8000
-2. **Cloud MCP Server:** Supabase + Neo4j Aura + Fly.io → AI agents connect to https://rag-memory-mcp.fly.dev/sse
-3. **CLI Tool:** Command-line interface (connects to local OR cloud databases, never both)
+1. **System CLI Tool:** User installs `uv tool install rag-memory`, runs commands daily
+   - Config stored at: `~/.config/rag-memory/config.yaml` (system-level, persistent)
+   - Can delete repo anytime - config remains
+   - Connects to LOCAL or CLOUD databases (user chooses one)
 
-**Key Principle:** ONE knowledge store at a time. Users pick LOCAL or CLOUD, not both.
+2. **Local Development (repo cloned):** Developer `git clone` for local customization/testing
+   - Config stored at: `config/config.dev.yaml` + `.env` (repo-local, temporary)
+   - Uses local Docker Compose (PostgreSQL + Neo4j)
+   - Can delete repo safely - temporary configs
 
-**See:** `.reference/CLOUD_DEPLOYMENT.md` for complete setup guide.
+3. **Automated Tests (repo cloned):** Testing suite in the repo
+   - Config stored at: `config/config.test.yaml` + `.env` (repo-local, isolated)
+   - Uses test Docker Compose with ephemeral databases
+   - Can delete repo safely - test configs
+
+**Key Principle:** ONE environment at a time. System config is permanent, repo configs are temporary.
 
 ---
 
@@ -190,17 +199,107 @@ PostgreSQL: **54320** (not 5432 or 5433, to avoid conflicts with local PostgreSQ
 
 **Completed:**
 - ✅ Removed automatic GitHub Actions CI/CD (manual deployment only)
-- ✅ Decided: git clone distribution (NOT PyPI package)
+- ✅ Decided: PyPI distribution via `uv publish`
 - ✅ Decided: Local OR Cloud, never both (single environment at a time)
 - ✅ Mandatory Knowledge Graph architecture ("All or Nothing")
 - ✅ Startup validation for both PostgreSQL and Neo4j
 - ✅ MCP tool count: 17 tools registered and functional
 - ✅ Delete collection tool with graph cleanup
+- ✅ Configuration system: YAML + environment variables (section 2025-10-22)
+
+**Configuration Strategy (2025-10-22):**
+
+Three scenarios, three configurations:
+
+1. **System CLI (installed via setup.py):**
+   - `~/.config/rag-memory/config.yaml` - system-level, permanent, created by setup.py
+   - Mount paths: Configured by user during setup (could be anywhere on their system)
+   - OPENAI_API_KEY in config.yaml
+
+2. **Local Development (repo cloned):**
+   - `.env` file (gitignored) - stores ONLY OPENAI_API_KEY
+   - `config/config.dev.yaml` (committed) - database URLs, dev mounts
+   - Mounts point to: `.reference/` directory in repo
+   - conftest.py sets RAG_CONFIG_PATH to repo config directory
+
+3. **Automated Tests (repo cloned):**
+   - `.env` file (gitignored) - stores ONLY OPENAI_API_KEY
+   - `config/config.test.yaml` (committed) - test database URLs, test mounts
+   - Mounts point to: `test-data/` directory in repo (test documents)
+   - conftest.py sets RAG_CONFIG_PATH to repo config directory
+
+Key principle: `.env` is ONLY for secrets (OPENAI_API_KEY), everything else is in YAML. YAML files are committed and source-controlled. `.env` is gitignored.
+
+**In Progress:**
+- Create `scripts/setup.py` (interactive one-command setup for users)
+- Update `.env.example` to show OPENAI_API_KEY only
+- Update `config/config.dev.yaml` to use `.reference/` as default mount
+- Create `config/config.test.yaml` to use `test-data/` as default mount
+- Create `test-data/` directory with sample test documents
+- Update conftest.py to load `.env` + YAML config
 
 **Pending:**
-- Create `scripts/deploy-to-fly.sh` (manual deployment with test pre-checks)
+- Verify end-to-end configuration works for all three scenarios
+- Test fresh PyPI install in clean environment
 - Create `.reference/DATA_MIGRATION.md` (guide for local → cloud migration)
-- Create `/rag-migrate` custom command (guided migration in Claude Code)
+
+---
+
+## scripts/setup.py - One-Command User Setup (2025-10-22)
+
+**Purpose:** User runs `python scripts/setup.py` once. Script handles entire setup: Docker, containers, system config, tool installation.
+
+**User experience:** One command, interactive prompts, everything done. Then user can delete repo.
+
+**Setup.py Flow (All-or-Nothing at Each Step):**
+
+1. **Check Docker installed**
+   - If NO: "Install Docker, open new terminal, re-run this script"
+   - HALT and EXIT
+
+2. **Check Docker daemon running**
+   - If NO: "Start Docker, then press Enter to continue"
+   - PAUSE/WAIT for user input, then retry check in same script
+
+3. **Check if RAG Memory local containers running**
+   - If YES: "Containers exist. Tear down and rebuild (volumes preserved)? (yes/no)"
+     - If NO: HALT and EXIT
+     - If YES: Run `docker-compose -f docker-compose.local.yml down`, continue
+   - If NO: Continue
+
+4. **Start containers**
+   - Run `docker-compose -f docker-compose.local.yml up -d`
+   - Wait for health checks to pass
+
+5. **Check if system config exists**
+   - If YES: "Config exists. Overwrite it? (yes/no)"
+     - If NO: HALT and EXIT
+     - If YES: Continue to overwrite
+   - If NO: Continue
+
+6. **Prompt for OPENAI_API_KEY**
+   - Validate not empty
+   - If invalid: re-prompt
+
+7. **Prompt for database_url, neo4j_uri, neo4j_user, neo4j_password**
+   - Validate connectivity or at least format
+   - If invalid: re-prompt
+
+8. **Create system config directory**
+   - Ensure `~/.config/rag-memory/` exists
+
+9. **Write config.yaml**
+   - Write `~/.config/rag-memory/config.yaml` with all settings
+   - Set permissions to 0o600 (user-only)
+
+10. **Install tool**
+    - Run `uv tool install .`
+
+11. **Verify installation**
+    - Run `rag status` to confirm tool works
+
+12. **Print success message**
+    - "Setup complete! You can now delete this repository and use 'rag' commands anywhere."
 
 ---
 

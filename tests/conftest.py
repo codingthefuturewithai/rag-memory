@@ -43,28 +43,27 @@ repo_root = Path(__file__).parent.parent
 # Set RAG_CONFIG_PATH to use test config from repo
 # This ensures tests use config/config.test.yaml, NOT system-level config
 os.environ['RAG_CONFIG_PATH'] = str(repo_root / 'config')
-print(f"✅ Using repo-local config: {os.environ['RAG_CONFIG_PATH']}")
+os.environ['RAG_CONFIG_FILE'] = 'config.test.yaml'
+print(f"✅ Using repo-local config: {os.environ['RAG_CONFIG_PATH']}/config.test.yaml")
 
-# Try to load .env.test first (primary test config)
+# Load secrets from .env file (OPENAI_API_KEY only)
 env_test_path = repo_root / ".env.test"
 env_dev_path = repo_root / ".env.dev"
-env_supabase_path = repo_root / ".env.supabase"
 
-# Load from .env.test if it exists, otherwise fallback to .env.dev
+# Try .env.test first (primary for tests), fallback to .env.dev
 if env_test_path.exists():
-    # Load .env.test first
     from dotenv import load_dotenv
     load_dotenv(env_test_path, override=True)
     print("✅ Loaded .env.test for test environment")
 elif env_dev_path.exists():
     print("⚠️  WARNING: .env.test not found, falling back to .env.dev")
-    print("   Tests will run against development servers instead of test servers")
     from dotenv import load_dotenv
     load_dotenv(env_dev_path, override=True)
 else:
-    print("⚠️  No environment file found, using shell environment variables")
+    print("⚠️  No .env file found, OPENAI_API_KEY must be in shell environment")
 
-# Load config - will use config/config.test.yaml automatically
+# Load config from YAML - will use config/config.test.yaml automatically
+# (RAG_CONFIG_PATH and RAG_CONFIG_FILE are already set above to point to repo config directory)
 load_environment_variables()
 
 # ============================================================================
