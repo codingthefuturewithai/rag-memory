@@ -759,6 +759,12 @@ async def ingest_file_impl(
         if health_error:
             return health_error
 
+        # Validate path is within configured mounts
+        from src.core.config_loader import is_path_in_mounts
+        is_valid, mount_msg = is_path_in_mounts(file_path)
+        if not is_valid:
+            raise PermissionError(mount_msg)
+
         path = Path(file_path)
 
         if not path.exists():
@@ -837,6 +843,12 @@ async def ingest_directory_impl(
         health_error = await ensure_databases_healthy(db, graph_store)
         if health_error:
             return health_error
+
+        # Validate path is within configured mounts
+        from src.core.config_loader import is_path_in_mounts
+        is_valid, mount_msg = is_path_in_mounts(directory_path)
+        if not is_valid:
+            raise PermissionError(mount_msg)
 
         path = Path(directory_path)
 

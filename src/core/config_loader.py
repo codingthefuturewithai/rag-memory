@@ -212,3 +212,63 @@ def _config_key_to_env_var(config_key: str) -> str:
         'neo4j_password': 'NEO4J_PASSWORD',
     }
     return mapping.get(config_key, config_key.upper())
+
+
+def is_path_in_mounts(file_path: str) -> tuple[bool, str]:
+    """
+    Check if a file path is within one of the configured mount directories.
+
+    This is used by the MCP server running in Docker to validate that tools
+    like ingest_file and ingest_directory only access paths that were
+    explicitly mounted and made available at setup time.
+
+    Args:
+        file_path: Absolute or relative path to check
+
+    Returns:
+        Tuple of (is_valid, message) where:
+        - is_valid (bool): True if path is within a configured mount
+        - message (str): Explanation of why path is valid/invalid
+    """
+    try:
+        # Resolve path to absolute, canonical form
+        requested_path = Path(file_path).expanduser().resolve()
+
+        # Get configured mounts
+        mounts = get_mounts()
+
+        # If no mounts configured, reject all file access
+        if not mounts:
+            return False, (
+                "No directories are currently mounted for file access. "
+                "Run 'python scripts/update-config.py' to configure mounts."
+            )
+
+        # Check if path is within any mounted directory
+        for mount in mounts:
+            mount_path = mount.get('path')
+            if not mount_path:
+                continue
+
+            try:
+                mount_path_resolved = Path(mount_path).expanduser().resolve()
+
+                # Check if requested path is under the mount
+                # This will succeed if requested_path == mount_path or is a descendant
+                requested_path.relative_to(mount_path_resolved)
+                return True, f"Path is within configured mount: {mount_path}"
+
+            except ValueError:
+                # relative_to() raises ValueError if path is not relative
+                # This means requested_path is not under this mount
+                continue
+
+        # Path is not under any mount
+        mounted_dirs = [m.get('path') for m in mounts if m.get('path')]
+        return False, (
+            f"Path is not within configured mounts. "
+            f"Mounted directories: {', '.join(mounted_dirs)}"
+        )
+
+    except Exception as e:
+        return False, f"Error validating path: {str(e)}"
