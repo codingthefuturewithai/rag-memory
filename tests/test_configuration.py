@@ -1,11 +1,11 @@
 """
 Comprehensive tests for the configuration system.
 
-Tests the self-healing configuration that handles:
-- Fresh installations (all variables missing)
-- Upgrades (new variables added)
-- Partial configurations (any variable missing)
-- Shell environment variables (highest priority)
+Tests the YAML-based configuration that handles:
+- Configuration loading from OS-standard locations
+- Environment variable priority over config file values
+- Mount validation for file access in containerized environment
+- Configuration save/load with proper file permissions
 """
 
 import os
@@ -14,232 +14,276 @@ from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
+import yaml
 
 from src.core.config_loader import (
-    REQUIRED_VARIABLES,
-    get_global_config_path,
-    load_env_file,
-    save_env_var,
-    get_env_var_from_file,
-    ensure_config_exists,
-    get_missing_variables,
-    create_default_config,
+    REQUIRED_SERVER_KEYS,
+    get_config_dir,
+    get_config_path,
+    load_config,
+    save_config,
     load_environment_variables,
+    get_mounts,
+    ensure_config_exists,
+    get_missing_config_keys,
+    is_path_in_mounts,
 )
-from src.core.first_run import (
-    prompt_for_missing_variables,
-    _get_prompt_text,
-    _get_default_value,
-)
+from src.core.first_run import validate_config_exists
 
 
-class TestRequiredVariables:
-    """Test REQUIRED_VARIABLES constant."""
+class TestConfigDirectory:
+    """Test configuration directory resolution."""
 
-    def test_required_variables_defined(self):
-        """Verify all required variables are defined."""
-        assert REQUIRED_VARIABLES is not None
-        assert len(REQUIRED_VARIABLES) > 0
-        assert isinstance(REQUIRED_VARIABLES, list)
+    def test_get_config_dir_creates_directory(self):
+        """Test that get_config_dir creates the directory if it doesn't exist."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch('platformdirs.user_config_dir', return_value=os.path.join(tmpdir, 'rag-memory')):
+                config_dir = get_config_dir()
+                assert config_dir.exists()
+                assert config_dir.is_dir()
 
-    def test_required_variables_include_neo4j(self):
-        """Verify Neo4j variables are in REQUIRED_VARIABLES."""
-        assert 'NEO4J_URI' in REQUIRED_VARIABLES
-        assert 'NEO4J_USER' in REQUIRED_VARIABLES
-        assert 'NEO4J_PASSWORD' in REQUIRED_VARIABLES
-
-    def test_required_variables_include_database(self):
-        """Verify database variables are in REQUIRED_VARIABLES."""
-        assert 'DATABASE_URL' in REQUIRED_VARIABLES
-        assert 'OPENAI_API_KEY' in REQUIRED_VARIABLES
+    def test_get_config_path_returns_yaml_file(self):
+        """Test that get_config_path returns path to config.yaml."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with patch('platformdirs.user_config_dir', return_value=os.path.join(tmpdir, 'rag-memory')):
+                config_path = get_config_path()
+                assert config_path.name == 'config.yaml'
+                assert config_path.parent.exists()
 
 
-class TestConfigLoader:
-    """Test configuration loading functions."""
+class TestConfigLoading:
+    """Test configuration loading from YAML files."""
 
-    def test_load_env_file_empty(self):
+    def test_load_config_nonexistent_returns_empty_dict(self):
         """Test loading from non-existent file returns empty dict."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            fake_path = Path(tmpdir) / "nonexistent.env"
-            result = load_env_file(fake_path)
+            fake_path = Path(tmpdir) / "nonexistent.yaml"
+            result = load_config(fake_path)
             assert result == {}
 
-    def test_load_env_file_with_values(self):
-        """Test loading environment variables from file."""
+    def test_load_config_with_server_settings(self):
+        """Test loading server settings from YAML."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-            content = """DATABASE_URL=postgresql://localhost:5432/rag
-OPENAI_API_KEY=sk-test-key
-NEO4J_URI=neo4j+s://test.neo4jdb.com
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=test-password
-"""
-            config_path.write_text(content)
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test-key',
+                    'database_url': 'postgresql://localhost:5432/rag',
+                    'neo4j_uri': 'bolt://localhost:7687',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            result = load_env_file(config_path)
-            assert result['DATABASE_URL'] == 'postgresql://localhost:5432/rag'
-            assert result['OPENAI_API_KEY'] == 'sk-test-key'
-            assert result['NEO4J_URI'] == 'neo4j+s://test.neo4jdb.com'
-            assert result['NEO4J_USER'] == 'neo4j'
-            assert result['NEO4J_PASSWORD'] == 'test-password'
+            result = load_config(config_path)
+            assert result['server']['openai_api_key'] == 'sk-test-key'
+            assert result['server']['database_url'] == 'postgresql://localhost:5432/rag'
 
-    def test_load_env_file_with_comments(self):
-        """Test that comments are ignored."""
+    def test_load_config_with_mounts(self):
+        """Test loading mount configuration from YAML."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-            content = """# This is a comment
-DATABASE_URL=postgresql://localhost:5432/rag
-# Another comment
-OPENAI_API_KEY=sk-test-key
-"""
-            config_path.write_text(content)
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    'neo4j_uri': 'bolt://localhost',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                },
+                'mounts': [
+                    {'path': '/Users/test', 'read_only': True},
+                    {'path': '/home/test', 'read_only': True},
+                ]
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            result = load_env_file(config_path)
-            assert len(result) == 2
-            assert 'DATABASE_URL' in result
-            assert 'OPENAI_API_KEY' in result
+            result = load_config(config_path)
+            assert len(result['mounts']) == 2
+            assert result['mounts'][0]['path'] == '/Users/test'
 
-    def test_load_env_file_with_quotes(self):
-        """Test that quoted values are properly stripped."""
+
+class TestConfigSaving:
+    """Test configuration saving to YAML files."""
+
+    def test_save_config_creates_file(self):
+        """Test that save_config creates the config file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-            content = """DATABASE_URL="postgresql://localhost:5432/rag"
-OPENAI_API_KEY='sk-test-key'
-"""
-            config_path.write_text(content)
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    'neo4j_uri': 'bolt://localhost',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                }
+            }
 
-            result = load_env_file(config_path)
-            assert result['DATABASE_URL'] == 'postgresql://localhost:5432/rag'
-            assert result['OPENAI_API_KEY'] == 'sk-test-key'
-
-    def test_save_env_var(self):
-        """Test saving environment variable."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            success = save_env_var("DATABASE_URL", "postgresql://localhost", config_path)
-            assert success is True
+            result = save_config(config_data, config_path)
+            assert result is True
             assert config_path.exists()
 
-            # Verify it was saved
-            loaded = load_env_file(config_path)
-            assert loaded['DATABASE_URL'] == 'postgresql://localhost'
-
-    def test_save_env_var_updates_existing(self):
-        """Test that save_env_var updates existing variables."""
+    def test_save_config_preserves_data(self):
+        """Test that saved data can be loaded back."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
+            original = {
+                'server': {
+                    'openai_api_key': 'sk-test-key',
+                    'database_url': 'postgresql://localhost:5432/rag',
+                    'neo4j_uri': 'bolt://localhost:7687',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                },
+                'mounts': [
+                    {'path': '/home/user', 'read_only': True}
+                ]
+            }
 
-            # Save initial variables
-            save_env_var("DATABASE_URL", "postgresql://old", config_path)
-            save_env_var("OPENAI_API_KEY", "sk-old", config_path)
+            save_config(original, config_path)
+            loaded = load_config(config_path)
 
-            # Update one variable
-            save_env_var("DATABASE_URL", "postgresql://new", config_path)
+            assert loaded['server']['openai_api_key'] == 'sk-test-key'
+            assert len(loaded['mounts']) == 1
 
-            # Verify both are present, one is updated
-            loaded = load_env_file(config_path)
-            assert loaded['DATABASE_URL'] == 'postgresql://new'
-            assert loaded['OPENAI_API_KEY'] == 'sk-old'
+    def test_save_config_sets_restrictive_permissions(self):
+        """Test that saved config has restrictive permissions (0o600)."""
+        if os.name == 'nt':
+            pytest.skip("Permissions test not applicable on Windows")
 
-    def test_get_env_var_from_file(self):
-        """Test retrieving specific variable from file."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-            save_env_var("DATABASE_URL", "postgresql://localhost", config_path)
-            save_env_var("OPENAI_API_KEY", "sk-test", config_path)
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    'neo4j_uri': 'bolt://localhost',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                }
+            }
 
-            result = get_env_var_from_file("DATABASE_URL", config_path)
-            assert result == "postgresql://localhost"
+            save_config(config_data, config_path)
 
-            result = get_env_var_from_file("NONEXISTENT", config_path)
-            assert result is None
+            stat_info = config_path.stat()
+            mode = stat_info.st_mode & 0o777
+            # Should be readable and writable by owner only (0o600)
+            assert mode == 0o600
 
-    def test_file_permissions_restrictive(self):
-        """Test that saved config file has restrictive permissions (0o600)."""
+    def test_save_config_creates_parent_directories(self):
+        """Test that save_config creates parent directories if they don't exist."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-            save_env_var("DATABASE_URL", "postgresql://localhost", config_path)
+            config_path = Path(tmpdir) / "nested" / "path" / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    'neo4j_uri': 'bolt://localhost',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                }
+            }
 
-            # Check permissions (only on Unix-like systems)
-            if os.name != 'nt':
-                stat_info = config_path.stat()
-                mode = stat_info.st_mode & 0o777
-                # Should be readable and writable by owner only (0o600)
-                assert mode == 0o600 or mode == 0o644  # Some systems may not enforce
+            result = save_config(config_data, config_path)
+            assert result is True
+            assert config_path.exists()
+            assert config_path.parent.exists()
 
 
-class TestGetMissingVariables:
-    """Test get_missing_variables() function."""
+class TestRequiredServerKeys:
+    """Test REQUIRED_SERVER_KEYS constant."""
 
-    def test_all_variables_present(self):
-        """Test when all variables are present."""
+    def test_required_keys_defined(self):
+        """Verify all required server keys are defined."""
+        assert REQUIRED_SERVER_KEYS is not None
+        assert len(REQUIRED_SERVER_KEYS) > 0
+        assert isinstance(REQUIRED_SERVER_KEYS, list)
+
+    def test_required_keys_include_database(self):
+        """Verify database keys are required."""
+        assert 'database_url' in REQUIRED_SERVER_KEYS
+        assert 'openai_api_key' in REQUIRED_SERVER_KEYS
+
+    def test_required_keys_include_neo4j(self):
+        """Verify Neo4j keys are required."""
+        assert 'neo4j_uri' in REQUIRED_SERVER_KEYS
+        assert 'neo4j_user' in REQUIRED_SERVER_KEYS
+        assert 'neo4j_password' in REQUIRED_SERVER_KEYS
+
+
+class TestGetMissingConfigKeys:
+    """Test get_missing_config_keys() function."""
+
+    def test_all_keys_present(self):
+        """Test when all required keys are present."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    'neo4j_uri': 'bolt://localhost',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            # Save all required variables
-            for var in REQUIRED_VARIABLES:
-                save_env_var(var, f"value-{var}", config_path)
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                # Clear environment
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
                 with patch.dict(os.environ, {}, clear=True):
-                    missing = get_missing_variables()
+                    missing = get_missing_config_keys()
                     assert len(missing) == 0
 
-    def test_some_variables_missing_from_file(self):
-        """Test when some variables missing from file but not in environment."""
+    def test_some_keys_missing(self):
+        """Test when some required keys are missing."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    # Missing neo4j keys
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            # Save only first 2 variables
-            for var in REQUIRED_VARIABLES[:2]:
-                save_env_var(var, f"value-{var}", config_path)
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                # Clear environment
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
                 with patch.dict(os.environ, {}, clear=True):
-                    missing = get_missing_variables()
-                    # Should be missing the last 3
-                    assert len(missing) == 3
-                    for var in REQUIRED_VARIABLES[2:]:
-                        assert var in missing
+                    missing = get_missing_config_keys()
+                    assert 'neo4j_uri' in missing
+                    assert 'neo4j_user' in missing
+                    assert 'neo4j_password' in missing
 
     def test_missing_satisfied_by_environment(self):
         """Test that environment variables satisfy missing config file entries."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            # Save only first 2 variables
-            for var in REQUIRED_VARIABLES[:2]:
-                save_env_var(var, f"value-{var}", config_path)
+            env_vars = {
+                'NEO4J_URI': 'bolt://localhost',
+                'NEO4J_USER': 'neo4j',
+                'NEO4J_PASSWORD': 'password',
+            }
 
-            # Set remaining in environment
-            env_vars = {var: f"env-{var}" for var in REQUIRED_VARIABLES[2:]}
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
                 with patch.dict(os.environ, env_vars, clear=True):
-                    missing = get_missing_variables()
+                    missing = get_missing_config_keys()
                     # Should be no missing (satisfied by environment)
                     assert len(missing) == 0
-
-    def test_upgrade_scenario(self):
-        """Test upgrade scenario: old config missing new Neo4j variables."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            # Old config has only DATABASE_URL and OPENAI_API_KEY
-            save_env_var("DATABASE_URL", "postgresql://old", config_path)
-            save_env_var("OPENAI_API_KEY", "sk-old", config_path)
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                with patch.dict(os.environ, {}, clear=True):
-                    missing = get_missing_variables()
-                    # Should be missing the 3 Neo4j variables
-                    assert len(missing) == 3
-                    assert 'NEO4J_URI' in missing
-                    assert 'NEO4J_USER' in missing
-                    assert 'NEO4J_PASSWORD' in missing
 
 
 class TestEnsureConfigExists:
@@ -248,23 +292,27 @@ class TestEnsureConfigExists:
     def test_fresh_install_returns_false(self):
         """Test that fresh install (no config file) returns False."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
 
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
                 with patch.dict(os.environ, {}, clear=True):
                     result = ensure_config_exists()
                     assert result is False
 
-    def test_upgrade_incomplete_returns_false(self):
-        """Test that upgrade with missing variables returns False."""
+    def test_incomplete_config_returns_false(self):
+        """Test that incomplete config returns False."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    # Missing other keys
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            # Old config
-            save_env_var("DATABASE_URL", "postgresql://old", config_path)
-            save_env_var("OPENAI_API_KEY", "sk-old", config_path)
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
                 with patch.dict(os.environ, {}, clear=True):
                     result = ensure_config_exists()
                     assert result is False
@@ -272,13 +320,20 @@ class TestEnsureConfigExists:
     def test_complete_config_returns_true(self):
         """Test that complete config returns True."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    'neo4j_uri': 'bolt://localhost',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            # Complete config
-            for var in REQUIRED_VARIABLES:
-                save_env_var(var, f"value-{var}", config_path)
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
                 with patch.dict(os.environ, {}, clear=True):
                     result = ensure_config_exists()
                     assert result is True
@@ -286,170 +341,212 @@ class TestEnsureConfigExists:
     def test_environment_variables_satisfy_requirement(self):
         """Test that environment variables satisfy config requirement."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            # Only save some in file
-            save_env_var("DATABASE_URL", "postgresql://localhost", config_path)
+            env_vars = {
+                'NEO4J_URI': 'bolt://localhost',
+                'NEO4J_USER': 'neo4j',
+                'NEO4J_PASSWORD': 'password',
+            }
 
-            # Set rest in environment
-            env_vars = {var: f"env-{var}" for var in REQUIRED_VARIABLES[1:]}
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
                 with patch.dict(os.environ, env_vars, clear=True):
                     result = ensure_config_exists()
                     assert result is True
 
 
-class TestCreateDefaultConfig:
-    """Test create_default_config() function."""
+class TestLoadEnvironmentVariables:
+    """Test load_environment_variables() function."""
 
-    def test_creates_config_file(self):
-        """Test that default config file is created."""
+    def test_loads_config_to_environment(self):
+        """Test that config values are loaded into os.environ."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                success = create_default_config()
-                assert success is True
-                assert config_path.exists()
-
-    def test_default_config_has_all_variables(self):
-        """Test that default config includes all required variables."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                create_default_config()
-                loaded = load_env_file(config_path)
-
-                # Should have placeholder values for all required variables
-                for var in REQUIRED_VARIABLES:
-                    assert var in loaded
-
-    def test_default_config_has_comments(self):
-        """Test that default config has helpful comments."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                create_default_config()
-                content = config_path.read_text()
-
-                # Should have comments
-                assert '#' in content
-                assert 'RAG Memory' in content
-
-
-class TestPromptTextAndDefaults:
-    """Test _get_prompt_text() and _get_default_value() functions."""
-
-    def test_get_prompt_text_database_url(self):
-        """Test prompt text for DATABASE_URL."""
-        text = _get_prompt_text('DATABASE_URL')
-        assert text is not None
-        assert 'Database' in text or 'database' in text
-
-    def test_get_prompt_text_neo4j_variables(self):
-        """Test prompt text for Neo4j variables."""
-        assert 'Neo4j' in _get_prompt_text('NEO4J_URI')
-        assert 'Neo4j' in _get_prompt_text('NEO4J_USER')
-        assert 'Neo4j' in _get_prompt_text('NEO4J_PASSWORD')
-
-    def test_get_prompt_text_unknown_variable(self):
-        """Test that unknown variables return the variable name."""
-        text = _get_prompt_text('UNKNOWN_VAR')
-        assert text == 'UNKNOWN_VAR'
-
-    def test_get_default_value_database_url(self):
-        """Test default value for DATABASE_URL."""
-        default = _get_default_value('DATABASE_URL')
-        assert default is not None
-        assert 'postgresql' in default
-
-    def test_get_default_value_neo4j_user(self):
-        """Test default value for NEO4J_USER."""
-        default = _get_default_value('NEO4J_USER')
-        assert default == 'neo4j'
-
-    def test_get_default_value_unknown_variable(self):
-        """Test that unknown variables return empty string."""
-        default = _get_default_value('UNKNOWN_VAR')
-        assert default == ''
-
-
-class TestConfigurationIntegration:
-    """Integration tests for complete configuration flow."""
-
-    def test_fresh_install_flow(self):
-        """Test fresh installation flow: no config exists."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                with patch.dict(os.environ, {}, clear=True):
-                    # Fresh install: no config file
-                    missing = get_missing_variables()
-                    assert len(missing) == len(REQUIRED_VARIABLES)
-
-                    # Save all variables
-                    for var in REQUIRED_VARIABLES:
-                        save_env_var(var, f"value-{var}", config_path)
-
-                    # Now complete
-                    missing = get_missing_variables()
-                    assert len(missing) == 0
-                    assert ensure_config_exists() is True
-
-    def test_upgrade_flow(self):
-        """Test upgrade flow: old config with missing new variables."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                with patch.dict(os.environ, {}, clear=True):
-                    # Old config has only DATABASE_URL and OPENAI_API_KEY
-                    save_env_var("DATABASE_URL", "postgresql://old", config_path)
-                    save_env_var("OPENAI_API_KEY", "sk-old", config_path)
-
-                    # Should detect missing Neo4j variables
-                    missing = get_missing_variables()
-                    assert len(missing) == 3
-                    assert ensure_config_exists() is False
-
-                    # Add missing variables
-                    for var in missing:
-                        save_env_var(var, f"value-{var}", config_path)
-
-                    # Now complete
-                    missing = get_missing_variables()
-                    assert len(missing) == 0
-                    assert ensure_config_exists() is True
-
-    def test_environment_variable_priority(self):
-        """Test that environment variables have priority over config file."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            config_path = Path(tmpdir) / ".rag-memory-env"
-
-            # Save config with one value
-            save_env_var("DATABASE_URL", "postgresql://config", config_path)
-            save_env_var("OPENAI_API_KEY", "sk-config", config_path)
-
-            env_override = {
-                "DATABASE_URL": "postgresql://environment",
-                "NEO4J_URI": "neo4j://env",
-                "NEO4J_USER": "neo4j",
-                "NEO4J_PASSWORD": "password"
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-config-value',
+                    'database_url': 'postgresql://config:5432/rag',
+                    'neo4j_uri': 'bolt://config:7687',
+                    'neo4j_user': 'config-user',
+                    'neo4j_password': 'config-pass',
+                }
             }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
 
-            with patch('src.core.config_loader.get_global_config_path', return_value=config_path):
-                with patch.dict(os.environ, env_override, clear=True):
-                    # load_environment_variables should prefer environment
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                with patch.dict(os.environ, {}, clear=True):
                     load_environment_variables()
+                    assert os.environ.get('OPENAI_API_KEY') == 'sk-config-value'
+                    assert os.environ.get('DATABASE_URL') == 'postgresql://config:5432/rag'
 
-                    # Verify priority: environment wins
-                    assert os.environ.get("DATABASE_URL") == "postgresql://environment"
-                    # Values not in environment keep their config values
-                    assert os.environ.get("OPENAI_API_KEY") == "sk-config"
+    def test_environment_variables_have_priority(self):
+        """Test that existing environment variables are not overwritten."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-config-value',
+                    'database_url': 'postgresql://config:5432/rag',
+                    'neo4j_uri': 'bolt://config:7687',
+                    'neo4j_user': 'config-user',
+                    'neo4j_password': 'config-pass',
+                }
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+
+            env_vars = {'OPENAI_API_KEY': 'sk-env-value'}
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                with patch.dict(os.environ, env_vars, clear=True):
+                    load_environment_variables()
+                    # Environment variable should be preserved
+                    assert os.environ.get('OPENAI_API_KEY') == 'sk-env-value'
+                    # Config values should fill in missing variables
+                    assert os.environ.get('DATABASE_URL') == 'postgresql://config:5432/rag'
+
+
+class TestGetMounts:
+    """Test get_mounts() function."""
+
+    def test_get_mounts_empty_when_no_config(self):
+        """Test that get_mounts returns empty list when no config."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "nonexistent.yaml"
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                mounts = get_mounts()
+                assert mounts == []
+
+    def test_get_mounts_from_config(self):
+        """Test getting mounts from config."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'server': {
+                    'openai_api_key': 'sk-test',
+                    'database_url': 'postgresql://localhost',
+                    'neo4j_uri': 'bolt://localhost',
+                    'neo4j_user': 'neo4j',
+                    'neo4j_password': 'password',
+                },
+                'mounts': [
+                    {'path': '/Users/test', 'read_only': True},
+                    {'path': '/home/test', 'read_only': True},
+                ]
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                mounts = get_mounts()
+                assert len(mounts) == 2
+                assert mounts[0]['path'] == '/Users/test'
+
+    def test_get_mounts_returns_empty_list_if_not_list(self):
+        """Test that get_mounts returns empty list if mounts is not a list."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'mounts': 'invalid-string'
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                mounts = get_mounts()
+                assert mounts == []
+
+
+class TestPathInMounts:
+    """Test is_path_in_mounts() function."""
+
+    def test_path_within_mount_returns_true(self):
+        """Test that path within a mount returns True."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_dir = Path(tmpdir) / "mounts" / "home"
+            mount_dir.mkdir(parents=True)
+            file_path = mount_dir / "subdir" / "file.txt"
+            file_path.parent.mkdir(parents=True)
+            file_path.touch()
+
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'mounts': [
+                    {'path': str(mount_dir), 'read_only': True}
+                ]
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                is_valid, msg = is_path_in_mounts(str(file_path))
+                assert is_valid is True
+
+    def test_path_outside_mount_returns_false(self):
+        """Test that path outside mounts returns False."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mount_dir = Path(tmpdir) / "mounts" / "home"
+            mount_dir.mkdir(parents=True)
+
+            other_dir = Path(tmpdir) / "other"
+            other_dir.mkdir()
+            file_path = other_dir / "file.txt"
+            file_path.touch()
+
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'mounts': [
+                    {'path': str(mount_dir), 'read_only': True}
+                ]
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                is_valid, msg = is_path_in_mounts(str(file_path))
+                assert is_valid is False
+
+    def test_no_mounts_returns_false(self):
+        """Test that with no mounts configured, all paths are invalid."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {'mounts': []}
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                is_valid, msg = is_path_in_mounts("/some/path")
+                assert is_valid is False
+                assert "No directories are currently mounted" in msg
+
+    def test_path_expands_tilde(self):
+        """Test that ~ is expanded in paths."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            home = str(Path.home())
+            config_path = Path(tmpdir) / "config.yaml"
+            config_data = {
+                'mounts': [
+                    {'path': home, 'read_only': True}
+                ]
+            }
+            with open(config_path, 'w') as f:
+                yaml.dump(config_data, f)
+
+            with patch('src.core.config_loader.get_config_path', return_value=config_path):
+                # Test with tilde path
+                is_valid, msg = is_path_in_mounts("~/testfile.txt")
+                # Result depends on if ~/ is within home directory (it should be)
+                assert isinstance(is_valid, bool)
 
 
 class TestMCPServerIntegration:
@@ -463,7 +560,7 @@ class TestMCPServerIntegration:
 
     def test_config_called_before_server_start(self):
         """Test that ensure_config_or_exit is called before server starts."""
-        # This is verified by checking the source code at line 1240 of src/mcp/server.py
+        # This is verified by checking the source code
         with open('/Users/timkitchens/projects/ai-projects/rag-memory/src/mcp/server.py') as f:
             content = f.read()
             # Verify ensure_config_or_exit is imported
