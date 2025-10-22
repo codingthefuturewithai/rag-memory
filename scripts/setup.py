@@ -112,32 +112,33 @@ def check_docker_running() -> bool:
 
 
 def check_existing_containers() -> bool:
-    """Check if RAG Memory containers are already running"""
+    """Check if RAG Memory user-level containers are already running"""
     print_header("STEP 3: Checking for Existing RAG Memory Containers")
 
-    code, stdout, _ = run_command(["docker-compose", "-f", "docker-compose.local.yml", "ps"])
+    # Check for USER-LEVEL containers ONLY (rag-memory-postgres and rag-memory-neo4j, NOT -dev or -test)
+    postgres_code, _, _ = run_command(["docker", "container", "inspect", "rag-memory-postgres"])
+    neo4j_code, _, _ = run_command(["docker", "container", "inspect", "rag-memory-neo4j"])
 
-    if code != 0:
-        print_info("No existing containers found")
+    postgres_exists = postgres_code == 0
+    neo4j_exists = neo4j_code == 0
+
+    if not (postgres_exists or neo4j_exists):
+        print_info("No existing user-level containers found")
         return False
 
-    # Check if any RAG Memory containers are running
-    if "rag-memory" in stdout and ("Up" in stdout or "running" in stdout):
-        print_warning("Found existing RAG Memory containers")
-        print_warning("This will destroy any data in PostgreSQL and Neo4j")
+    # Found user-level containers
+    print_warning("Found existing RAG Memory containers")
+    print_warning("This will destroy any data in PostgreSQL and Neo4j")
 
-        response = input(f"\n{Colors.YELLOW}Proceed with setup? This will overwrite .env.local and rebuild containers (yes/no): {Colors.RESET}").strip().lower()
+    response = input(f"\n{Colors.YELLOW}Proceed with setup? This will overwrite .env.local and rebuild containers (yes/no): {Colors.RESET}").strip().lower()
 
-        if response != "yes":
-            print_info("Setup cancelled")
-            return True
+    if response != "yes":
+        print_info("Setup cancelled")
+        return True
 
-        print_info("Stopping and removing existing containers...")
-        run_command(["docker-compose", "-f", "docker-compose.local.yml", "down", "-v"])
-        print_success("Existing containers removed")
-        return False
-
-    print_info("No existing RAG Memory containers running")
+    print_info("Stopping and removing existing containers...")
+    run_command(["docker-compose", "-f", "docker-compose.local.yml", "down", "-v"])
+    print_success("Existing containers removed")
     return False
 
 
