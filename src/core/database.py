@@ -245,14 +245,15 @@ class Database:
                         """
                         SELECT COUNT(*) FROM pg_indexes
                         WHERE schemaname = 'public'
-                        AND indexname LIKE '%hnsw%';
+                        AND indexname LIKE '%embedding%'
+                        AND indexdef LIKE '%hnsw%';
                         """
                     )
                     hnsw_indexes = cur.fetchone()[0]
 
-                    if hnsw_indexes < 2:
+                    if hnsw_indexes < 1:
                         errors.append(
-                            f"HNSW indexes not found (expected 2, found {hnsw_indexes}). "
+                            f"HNSW embedding index not found. "
                             "Run 'uv run rag init' to create indexes."
                         )
 

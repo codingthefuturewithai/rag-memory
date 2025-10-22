@@ -95,10 +95,8 @@ services:
     environment:
       BACKUP_SOURCES: /backup
       BACKUP_FILENAME_EXPAND: "true"
-      # Default backup schedule: 2:05 AM daily (override in .env.prod)
+      # Backup schedule: 2:05 AM daily by default (override in .env.prod)
       BACKUP_CRON_SCHEDULE: "${BACKUP_CRON_SCHEDULE:-5 2 * * *}"
-      # Default: compress backups (override in .env.prod)
-      BACKUP_COMPRESSION: "${BACKUP_COMPRESSION:-true}"
     labels:
       description: "RAG Memory - Automated Daily Backups"
       backup_location: "./backups"
