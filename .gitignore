@@ -37,9 +37,14 @@ uv.lock
 *.swo
 *~
 
-# Environment variables
+# Environment variables (all .env files except .env.example which is a template)
 .env
 .env.local
+.env.dev
+.env.prod
+.env.supabase
+.env.test
+backup.env
 
 # Database
 *.db
