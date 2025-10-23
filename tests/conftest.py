@@ -14,8 +14,10 @@ import sys
 from pathlib import Path
 import asyncio
 import pytest
+import pytest_asyncio
 
 from src.core.config_loader import load_environment_variables
+from src.core.database import Database
 
 # ============================================================================
 # CRITICAL: Enable coverage tracking in subprocesses
@@ -260,12 +262,71 @@ def initialize_test_postgres():
 
 
 # ============================================================================
+# INTEGRATION TEST ISOLATION: Complete database cleanup after every test
+# ============================================================================
+
+@pytest_asyncio.fixture(autouse=True, scope="function")
+async def cleanup_after_each_test():
+    """
+    ATOMIC TEST ISOLATION: Clean all data from both databases after every test.
+
+    This fixture ensures every integration test is completely isolated:
+    - Runs after EVERY test function (autouse=True)
+    - Deletes ALL data from PostgreSQL tables (collections, chunks, documents)
+    - Deletes ALL nodes and relationships from Neo4j
+    - No test-specific cleanup logic needed - this is universal
+
+    This is non-negotiable: Each test must start with zero data, end with zero data.
+    The next test gets a completely blank slate.
+
+    Location: conftest.py (global, applies to all tests)
+    Mechanism: async fixture with yield (cleanup runs AFTER test completes)
+    """
+    yield  # Test runs here
+
+    # CLEANUP PHASE: Delete everything from both databases after test completes
+
+    # PostgreSQL cleanup - delete in order respecting foreign keys
+    try:
+        db = Database()
+        conn = db.connect()
+        with conn.cursor() as cur:
+            # chunk_collections references both chunks and collections
+            cur.execute("DELETE FROM chunk_collections;")
+            # document_chunks references source_documents
+            cur.execute("DELETE FROM document_chunks;")
+            # collections table
+            cur.execute("DELETE FROM collections;")
+            # source_documents table
+            cur.execute("DELETE FROM source_documents;")
+        db.close()
+    except Exception as e:
+        raise RuntimeError(f"PostgreSQL cleanup failed: {e}")
+
+    # Neo4j cleanup - delete all nodes and relationships
+    try:
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7689")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "test-password")
+
+        from graphiti_core import Graphiti
+
+        graphiti = Graphiti(
+            uri=neo4j_uri,
+            user=neo4j_user,
+            password=neo4j_password
+        )
+        await graphiti.driver.execute_query("MATCH (n) DETACH DELETE n")
+        await graphiti.close()
+    except Exception as e:
+        raise RuntimeError(f"Neo4j cleanup failed: {e}")
+
+
+# ============================================================================
 # SHARED FIXTURES: Available to all test suites
 # ============================================================================
 
-import pytest_asyncio
 import uuid
-from src.core.database import Database
 from src.core.embeddings import EmbeddingGenerator
 from src.core.collections import CollectionManager
 from src.retrieval.search import SimilaritySearch
@@ -331,10 +392,16 @@ async def setup_test_collection(collection_mgr, test_collection_name):
 
     Scope: function
     """
-    # Create collection
+    # Create collection with default metadata schema
+    default_schema = {
+        "custom": {},
+        "system": ["file_type", "source_type", "ingested_at"]
+    }
+
     collection_mgr.create_collection(
         name=test_collection_name,
-        description="Test collection"
+        description="Test collection",
+        metadata_schema=default_schema
     )
 
     yield test_collection_name

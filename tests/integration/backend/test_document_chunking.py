@@ -1,6 +1,7 @@
 """Tests for document chunking functionality."""
 
 import tempfile
+import uuid
 from pathlib import Path
 
 import pytest
@@ -44,72 +45,16 @@ def searcher(db, embedder, coll_mgr):
 
 
 @pytest.fixture
-def test_collection(coll_mgr, db):
-    """Create a test collection and ensure cleanup after test."""
+def test_collection(coll_mgr):
+    """Create a test collection.
+
+    Cleanup is handled by the global cleanup_after_each_test fixture
+    in conftest.py, which clears ALL data from both PostgreSQL and Neo4j
+    after every test. This fixture just creates the collection.
+    """
     collection_name = "test_chunking"
-
-    # Create collection
-    try:
-        coll_mgr.create_collection(collection_name, "Test collection for chunking")
-    except ValueError:
-        # Collection already exists - delete and recreate for clean state
-        coll_mgr.delete_collection(collection_name)
-        coll_mgr.create_collection(collection_name, "Test collection for chunking")
-
+    coll_mgr.create_collection(collection_name, "Test collection for chunking", metadata_schema={"custom": {}, "system": []})
     yield collection_name
-
-    # TEARDOWN: Delete all data created during test
-    # The CASCADE relationships will handle cleanup in this order:
-    # 1. Delete collection -> CASCADE deletes chunk_collections
-    # 2. Delete orphaned chunks -> CASCADE from source_documents handles this
-    # 3. Delete orphaned source documents
-    try:
-        conn = db.connect()
-        with conn.cursor() as cur:
-            # Get collection ID before deletion
-            cur.execute("SELECT id FROM collections WHERE name = %s", (collection_name,))
-            result = cur.fetchone()
-
-            if result:
-                collection_id = result[0]
-
-                # Step 1: Get all chunks in this collection before we delete anything
-                cur.execute(
-                    """
-                    SELECT DISTINCT dc.source_document_id
-                    FROM document_chunks dc
-                    INNER JOIN chunk_collections cc ON dc.id = cc.chunk_id
-                    WHERE cc.collection_id = %s
-                    """,
-                    (collection_id,)
-                )
-                source_doc_ids = [row[0] for row in cur.fetchall()]
-
-                # Step 2: Delete the collection (CASCADE deletes chunk_collections)
-                coll_mgr.delete_collection(collection_name)
-
-                # Step 3: Delete all chunks belonging to source documents from this collection
-                # This may delete chunks used by other collections, but that's OK for isolated tests
-                if source_doc_ids:
-                    cur.execute(
-                        """
-                        DELETE FROM document_chunks
-                        WHERE source_document_id = ANY(%s)
-                        """,
-                        (source_doc_ids,)
-                    )
-
-                    # Step 4: Delete the source documents (now that their chunks are gone)
-                    cur.execute(
-                        """
-                        DELETE FROM source_documents
-                        WHERE id = ANY(%s)
-                        """,
-                        (source_doc_ids,)
-                    )
-    except Exception as e:
-        # Log but don't fail the test if cleanup fails
-        print(f"Warning: Cleanup failed for collection {collection_name}: {e}")
 
 
 class TestDocumentChunker:

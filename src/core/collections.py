@@ -2,6 +2,7 @@
 
 import logging
 from typing import List, Optional
+from psycopg.types.json import Jsonb
 
 from src.core.database import Database
 
@@ -66,7 +67,7 @@ class CollectionManager:
                     VALUES (%s, %s, %s)
                     RETURNING id;
                     """,
-                    (name, description, schema),
+                    (name, description, Jsonb(schema)),
                 )
                 collection_id = cur.fetchone()[0]
                 logger.info(

@@ -26,11 +26,11 @@ class TestRecrawlCommand:
         # Create test collection
         collection_name = "test-recrawl"
         try:
-            coll_mgr.create_collection(collection_name, "Test collection for recrawl")
+            coll_mgr.create_collection(collection_name, "Test collection for recrawl", metadata_schema={"custom": {}, "system": []})
         except ValueError:
             # Collection already exists - delete and recreate for clean state
             coll_mgr.delete_collection(collection_name)
-            coll_mgr.create_collection(collection_name, "Test collection for recrawl")
+            coll_mgr.create_collection(collection_name, "Test collection for recrawl", metadata_schema={"custom": {}, "system": []})
 
         yield {
             "db": db,
@@ -41,54 +41,8 @@ class TestRecrawlCommand:
             "collection_name": collection_name,
         }
 
-        # TEARDOWN: Delete all data created during test
-        # This MUST run even if test fails to prevent database pollution
-        try:
-            conn = db.connect()
-            with conn.cursor() as cur:
-                # Get collection ID before deletion
-                cur.execute("SELECT id FROM collections WHERE name = %s", (collection_name,))
-                result = cur.fetchone()
-
-                if result:
-                    collection_id = result[0]
-
-                    # Step 1: Get all source documents from this collection
-                    cur.execute(
-                        """
-                        SELECT DISTINCT dc.source_document_id
-                        FROM document_chunks dc
-                        INNER JOIN chunk_collections cc ON dc.id = cc.chunk_id
-                        WHERE cc.collection_id = %s
-                        """,
-                        (collection_id,)
-                    )
-                    source_doc_ids = [row[0] for row in cur.fetchall()]
-
-                    # Step 2: Delete the collection (CASCADE deletes chunk_collections)
-                    coll_mgr.delete_collection(collection_name)
-
-                    # Step 3: Delete all chunks belonging to source documents from this collection
-                    if source_doc_ids:
-                        cur.execute(
-                            """
-                            DELETE FROM document_chunks
-                            WHERE source_document_id = ANY(%s)
-                            """,
-                            (source_doc_ids,)
-                        )
-
-                        # Step 4: Delete the source documents
-                        cur.execute(
-                            """
-                            DELETE FROM source_documents
-                            WHERE id = ANY(%s)
-                            """,
-                            (source_doc_ids,)
-                        )
-        except Exception as e:
-            # Log but don't fail the test if cleanup fails
-            print(f"Warning: Cleanup failed for collection {collection_name}: {e}")
+        # Cleanup is handled by the global cleanup_after_each_test fixture in conftest.py
+        # which clears ALL data from both PostgreSQL and Neo4j after every test
 
     async def test_recrawl_deletes_only_matching_crawl_root_url(self, setup_components):
         """Test that recrawl only deletes documents matching the specific crawl_root_url."""

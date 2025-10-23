@@ -65,7 +65,8 @@ class TestDeleteCollectionGraphCleanup:
             "graph_available": graph_available,
         }
 
-        # Cleanup
+        # Cleanup is handled by the global cleanup_after_each_test fixture in conftest.py
+        # which clears ALL data from both PostgreSQL and Neo4j after every test
         try:
             if graph_store:
                 await graph_store.close()
@@ -86,7 +87,11 @@ class TestDeleteCollectionGraphCleanup:
         collection_name = f"graph_cleanup_test_{id(self)}"
 
         # Create collection
-        coll_mgr.create_collection(collection_name, "Test for graph cleanup")
+        coll_mgr.create_collection(
+            collection_name,
+            "Test for graph cleanup",
+            metadata_schema={"custom": {}, "system": []}
+        )
 
         # Ingest documents (creates episodes in graph)
         doc_ids = []

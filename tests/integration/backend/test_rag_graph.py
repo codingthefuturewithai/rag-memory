@@ -69,21 +69,8 @@ async def test_infrastructure():
         "graphiti": graphiti
     }
 
-    # ATOMIC CLEANUP: Delete all test data
-    # Clean up any collections that were created (they should have been deleted by tests)
-    # but ensure we get any stragglers
-    try:
-        # Delete ALL nodes and relationships from graph (most robust cleanup)
-        await graphiti.driver.execute_query(
-            "MATCH (n) DETACH DELETE n"
-        )
-    except Exception as e:
-        print(f"Warning during Neo4j cleanup: {e}")
-
-    try:
-        await graph_store.close()
-    except Exception as e:
-        print(f"Warning during graph store close: {e}")
+    # Cleanup is handled by the global cleanup_after_each_test fixture in conftest.py
+    # which clears ALL data from both PostgreSQL and Neo4j after every test
 
 
 @pytest_asyncio.fixture
