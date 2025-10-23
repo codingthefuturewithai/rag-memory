@@ -5,7 +5,8 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE TABLE collections (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) UNIQUE NOT NULL,
-    description TEXT,
+    description TEXT NOT NULL,
+    metadata_schema JSONB NOT NULL DEFAULT '{"custom": {}, "system": []}',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
