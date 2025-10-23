@@ -166,20 +166,34 @@ def list_collections_impl(coll_mgr: CollectionManager) -> List[Dict[str, Any]]:
 
 
 def create_collection_impl(
-    coll_mgr: CollectionManager, name: str, description: str
+    coll_mgr: CollectionManager,
+    name: str,
+    description: str,
+    metadata_schema: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Implementation of create_collection tool."""
+    """
+    Implementation of create_collection tool.
+
+    Creates a collection with an optional metadata schema declaration.
+    """
     try:
-        collection_id = coll_mgr.create_collection(name, description)
+        collection_id = coll_mgr.create_collection(
+            name=name,
+            description=description,
+            metadata_schema=metadata_schema,
+        )
+
+        collection = coll_mgr.get_collection(name)
 
         return {
             "collection_id": collection_id,
             "name": name,
             "description": description,
-            "created": True
+            "metadata_schema": collection.get("metadata_schema"),
+            "created": True,
         }
     except ValueError as e:
-        # Collection already exists
+        # Collection already exists or invalid schema
         logger.warning(f"create_collection failed: {e}")
         raise
     except Exception as e:
@@ -187,28 +201,39 @@ def create_collection_impl(
         raise
 
 
-def update_collection_description_impl(
-    coll_mgr: CollectionManager, name: str, description: str
+def get_collection_metadata_schema_impl(
+    coll_mgr: CollectionManager, collection_name: str
 ) -> Dict[str, Any]:
     """
-    Implementation of update_collection_description tool.
+    Implementation of get_collection_metadata_schema tool.
 
-    Thin facade over CollectionManager.update_description() business logic.
+    Returns the metadata schema for a collection, allowing clients to discover
+    available metadata fields before ingesting documents.
     """
     try:
-        # Call business logic layer
-        coll_mgr.update_description(name, description)
+        collection = coll_mgr.get_collection(collection_name)
+
+        if not collection:
+            raise ValueError(f"Collection '{collection_name}' not found")
 
         return {
-            "name": name,
-            "description": description,
-            "updated": True
+            "collection_name": collection_name,
+            "description": collection["description"],
+            "metadata_schema": collection.get("metadata_schema"),
+            "custom_fields": {
+                name: field_def.get("type", "unknown")
+                for name, field_def in collection.get("metadata_schema", {})
+                .get("custom", {})
+                .items()
+            },
+            "system_fields": collection.get("metadata_schema", {}).get("system", []),
+            "document_count": collection["document_count"],
         }
     except ValueError as e:
-        logger.warning(f"update_collection_description failed: {e}")
+        logger.warning(f"get_collection_metadata_schema failed: {e}")
         raise
     except Exception as e:
-        logger.error(f"update_collection_description failed: {e}")
+        logger.error(f"get_collection_metadata_schema failed: {e}")
         raise
 
 

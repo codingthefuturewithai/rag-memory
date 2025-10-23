@@ -22,7 +22,7 @@ from src.mcp.tools import (
     search_documents_impl,
     list_collections_impl,
     create_collection_impl,
-    update_collection_description_impl,
+    get_collection_metadata_schema_impl,
     delete_collection_impl,
     ingest_text_impl,
     get_document_by_id_impl,
@@ -316,67 +316,98 @@ def list_collections() -> list[dict]:
 
 
 @mcp.tool()
-def create_collection(name: str, description: str) -> dict:
+def create_collection(
+    name: str, description: str, metadata_schema: dict = None
+) -> dict:
     """
-    Create a new collection for organizing documents.
+    Create a new collection with an optional metadata schema.
 
     Collections are required before ingesting documents. Each collection must
     have a meaningful description to help users understand its purpose.
+
+    Once created, collections are immutable - you cannot change the description or schema.
+    If you need to change it, delete the collection and create a new one.
 
     Args:
         name: (REQUIRED) Collection identifier (unique, lowercase recommended)
         description: (REQUIRED) Human-readable description of the collection's purpose.
                     Collections without descriptions are not allowed.
+        metadata_schema: (OPTIONAL) Fixed metadata schema declaration.
+                        Format: {
+                            "custom": {
+                                "field_name": {
+                                    "type": "string|number|boolean|array|object",
+                                    "required": false,
+                                    "enum": ["value1", "value2"]
+                                }
+                            },
+                            "system": ["field1", "field2"]
+                        }
+                        Defaults to empty schema if not provided.
 
     Returns:
         {
             "collection_id": int,
             "name": str,
             "description": str,
+            "metadata_schema": dict,
             "created": bool  # Always True on success
         }
 
     Raises:
-        ValueError: If collection with this name already exists
+        ValueError: If collection with this name already exists or schema is invalid
 
     Example:
         result = create_collection(
             name="python-docs",
-            description="Official Python documentation and tutorials"
+            description="Official Python documentation and tutorials",
+            metadata_schema={
+                "custom": {
+                    "version": {"type": "string"},
+                    "status": {"type": "string", "enum": ["draft", "published"]}
+                },
+                "system": ["file_type", "ingested_at"]
+            }
         )
     """
-    return create_collection_impl(coll_mgr, name, description)
+    return create_collection_impl(coll_mgr, name, description, metadata_schema)
 
 
 @mcp.tool()
-def update_collection_description(name: str, description: str) -> dict:
+def get_collection_metadata_schema(collection_name: str) -> dict:
     """
-    Update the description of an existing collection.
+    Get the metadata schema for a collection.
 
-    Useful when collection purpose changes or needs clarification.
+    Allows clients to discover what metadata fields are available and required
+    for ingesting documents into a collection before attempting ingest.
 
     Args:
-        name: (REQUIRED) Collection name to update
-        description: (REQUIRED) New description for the collection.
-                    Cannot be empty or None.
+        collection_name: (REQUIRED) Name of the collection
 
     Returns:
         {
-            "name": str,
+            "collection_name": str,
             "description": str,
-            "updated": bool  # Always True on success
+            "metadata_schema": {
+                "custom": {...},
+                "system": [...]
+            },
+            "custom_fields": {
+                "field_name": "type",
+                ...
+            },
+            "system_fields": [...],
+            "document_count": int
         }
 
     Raises:
         ValueError: If collection doesn't exist
 
     Example:
-        result = update_collection_description(
-            name="python-docs",
-            description="Python 3.12+ documentation with examples"
-        )
+        result = get_collection_metadata_schema("python-docs")
+        # Use result["custom_fields"] to discover available metadata fields
     """
-    return update_collection_description_impl(coll_mgr, name, description)
+    return get_collection_metadata_schema_impl(coll_mgr, collection_name)
 
 
 @mcp.tool()
