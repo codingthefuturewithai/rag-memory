@@ -17,6 +17,10 @@ server:
 
   # OPENAI_API_KEY comes from .env (loaded by conftest.py)
 
+  # Graphiti LLM Models (optional - uses Graphiti defaults if not specified)
+  # graphiti_model: gpt-5-mini          # Main extraction model (default: gpt-5-mini)
+  # graphiti_small_model: gpt-5-nano    # Small task model (default: gpt-5-nano)
+
 mounts:
   # Test documents for automated file/directory ingestion tests
   - path: test-data

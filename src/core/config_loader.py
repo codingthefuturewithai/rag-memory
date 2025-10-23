@@ -31,6 +31,12 @@ REQUIRED_SERVER_KEYS = [
     'neo4j_password',
 ]
 
+# Optional configuration keys (won't fail if missing)
+OPTIONAL_SERVER_KEYS = [
+    'graphiti_model',
+    'graphiti_small_model',
+]
+
 
 def get_config_dir() -> Path:
     """
@@ -162,6 +168,8 @@ def load_environment_variables():
         'neo4j_uri': 'NEO4J_URI',
         'neo4j_user': 'NEO4J_USER',
         'neo4j_password': 'NEO4J_PASSWORD',
+        'graphiti_model': 'GRAPHITI_MODEL',
+        'graphiti_small_model': 'GRAPHITI_SMALL_MODEL',
     }
 
     for config_key, env_var in key_mapping.items():

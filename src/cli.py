@@ -92,16 +92,41 @@ async def initialize_graph_components():
     logger.info("Initializing Knowledge Graph components...")
     try:
         from graphiti_core import Graphiti
+        from graphiti_core.llm_client.openai_client import OpenAIClient
+        from graphiti_core.llm_client.config import LLMConfig
 
         # Read Neo4j connection details from environment
+        # Note: These environment variables are set by ensure_config_or_exit() in main(),
+        # which loads credentials from config/config.yaml. The fallback defaults are only
+        # used if configuration hasn't been loaded (should not happen in normal operation).
         neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
 
+        # Read optional Graphiti LLM model configuration
+        # If not specified, Graphiti will use its own defaults (gpt-5-mini, gpt-5-nano)
+        graphiti_model = os.getenv("GRAPHITI_MODEL")
+        graphiti_small_model = os.getenv("GRAPHITI_SMALL_MODEL")
+
+        # Create LLM client with optional model overrides
+        llm_config_kwargs = {
+            'api_key': os.getenv("OPENAI_API_KEY")
+        }
+        if graphiti_model:
+            llm_config_kwargs['model'] = graphiti_model
+            logger.info(f"Using configured Graphiti model: {graphiti_model}")
+        if graphiti_small_model:
+            llm_config_kwargs['small_model'] = graphiti_small_model
+            logger.info(f"Using configured Graphiti small model: {graphiti_small_model}")
+
+        llm_config = LLMConfig(**llm_config_kwargs)
+        llm_client = OpenAIClient(config=llm_config)
+
         graphiti = Graphiti(
             uri=neo4j_uri,
             user=neo4j_user,
-            password=neo4j_password
+            password=neo4j_password,
+            llm_client=llm_client
         )
         await graphiti.build_indices_and_constraints()
 
@@ -1506,13 +1531,15 @@ def graph():
 @graph.command("query-relationships")
 @click.argument("query")
 @click.option("--limit", default=5, help="Maximum number of relationships to return")
+@click.option("--threshold", type=float, default=0.35, help="Relationship confidence threshold (0.0-1.0, default 0.35)")
 @click.option("--verbose", is_flag=True, help="Show detailed metadata (id, source/target nodes, established date)")
-def graph_query_relationships(query, limit, verbose):
+def graph_query_relationships(query, limit, threshold, verbose):
     """
     Search for entity relationships using natural language.
 
     Example:
         rag graph query-relationships "How does quantum computing relate to cryptography?" --limit 5
+        rag graph query-relationships "How does quantum computing relate to cryptography?" --threshold 0.5
         rag graph query-relationships "How does quantum computing relate to cryptography?" --verbose
     """
     try:
@@ -1520,6 +1547,9 @@ def graph_query_relationships(query, limit, verbose):
         from src.mcp.tools import query_relationships_impl
 
         # Initialize Graphiti
+        # Note: These environment variables are set by ensure_config_or_exit() in main(),
+        # which loads credentials from config/config.yaml. The fallback defaults are only
+        # used if configuration hasn't been loaded (should not happen in normal operation).
         neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
@@ -1533,10 +1563,16 @@ def graph_query_relationships(query, limit, verbose):
         graph_store = GraphStore(graphiti)
 
         console.print(f"[bold blue]Searching Knowledge Graph...[/bold blue]\n")
-        console.print(f"Query: {query}\n")
+        console.print(f"Query: {query}")
+        console.print(f"Threshold: {threshold}\n")
 
         # Call business logic layer (same as MCP tool)
-        result = asyncio.run(query_relationships_impl(graph_store, query, num_results=limit))
+        result = asyncio.run(query_relationships_impl(
+            graph_store,
+            query,
+            num_results=limit,
+            threshold=threshold
+        ))
 
         if result["status"] == "unavailable":
             console.print("[yellow]Knowledge Graph is not available. Only RAG search is enabled.[/yellow]")
@@ -1587,6 +1623,9 @@ def graph_query_temporal(query, limit):
         from src.mcp.tools import query_temporal_impl
 
         # Initialize Graphiti
+        # Note: These environment variables are set by ensure_config_or_exit() in main(),
+        # which loads credentials from config/config.yaml. The fallback defaults are only
+        # used if configuration hasn't been loaded (should not happen in normal operation).
         neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
         neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
