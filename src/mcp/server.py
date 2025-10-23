@@ -15,6 +15,7 @@ from src.core.database import get_database
 from src.core.embeddings import get_embedding_generator
 from src.core.collections import get_collection_manager
 from src.core.first_run import ensure_config_or_exit
+from src.core.config_loader import load_environment_variables
 from src.retrieval.search import get_similarity_search
 from src.ingestion.document_store import get_document_store
 from src.unified import GraphStore, UnifiedIngestionMediator
@@ -75,6 +76,9 @@ async def lifespan(app: FastMCP):
     """
     global db, embedder, coll_mgr, searcher, doc_store
     global graph_store, unified_mediator
+
+    # Load configuration from YAML files before initializing components
+    load_environment_variables()
 
     # Initialize RAG components when server starts (MANDATORY per Gap 2.1)
     logger.info("Initializing RAG components...")
