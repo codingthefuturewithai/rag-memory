@@ -20,33 +20,59 @@ class CollectionManager:
         """
         self.db = database
 
-    def create_collection(self, name: str, description: Optional[str] = None) -> int:
+    def create_collection(
+        self, name: str, description: str, metadata_schema: dict = None
+    ) -> int:
         """
-        Create a new collection.
+        Create a new collection with a fixed metadata schema.
 
         Args:
             name: Unique name for the collection.
-            description: Optional description of the collection.
+            description: Description of the collection (mandatory).
+            metadata_schema: Optional metadata schema declaration.
+                Format: {
+                    "custom": {
+                        "field_name": {
+                            "type": "string|number|boolean|array|object",
+                            "description": "optional",
+                            "required": false,
+                            "enum": ["value1", "value2"]  # optional
+                        },
+                        ...
+                    },
+                    "system": ["field1", "field2", ...]
+                }
+                Defaults to: {"custom": {}, "system": []}
 
         Returns:
             Collection ID.
 
         Raises:
-            ValueError: If collection with same name already exists.
+            ValueError: If collection with same name already exists or schema is invalid.
         """
+        # Validate description is provided
+        if not description or description.strip() == "":
+            raise ValueError("Collection description is mandatory")
+
+        # Validate and normalize metadata_schema
+        schema = self._validate_metadata_schema(metadata_schema)
+
         conn = self.db.connect()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO collections (name, description)
-                    VALUES (%s, %s)
+                    INSERT INTO collections (name, description, metadata_schema)
+                    VALUES (%s, %s, %s)
                     RETURNING id;
                     """,
-                    (name, description),
+                    (name, description, schema),
                 )
                 collection_id = cur.fetchone()[0]
-                logger.info(f"Created collection '{name}' with ID {collection_id}")
+                logger.info(
+                    f"Created collection '{name}' with ID {collection_id}, "
+                    f"schema: {schema}"
+                )
                 return collection_id
         except Exception as e:
             if "unique" in str(e).lower():
@@ -56,7 +82,7 @@ class CollectionManager:
 
     def list_collections(self) -> List[dict]:
         """
-        List all collections with their metadata.
+        List all collections with their metadata and schemas.
 
         Returns:
             List of dictionaries with collection information.
@@ -69,11 +95,12 @@ class CollectionManager:
                     c.id,
                     c.name,
                     c.description,
+                    c.metadata_schema,
                     c.created_at,
                     COUNT(DISTINCT cc.chunk_id) as document_count
                 FROM collections c
                 LEFT JOIN chunk_collections cc ON c.id = cc.collection_id
-                GROUP BY c.id, c.name, c.description, c.created_at
+                GROUP BY c.id, c.name, c.description, c.metadata_schema, c.created_at
                 ORDER BY c.created_at DESC;
                 """
             )
@@ -86,8 +113,9 @@ class CollectionManager:
                         "id": row[0],
                         "name": row[1],
                         "description": row[2],
-                        "created_at": row[3],
-                        "document_count": row[4],
+                        "metadata_schema": row[3],
+                        "created_at": row[4],
+                        "document_count": row[5],
                     }
                 )
 
@@ -96,7 +124,7 @@ class CollectionManager:
 
     def get_collection(self, name: str) -> Optional[dict]:
         """
-        Get a collection by name.
+        Get a collection by name including its metadata schema.
 
         Args:
             name: Collection name.
@@ -112,12 +140,13 @@ class CollectionManager:
                     c.id,
                     c.name,
                     c.description,
+                    c.metadata_schema,
                     c.created_at,
                     COUNT(DISTINCT cc.chunk_id) as document_count
                 FROM collections c
                 LEFT JOIN chunk_collections cc ON c.id = cc.collection_id
                 WHERE c.name = %s
-                GROUP BY c.id, c.name, c.description, c.created_at;
+                GROUP BY c.id, c.name, c.description, c.metadata_schema, c.created_at;
                 """,
                 (name,),
             )
@@ -128,42 +157,79 @@ class CollectionManager:
                     "id": result[0],
                     "name": result[1],
                     "description": result[2],
-                    "created_at": result[3],
-                    "document_count": result[4],
+                    "metadata_schema": result[3],
+                    "created_at": result[4],
+                    "document_count": result[5],
                 }
             return None
 
-    def update_description(self, name: str, description: str) -> bool:
+    def _validate_metadata_schema(self, schema: dict = None) -> dict:
         """
-        Update a collection's description.
+        Validate and normalize metadata schema.
 
         Args:
-            name: Collection name to update.
-            description: New description for the collection.
+            schema: Raw schema dict from user (may be None).
 
         Returns:
-            True if collection was updated, False if not found.
+            Normalized schema dict ready for storage.
 
         Raises:
-            ValueError: If collection doesn't exist.
+            ValueError: If schema is invalid.
         """
-        conn = self.db.connect()
-        with conn.cursor() as cur:
-            # Check if collection exists first
-            cur.execute("SELECT id FROM collections WHERE name = %s", (name,))
-            result = cur.fetchone()
+        if schema is None:
+            return {"custom": {}, "system": []}
 
-            if not result:
-                raise ValueError(f"Collection '{name}' not found")
+        if not isinstance(schema, dict):
+            raise ValueError("metadata_schema must be a dictionary")
 
-            # Update description
-            cur.execute(
-                "UPDATE collections SET description = %s WHERE name = %s",
-                (description, name)
-            )
+        if "custom" not in schema:
+            raise ValueError("metadata_schema must have 'custom' key")
+        if "system" not in schema:
+            raise ValueError("metadata_schema must have 'system' key")
 
-            logger.info(f"Updated description for collection '{name}'")
-            return True
+        # Validate custom schema structure
+        if not isinstance(schema["custom"], dict):
+            raise ValueError("metadata_schema.custom must be a dictionary")
+
+        for field_name, field_def in schema["custom"].items():
+            if not isinstance(field_def, dict):
+                # Allow shorthand: {"name": "string"}
+                field_def = {"type": str(field_def)}
+
+            if "type" not in field_def:
+                raise ValueError(f"Field '{field_name}' missing required 'type' key")
+
+            allowed_types = {"string", "number", "boolean", "array", "object"}
+            if field_def["type"] not in allowed_types:
+                raise ValueError(
+                    f"Field '{field_name}' has invalid type '{field_def['type']}'. "
+                    f"Allowed: {allowed_types}"
+                )
+
+        # Validate system metadata fields
+        if not isinstance(schema["system"], list):
+            raise ValueError("metadata_schema.system must be a list")
+
+        allowed_system_fields = {
+            "file_type",
+            "source_type",
+            "ingested_at",
+            "domain",
+            "status_code",
+            "content_type",
+            "file_path",
+            "crawl_depth",
+            "crawl_root_url",
+        }
+
+        for field in schema["system"]:
+            if field not in allowed_system_fields:
+                raise ValueError(
+                    f"Unknown system field: '{field}'. "
+                    f"Allowed: {allowed_system_fields}"
+                )
+
+        return schema
 
     def delete_collection(self, name: str) -> bool:
         """
