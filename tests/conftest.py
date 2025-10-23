@@ -317,7 +317,6 @@ async def cleanup_after_each_test():
             password=neo4j_password
         )
         await graphiti.driver.execute_query("MATCH (n) DETACH DELETE n")
-        await graphiti.close()
     except Exception as e:
         raise RuntimeError(f"Neo4j cleanup failed: {e}")
 
