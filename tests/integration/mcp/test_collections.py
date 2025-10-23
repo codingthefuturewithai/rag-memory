@@ -1,6 +1,6 @@
 """MCP collection management tool integration tests.
 
-Tests create_collection, list_collections, update_collection_description, get_collection_info,
+Tests create_collection, list_collections, get_collection_metadata_schema, get_collection_info,
 and delete_collection.
 """
 
@@ -58,40 +58,48 @@ class TestCollections:
         assert found, f"Created collection not found in list"
         # Note: Collection persists in test database - this is acceptable for integration tests
 
-    async def test_update_collection_description(self, mcp_session):
-        """Test updating collection description."""
+    async def test_get_collection_metadata_schema(self, mcp_session):
+        """Test getting collection metadata schema."""
         session, transport = mcp_session
 
-        collection_name = f"test_update_desc_{id(session)}"
-        original_desc = "Original description"
-        updated_desc = "Updated description"
+        collection_name = f"test_metadata_schema_{id(session)}"
+        test_schema = {
+            "custom": {
+                "author": {
+                    "type": "string",
+                    "required": True
+                },
+                "version": {
+                    "type": "number"
+                }
+            },
+            "system": ["file_type", "ingested_at"]
+        }
 
-        # Create collection
-        await session.call_tool("create_collection", {
+        # Create collection with metadata schema
+        create_result = await session.call_tool("create_collection", {
             "name": collection_name,
-            "description": original_desc
+            "description": "Test metadata schema",
+            "metadata_schema": test_schema
         })
 
-        # Update description
-        result = await session.call_tool("update_collection_description", {
-            "name": collection_name,
-            "description": updated_desc
+        assert not create_result.isError
+
+        # Get metadata schema
+        result = await session.call_tool("get_collection_metadata_schema", {
+            "collection_name": collection_name
         })
 
         assert not result.isError
         text = extract_text_content(result)
         data = json.loads(text)
-        assert data.get("description") == updated_desc
 
-        # Verify change persisted
-        info_result = await session.call_tool("get_collection_info", {
-            "collection_name": collection_name
-        })
-
-        assert not info_result.isError
-        info_text = extract_text_content(info_result)
-        info_data = json.loads(info_text)
-        assert info_data.get("description") == updated_desc
+        # Verify schema returned
+        assert data.get("collection_name") == collection_name
+        assert data.get("custom_fields") is not None
+        assert "author" in data.get("custom_fields", {})
+        assert "version" in data.get("custom_fields", {})
+        assert "file_type" in data.get("system_fields", [])
         # Note: Collection persists in test database - this is acceptable for integration tests
 
     async def test_get_collection_info(self, mcp_session):
