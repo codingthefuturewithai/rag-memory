@@ -75,6 +75,13 @@ logs/
 # Benchmark test results (generated data)
 test-results/
 test_mcp_server/
+benchmarking/
+
+# Local backups (keep locally, don't commit)
+backups/
+
+# Owner-specific working documents (keep locally, don't commit)
+CLAUDE.md
 
 # Claude Code local settings (user-specific overrides)
 .claude/settings.local.json

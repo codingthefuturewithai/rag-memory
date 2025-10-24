@@ -2,6 +2,12 @@
 #
 # Sync database from Supabase to local Docker
 #
+# Usage: ./sync-from-supabase.sh <project-id> [region]
+#
+# Arguments:
+#   project-id  - Your Supabase project ID (e.g., yjokksbyqpzjoumjdyuu)
+#   region      - Your Supabase region (default: us-east-1)
+#
 # This script exports your Supabase database and imports it to local Docker.
 # WARNING: This DESTROYS all local Docker data!
 #
@@ -15,17 +21,27 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Validate arguments
+if [ $# -lt 1 ]; then
+    echo -e "${RED}❌ Error: Supabase project ID is required${NC}"
+    echo "Usage: $0 <project-id> [region]"
+    echo "Example: $0 yjokksbyqpzjoumjdyuu us-east-1"
+    exit 1
+fi
+
 # Configuration
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKUPS_DIR="$PROJECT_DIR/backups"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="$BACKUPS_DIR/supabase_sync_$TIMESTAMP.sql"
 
-# Supabase project configuration (update these values)
-SUPABASE_PROJECT_REF="yjokksbyqpzjoumjdyuu"
-SUPABASE_REGION="us-east-1"
+# Supabase project configuration from command-line arguments
+SUPABASE_PROJECT_REF="$1"
+SUPABASE_REGION="${2:-us-east-1}"
 
-echo -e "${BLUE}🔄 Syncing Supabase → Docker...${NC}\n"
+echo -e "${BLUE}🔄 Syncing Supabase → Docker...${NC}"
+echo -e "   Project ID: ${YELLOW}$SUPABASE_PROJECT_REF${NC}"
+echo -e "   Region: ${YELLOW}$SUPABASE_REGION${NC}\n"
 
 # Step 1: Get Supabase password
 echo -e "${YELLOW}Enter your Supabase database password:${NC}"
