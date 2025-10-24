@@ -841,7 +841,7 @@ async def ingest_url(
     your crawling strategy (single large crawl vs multiple smaller crawls).
     """
     return await ingest_url_impl(
-        doc_store, db, unified_mediator, url, collection_name, follow_links, max_depth, mode, include_document_ids, graph_store
+        db, doc_store, unified_mediator, graph_store, url, collection_name, follow_links, max_depth, mode, include_document_ids
     )
 
 
