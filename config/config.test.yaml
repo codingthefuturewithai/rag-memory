@@ -23,5 +23,6 @@ server:
 
 mounts:
   # Test documents for automated file/directory ingestion tests
+  # Using relative path - will resolve relative to project root where MCP server runs
   - path: test-data
     read_only: true

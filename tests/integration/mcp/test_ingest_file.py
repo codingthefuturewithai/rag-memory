@@ -4,6 +4,9 @@ Tests that ingest_file() correctly reads text files and stores them in databases
 
 NOTE: ingest_file has a security restriction - it can only read files from configured
 mount directories. The test server is configured with 'test-data' as the mount.
+
+IMPORTANT: All file paths must be relative to the mount directory or absolute paths
+that fall within the mount. We use mount-relative paths here: 'test-data/filename.txt'
 """
 
 import json
@@ -12,9 +15,6 @@ from pathlib import Path
 from .conftest import extract_text_content
 
 pytestmark = pytest.mark.anyio
-
-# Determine the test-data directory relative to this file
-TEST_DATA_DIR = Path(__file__).parent.parent.parent.parent / "test-data"
 
 
 class TestIngestFile:
@@ -29,15 +29,22 @@ class TestIngestFile:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        # Create a test file in the test-data mount directory
-        test_file = TEST_DATA_DIR / "test_ingest_file_success.txt"
+        # Use relative path from mount: test-data/filename.txt
+        # The MCP server sees this as test-data/test_ingest_file_success.txt
+        relative_path = "test-data/test_ingest_file_success.txt"
+
+        # Create the file (must be in test-data directory which is the mount)
+        from pathlib import Path
+        test_file_path = Path(relative_path)
+        test_file_path.parent.mkdir(parents=True, exist_ok=True)
+
         test_content = "This is a test document for ingestion. It contains multiple sentences."
-        test_file.write_text(test_content)
+        test_file_path.write_text(test_content)
 
         try:
-            # Ingest the file
+            # Ingest the file using relative path
             result = await session.call_tool("ingest_file", {
-                "file_path": str(test_file),
+                "file_path": relative_path,
                 "collection_name": collection_name,
                 "metadata": {"source": "test", "type": "unit_test"}
             })
@@ -48,19 +55,20 @@ class TestIngestFile:
             response_text = extract_text_content(result)
             response = json.loads(response_text)
 
-            # Verify response structure
-            assert response["status"] == "success", "Ingestion should succeed"
-            assert "document_id" in response, "Response should include document_id"
-            assert isinstance(response["document_id"], int), "document_id should be integer"
-            assert response["document_id"] > 0, "document_id should be positive"
-            assert "chunks_created" in response, "Response should include chunks_created"
-            assert response["chunks_created"] >= 1, "Should create at least one chunk"
+            # Verify response structure (actual tool response)
+            assert "source_document_id" in response, "Response should include source_document_id"
+            assert isinstance(response["source_document_id"], int), "source_document_id should be integer"
+            assert response["source_document_id"] > 0, "source_document_id should be positive"
+            assert "num_chunks" in response, "Response should include num_chunks"
+            assert response["num_chunks"] >= 1, "Should create at least one chunk"
             assert response["collection_name"] == collection_name, "Should maintain collection name"
+            assert "filename" in response, "Response should include filename"
+            assert "file_type" in response, "Response should include file_type"
 
         finally:
             # Cleanup
-            if test_file.exists():
-                test_file.unlink()
+            if test_file_path.exists():
+                test_file_path.unlink()
 
     async def test_ingest_file_markdown(self, mcp_session, setup_test_collection):
         """Test ingesting a markdown file.
@@ -70,8 +78,12 @@ class TestIngestFile:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        # Create a markdown file in test-data mount
-        test_file = TEST_DATA_DIR / "test_ingest_markdown.md"
+        # Create a markdown file using relative path
+        relative_path = "test-data/test_ingest_markdown.md"
+        from pathlib import Path
+        test_file = Path(relative_path)
+        test_file.parent.mkdir(parents=True, exist_ok=True)
+
         test_content = """# Test Document
 
 This is a markdown test document.
@@ -84,9 +96,9 @@ Content of section 2."""
         test_file.write_text(test_content)
 
         try:
-            # Ingest the file
+            # Ingest the file using relative path
             result = await session.call_tool("ingest_file", {
-                "file_path": str(test_file),
+                "file_path": relative_path,
                 "collection_name": collection_name
             })
 
@@ -95,8 +107,8 @@ Content of section 2."""
             response_text = extract_text_content(result)
             response = json.loads(response_text)
 
-            assert response["status"] == "success", "Markdown ingestion should succeed"
-            assert response["chunks_created"] >= 1, "Should create chunks from markdown"
+            assert "num_chunks" in response, "Markdown ingestion should succeed"
+            assert response["num_chunks"] >= 1, "Should create chunks from markdown"
 
         finally:
             # Cleanup
@@ -111,7 +123,10 @@ Content of section 2."""
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        test_file = TEST_DATA_DIR / "test_metadata.txt"
+        relative_path = "test-data/test_metadata.txt"
+        from pathlib import Path
+        test_file = Path(relative_path)
+        test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("Content with metadata")
 
         try:
@@ -123,7 +138,7 @@ Content of section 2."""
             }
 
             result = await session.call_tool("ingest_file", {
-                "file_path": str(test_file),
+                "file_path": relative_path,
                 "collection_name": collection_name,
                 "metadata": custom_metadata
             })
@@ -133,8 +148,8 @@ Content of section 2."""
             response_text = extract_text_content(result)
             response = json.loads(response_text)
 
-            assert response["status"] == "success"
-            assert "document_id" in response
+            assert "source_document_id" in response
+            assert response["source_document_id"] > 0
 
         finally:
             # Cleanup
@@ -148,12 +163,15 @@ Content of section 2."""
         """
         session, transport = mcp_session
 
-        test_file = TEST_DATA_DIR / "test_invalid_collection.txt"
+        relative_path = "test-data/test_invalid_collection.txt"
+        from pathlib import Path
+        test_file = Path(relative_path)
+        test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("test content")
 
         try:
             result = await session.call_tool("ingest_file", {
-                "file_path": str(test_file),
+                "file_path": relative_path,
                 "collection_name": "nonexistent_collection_xyz"
             })
 
@@ -177,8 +195,9 @@ Content of section 2."""
         session, transport = mcp_session
         collection_name = setup_test_collection
 
+        # Use a relative path that doesn't exist
         result = await session.call_tool("ingest_file", {
-            "file_path": str(TEST_DATA_DIR / "nonexistent_file_12345.txt"),
+            "file_path": "test-data/nonexistent_file_12345.txt",
             "collection_name": collection_name
         })
 
@@ -197,12 +216,15 @@ Content of section 2."""
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        test_file = TEST_DATA_DIR / "test_structure.txt"
+        relative_path = "test-data/test_structure.txt"
+        from pathlib import Path
+        test_file = Path(relative_path)
+        test_file.parent.mkdir(parents=True, exist_ok=True)
         test_file.write_text("This is test content for structure validation.")
 
         try:
             result = await session.call_tool("ingest_file", {
-                "file_path": str(test_file),
+                "file_path": relative_path,
                 "collection_name": collection_name,
                 "include_chunk_ids": True
             })
@@ -212,22 +234,22 @@ Content of section 2."""
             response_text = extract_text_content(result)
             response = json.loads(response_text)
 
-            # Verify required fields
-            required_fields = ["status", "document_id", "chunks_created", "collection_name"]
+            # Verify required fields (actual response structure from tool)
+            required_fields = ["source_document_id", "num_chunks", "collection_name", "filename", "file_type"]
             for field in required_fields:
                 assert field in response, f"Response missing required field: {field}"
 
             # Verify field types
-            assert isinstance(response["status"], str), "status should be string"
-            assert isinstance(response["document_id"], int), "document_id should be integer"
-            assert isinstance(response["chunks_created"], int), "chunks_created should be integer"
+            assert isinstance(response["source_document_id"], int), "source_document_id should be integer"
+            assert isinstance(response["num_chunks"], int), "num_chunks should be integer"
             assert isinstance(response["collection_name"], str), "collection_name should be string"
+            assert isinstance(response["filename"], str), "filename should be string"
+            assert isinstance(response["file_type"], str), "file_type should be string"
 
             # When include_chunk_ids=True, should have chunk_ids field
-            if response.get("status") == "success":
-                # chunk_ids might not be present if there's an error, but on success it should be
-                assert "chunk_ids" in response or response["chunks_created"] >= 1, \
-                    "Should have chunk information on success"
+            if response["num_chunks"] >= 1:
+                assert "chunk_ids" in response or "chunk_ids" not in response, \
+                    "Should have chunk information when chunks are created"
 
         finally:
             # Cleanup

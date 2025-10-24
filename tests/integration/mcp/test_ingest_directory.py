@@ -6,6 +6,9 @@ and stores them in databases.
 NOTE: ingest_directory has a security restriction - it can only read files from
 configured mount directories. The test server is configured with 'test-data' as
 the mount.
+
+IMPORTANT: All paths must be relative to the mount (test-data/) or absolute paths
+within the mounted directory. We use relative paths: 'test-data/subdir'
 """
 
 import json
@@ -14,9 +17,6 @@ from pathlib import Path
 from .conftest import extract_text_content
 
 pytestmark = pytest.mark.anyio
-
-# Determine the test-data directory relative to this file
-TEST_DATA_DIR = Path(__file__).parent.parent.parent.parent / "test-data"
 
 
 class TestIngestDirectory:
@@ -31,9 +31,10 @@ class TestIngestDirectory:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        # Create a subdirectory for this test
-        test_dir = TEST_DATA_DIR / "test_ingest_dir_basic"
-        test_dir.mkdir(exist_ok=True)
+        # Use relative path from mount: test-data/subdir
+        relative_dir = "test-data/test_ingest_dir_basic"
+        test_dir = Path(relative_dir)
+        test_dir.mkdir(parents=True, exist_ok=True)
 
         # Create multiple test files
         files_to_create = {
@@ -49,9 +50,9 @@ class TestIngestDirectory:
                 file_path.write_text(content)
                 created_files.append(file_path)
 
-            # Ingest the directory
+            # Ingest the directory using relative path
             result = await session.call_tool("ingest_directory", {
-                "directory_path": str(test_dir),
+                "directory_path": relative_dir,
                 "collection_name": collection_name,
                 "file_extensions": [".txt", ".md"],
                 "recursive": False,
@@ -89,8 +90,9 @@ class TestIngestDirectory:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        test_dir = TEST_DATA_DIR / "test_ingest_dir_extensions"
-        test_dir.mkdir(exist_ok=True)
+        relative_dir = "test-data/test_ingest_dir_extensions"
+        test_dir = Path(relative_dir)
+        test_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             # Create files with different extensions
@@ -99,9 +101,9 @@ class TestIngestDirectory:
             (test_dir / "script.py").write_text("# Python file - should be skipped")
             (test_dir / "image.jpg").write_text("Image file - should be skipped")
 
-            # Ingest only .md and .txt files
+            # Ingest only .md and .txt files using relative path
             result = await session.call_tool("ingest_directory", {
-                "directory_path": str(test_dir),
+                "directory_path": relative_dir,
                 "collection_name": collection_name,
                 "file_extensions": [".md", ".txt"],
                 "recursive": False
@@ -130,13 +132,14 @@ class TestIngestDirectory:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        test_dir = TEST_DATA_DIR / "test_ingest_dir_empty"
-        test_dir.mkdir(exist_ok=True)
+        relative_dir = "test-data/test_ingest_dir_empty"
+        test_dir = Path(relative_dir)
+        test_dir.mkdir(parents=True, exist_ok=True)
 
         try:
-            # Ingest empty directory
+            # Ingest empty directory using relative path
             result = await session.call_tool("ingest_directory", {
-                "directory_path": str(test_dir),
+                "directory_path": relative_dir,
                 "collection_name": collection_name,
                 "file_extensions": [".txt", ".md"],
                 "recursive": False
@@ -164,14 +167,15 @@ class TestIngestDirectory:
         """
         session, transport = mcp_session
 
-        test_dir = TEST_DATA_DIR / "test_ingest_dir_invalid_collection"
-        test_dir.mkdir(exist_ok=True)
+        relative_dir = "test-data/test_ingest_dir_invalid_collection"
+        test_dir = Path(relative_dir)
+        test_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             (test_dir / "test.txt").write_text("test content")
 
             result = await session.call_tool("ingest_directory", {
-                "directory_path": str(test_dir),
+                "directory_path": relative_dir,
                 "collection_name": "nonexistent_collection_xyz",
                 "file_extensions": [".txt"],
                 "recursive": False
@@ -197,8 +201,9 @@ class TestIngestDirectory:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
+        # Use a relative path that doesn't exist
         result = await session.call_tool("ingest_directory", {
-            "directory_path": str(TEST_DATA_DIR / "nonexistent_dir_12345"),
+            "directory_path": "test-data/nonexistent_dir_12345",
             "collection_name": collection_name,
             "file_extensions": [".txt"],
             "recursive": False
@@ -219,8 +224,9 @@ class TestIngestDirectory:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        test_dir = TEST_DATA_DIR / "test_ingest_dir_structure"
-        test_dir.mkdir(exist_ok=True)
+        relative_dir = "test-data/test_ingest_dir_structure"
+        test_dir = Path(relative_dir)
+        test_dir.mkdir(parents=True, exist_ok=True)
 
         try:
             # Create a few test files
@@ -228,7 +234,7 @@ class TestIngestDirectory:
             (test_dir / "file2.md").write_text("# Content of file 2")
 
             result = await session.call_tool("ingest_directory", {
-                "directory_path": str(test_dir),
+                "directory_path": relative_dir,
                 "collection_name": collection_name,
                 "file_extensions": [".txt", ".md"],
                 "recursive": False,

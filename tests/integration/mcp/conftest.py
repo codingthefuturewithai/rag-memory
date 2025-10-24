@@ -81,7 +81,12 @@ async def mcp_session(request) -> AsyncGenerator[Tuple[ClientSession, str], None
 
     try:
         # Setup STDIO transport
-        project_root = Path(__file__).parent.parent.parent
+        # Path(__file__) = tests/integration/mcp/conftest.py
+        # .parent = tests/integration/mcp
+        # .parent.parent = tests/integration
+        # .parent.parent.parent = tests
+        # .parent.parent.parent.parent = project root
+        project_root = Path(__file__).parent.parent.parent.parent
         server_module = "src.mcp.server"
 
         # Build environment
@@ -130,11 +135,13 @@ async def mcp_session(request) -> AsyncGenerator[Tuple[ClientSession, str], None
         else:
             env["PYTHONPATH"] = str(project_root)
 
-        # Create server parameters
+        # Create server parameters with project root as working directory
+        # This ensures relative mount paths (e.g., "test-data") resolve correctly
         server_params = StdioServerParameters(
             command=sys.executable,
             args=["-m", server_module],
-            env=env
+            env=env,
+            cwd=str(project_root)
         )
 
         # Start stdio client
