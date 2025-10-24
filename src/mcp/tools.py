@@ -1202,14 +1202,12 @@ async def query_temporal_impl(
         if valid_from or valid_until:
             from datetime import datetime
             filtered_edges = []
-            for i, edge in enumerate(edges):
+            for edge in edges:
                 include_edge = True
 
                 # Temporal logic: For a fact to be valid during window [valid_from, valid_until]:
                 # - It must have STARTED on or before valid_from (valid_at <= valid_from)
                 # - It must NOT have EXPIRED before valid_until (invalid_at >= valid_until OR invalid_at is NULL)
-
-                logger.debug(f"EDGE {i}: valid_at={getattr(edge, 'valid_at', None)}, invalid_at={getattr(edge, 'invalid_at', None)}, fact={getattr(edge, 'fact', '')[:50]}...")
 
                 if valid_from:
                     try:
@@ -1228,16 +1226,14 @@ async def query_temporal_impl(
                         # (only exclude if invalid_at exists AND is before valid_until)
                         if hasattr(edge, 'invalid_at') and edge.invalid_at:
                             if edge.invalid_at <= valid_until_dt:
-                                logger.debug(f"FILTER: Excluding edge (expired before window): invalid_at={edge.invalid_at} <= {valid_until_dt}")
                                 include_edge = False
-                    except Exception as e:
-                        logger.warning(f"Temporal filter error on valid_until: {e}")
+                    except Exception:
+                        pass
 
                 if include_edge:
                     filtered_edges.append(edge)
 
             edges = filtered_edges[:num_results]
-            logger.debug(f"Post-process temporal filtering: {len(results) if isinstance(results, list) else len(results.edges)} → {len(edges)} edges")
 
         # Convert to timeline format, grouped by temporal validity
         timeline_items = []
