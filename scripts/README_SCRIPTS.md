@@ -6,22 +6,32 @@ Quick reference for utility scripts available in this project.
 
 Quick verification script to check if data exists in PostgreSQL and Neo4j across different environments.
 
+**Key Feature:** Automatically discovers available environments by scanning `config/config.*.yaml` files. No hardcoded database connections!
+
 ### Usage
 
 ```bash
 # Check test database (default)
 uv run scripts/check_database_data.py
 
-# Check specific environment
+# Check specific environment (loaded from config/)
 uv run scripts/check_database_data.py --env test
 uv run scripts/check_database_data.py --env dev
 
 # Check all configured environments
 uv run scripts/check_database_data.py --env all
 
-# Show verbose output
+# Show verbose output (includes config file loading status)
 uv run scripts/check_database_data.py --env test --verbose
 ```
+
+### How It Works
+
+The script automatically discovers available environments by:
+1. Scanning the `config/` directory for `config.*.yaml` files
+2. Extracting database connection details from the `server:` section
+3. Dynamically populating the `--env` argument choices
+4. Loading credentials directly from YAML files (no hardcoding needed)
 
 ### What It Checks
 
@@ -32,7 +42,7 @@ uv run scripts/check_database_data.py --env test --verbose
 - Total rows across all tables
 
 **Neo4j:**
-- Total nodes in graph
+- Total node count
 - Entity node count
 - Connection status
 
@@ -57,9 +67,16 @@ DATABASE STATUS: Test (54323/7689)
 
 ### Supported Environments
 
-- **test** - Test databases (PostgreSQL: localhost:54323, Neo4j: localhost:7689)
-- **dev** - Development databases (PostgreSQL: localhost:54320, Neo4j: localhost:7688)
-- **all** - Check all environments and show summary
+Environments are automatically discovered from:
+- `config/config.test.yaml` → Available as `--env test`
+- `config/config.dev.yaml` → Available as `--env dev`
+- Any other `config/config.*.yaml` files → Available as `--env <name>`
+- `--env all` → Check all available environments
+
+List available environments anytime:
+```bash
+uv run scripts/check_database_data.py --help
+```
 
 ### Quick Commands
 
@@ -72,24 +89,25 @@ alias rag-check='uv run scripts/check_database_data.py'
 # Then use as:
 rag-check --env test
 rag-check --env all
+rag-check --env dev --verbose
 ```
 
 ## Adding New Environments
 
-To add a new environment, edit `scripts/check_database_data.py` and add to the `configs` dictionary:
+To add a new environment:
 
-```python
-"production": {
-    "pg_url": "postgresql://user:pass@host:port/dbname",
-    "neo4j_uri": "bolt://host:port",
-    "neo4j_user": "neo4j",
-    "neo4j_password": "password",
-    "label": "Production (port/port)"
-}
-```
+1. **Create a config file:** `config/config.production.yaml`
+2. **Add database details:**
+   ```yaml
+   server:
+     database_url: postgresql://user:pass@host:5432/dbname
+     neo4j_uri: bolt://host:7687
+     neo4j_user: neo4j
+     neo4j_password: your-password
+   ```
+3. **Use it immediately:**
+   ```bash
+   uv run scripts/check_database_data.py --env production
+   ```
 
-Then use:
-
-```bash
-uv run scripts/check_database_data.py --env production
-```
+The script will automatically discover and load your new environment from the YAML file!

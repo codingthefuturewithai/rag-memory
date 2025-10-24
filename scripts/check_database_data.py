@@ -3,6 +3,8 @@
 Quick database data verification script.
 
 Check if data exists in PostgreSQL and Neo4j across different environments.
+Loads database connection parameters from config/config.{env}.yaml files.
+
 Useful for verifying test databases are clean or for quick data snapshots.
 
 Usage:
@@ -18,6 +20,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+import yaml
 import psycopg
 from neo4j import AsyncGraphDatabase
 
@@ -28,22 +31,54 @@ class DatabaseChecker:
     def __init__(self, env: str = "test", verbose: bool = False):
         self.env = env
         self.verbose = verbose
-        self.configs = {
-            "test": {
-                "pg_url": "postgresql://raguser:ragpassword@localhost:54323/rag_memory_test",
-                "neo4j_uri": "bolt://localhost:7689",
-                "neo4j_user": "neo4j",
-                "neo4j_password": "test-password",
-                "label": "Test (54323/7689)"
-            },
-            "dev": {
-                "pg_url": "postgresql://raguser:ragpassword@localhost:54320/rag_memory",
-                "neo4j_uri": "bolt://localhost:7688",
-                "neo4j_user": "neo4j",
-                "neo4j_password": "dev-password",
-                "label": "Dev (54320/7688)"
-            },
-        }
+        self.configs = self._load_configs()
+
+    def _load_configs(self) -> dict:
+        """Load database configurations from YAML files in config/ directory."""
+        config_dir = Path(__file__).parent.parent / "config"
+        configs = {}
+
+        # Find all config.*.yaml files (excluding config.example.yaml)
+        for config_file in sorted(config_dir.glob("config.*.yaml")):
+            if "example" in config_file.name:
+                continue
+
+            # Extract environment name from filename (config.{env}.yaml)
+            env_name = config_file.stem.replace("config.", "")
+
+            try:
+                with open(config_file, 'r') as f:
+                    yaml_config = yaml.safe_load(f)
+
+                # Extract database connection details from YAML
+                server_config = yaml_config.get("server", {})
+                db_url = server_config.get("database_url")
+                neo4j_uri = server_config.get("neo4j_uri")
+                neo4j_user = server_config.get("neo4j_user")
+                neo4j_password = server_config.get("neo4j_password")
+
+                if db_url and neo4j_uri:
+                    # Extract ports from URLs for label
+                    pg_port = db_url.split(":")[3].split("/")[0] if ":" in db_url else "?"
+                    neo4j_port = neo4j_uri.split(":")[2] if ":" in neo4j_uri else "?"
+
+                    configs[env_name] = {
+                        "pg_url": db_url,
+                        "neo4j_uri": neo4j_uri,
+                        "neo4j_user": neo4j_user,
+                        "neo4j_password": neo4j_password,
+                        "label": f"{env_name.capitalize()} ({pg_port}/{neo4j_port})",
+                        "config_file": config_file,
+                    }
+                    if self.verbose:
+                        print(f"✓ Loaded config for '{env_name}' from {config_file.name}", file=sys.stderr)
+
+            except Exception as e:
+                if self.verbose:
+                    print(f"✗ Failed to load config from {config_file.name}: {e}", file=sys.stderr)
+                continue
+
+        return configs
 
     async def check_postgresql(self, config: dict) -> dict:
         """Check PostgreSQL for data."""
@@ -113,9 +148,10 @@ class DatabaseChecker:
     async def check_environment(self, env_name: str) -> dict:
         """Check both databases for a given environment."""
         if env_name not in self.configs:
+            available = ', '.join(sorted(self.configs.keys())) if self.configs else "None found (no config/*.yaml files)"
             return {
                 "env": env_name,
-                "error": f"Unknown environment. Valid options: {', '.join(self.configs.keys())}"
+                "error": f"Unknown environment '{env_name}'. Available: {available}"
             }
 
         config = self.configs[env_name]
@@ -180,8 +216,13 @@ class DatabaseChecker:
 
     async def run(self) -> int:
         """Run the database checks."""
+        if not self.configs:
+            print(f"❌ ERROR: No configuration files found in config/ directory")
+            print(f"Expected files like: config/config.test.yaml, config/config.dev.yaml, etc.")
+            return 1
+
         if self.env == "all":
-            environments = list(self.configs.keys())
+            environments = sorted(self.configs.keys())
         else:
             environments = [self.env]
 
@@ -222,11 +263,20 @@ class DatabaseChecker:
 
 
 async def main():
+    # Create checker first to load available environments from config files
+    temp_checker = DatabaseChecker(env="test", verbose=False)
+    available_envs = sorted(temp_checker.configs.keys()) + ["all"]
+
     parser = argparse.ArgumentParser(
         description="Check data in PostgreSQL and Neo4j databases across environments",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
+Dynamically loads database configurations from config/config.*.yaml files.
+
+Available environments: {', '.join(available_envs)}
+
 Examples:
+  uv run scripts/check_database_data.py
   uv run scripts/check_database_data.py --env test
   uv run scripts/check_database_data.py --env dev
   uv run scripts/check_database_data.py --env all
@@ -236,15 +286,15 @@ Examples:
 
     parser.add_argument(
         "--env",
-        choices=["test", "dev", "all"],
+        choices=available_envs,
         default="test",
-        help="Environment to check (default: test)"
+        help=f"Environment to check (default: test). Available: {', '.join(available_envs)}"
     )
 
     parser.add_argument(
         "--verbose",
         action="store_true",
-        help="Show verbose output"
+        help="Show verbose output including config file loading"
     )
 
     args = parser.parse_args()
