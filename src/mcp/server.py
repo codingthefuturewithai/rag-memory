@@ -1307,6 +1307,8 @@ async def query_relationships(
 async def query_temporal(
     query: str,
     num_results: int = 10,
+    valid_from: str = None,
+    valid_until: str = None,
 ) -> dict:
     """
     Query how knowledge has evolved over time using temporal reasoning.
@@ -1321,11 +1323,17 @@ async def query_temporal(
     - Reveals evolution of your understanding
     - Identifies outdated vs current information
 
+    **Temporal Filtering:**
+    - **valid_from**: Filter to facts valid AFTER this ISO 8601 date
+    - **valid_until**: Filter to facts valid BEFORE this ISO 8601 date
+    - Both filters can be used together to find facts valid in a specific time window
+
     **Best for:**
     - Evolution queries - "How has my business strategy changed?"
     - Temporal tracking - "What was my focus in January vs March?"
     - Trend analysis - "Show me how my product priorities evolved"
     - Consistency checking - "What beliefs changed about X?"
+    - Decision tracking - "What decisions did I make around December 2025?"
 
     **Note:** Knowledge Graph must be enabled and available. If unavailable,
     returns status="unavailable" with an empty timeline list.
@@ -1334,6 +1342,10 @@ async def query_temporal(
         query: (REQUIRED) Natural language query about temporal changes
                (e.g., "How has my business vision evolved?")
         num_results: Maximum number of timeline items to return (default: 10, max: 50)
+        valid_from: (OPTIONAL) ISO 8601 date (e.g., "2025-12-01T00:00:00")
+                   Only return facts valid after this date
+        valid_until: (OPTIONAL) ISO 8601 date (e.g., "2025-12-31T23:59:59")
+                    Only return facts valid before this date
 
     Returns:
         {
@@ -1353,7 +1365,7 @@ async def query_temporal(
             ]
         }
 
-    Example:
+    Examples:
         # Track business evolution
         result = query_temporal(
             query="How has my business strategy evolved?",
@@ -1365,12 +1377,21 @@ async def query_temporal(
             print(f"{status}: {item['fact']}")
             print(f"  Valid: {item['valid_from']} → {item['valid_until'] or 'present'}")
 
+        # Find decisions made in specific time window
+        result = query_temporal(
+            query="What decisions did I make?",
+            valid_from="2025-12-01T00:00:00",
+            valid_until="2025-12-31T23:59:59"
+        )
+
     Performance: ~500-800ms per query (includes LLM-based temporal matching)
     """
     return await query_temporal_impl(
         graph_store,
         query,
         num_results,
+        valid_from=valid_from,
+        valid_until=valid_until,
     )
 
 

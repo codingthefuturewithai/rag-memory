@@ -1,0 +1,26 @@
+# RAG Memory Local Development Configuration
+#
+# Used when running locally from the repo (uv run rag ... or local MCP server)
+# Database URLs and mounts point to local Docker Compose services
+#
+# DO NOT add secrets to this file - use .env for OPENAI_API_KEY
+
+server:
+  # Local development database (from docker-compose.dev.yml)
+  database_url: postgresql://raguser:ragpassword@localhost:54320/rag_memory_dev
+
+  # Local development Neo4j (from docker-compose.dev.yml)
+  neo4j_uri: bolt://localhost:7687
+  neo4j_user: neo4j
+  neo4j_password: dev-password
+
+  # OPENAI_API_KEY comes from .env (loaded by conftest.py or dotenv)
+
+  # Graphiti LLM Models (optional - uses Graphiti defaults if not specified)
+  #graphiti_model: gpt-5          # Main extraction model (default: gpt-5-mini)
+  #graphiti_small_model: gpt-5-nano    # Small task model (default: gpt-5-nano)
+
+mounts:
+  # Reference documentation and examples for file/directory ingestion testing
+  - path: .reference
+    read_only: true

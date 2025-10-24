@@ -353,7 +353,9 @@ class GraphStore:
         self,
         query: str,
         num_results: int = 5,
-        reranker_min_score: float = 0.35
+        reranker_min_score: float = 0.35,
+        valid_from: str = None,
+        valid_until: str = None,
     ) -> list[Any]:
         """
         Search for relationships in the knowledge graph.
@@ -366,18 +368,29 @@ class GraphStore:
             reranker_min_score: Cross-encoder confidence threshold (0.0-1.0, default 0.35).
                                Higher values filter more strictly (fewer, more accurate results).
                                Lower values are more permissive (more results, including potentially less relevant ones).
+            valid_from: (OPTIONAL) ISO 8601 date string. Only return facts valid AFTER this date.
+                       Example: "2025-12-01T00:00:00"
+            valid_until: (OPTIONAL) ISO 8601 date string. Only return facts valid BEFORE this date.
+                        Example: "2025-12-31T23:59:59"
 
         Returns:
-            List of search results (edges) with cross-encoder scores >= reranker_min_score
+            List of search results (edges) with cross-encoder scores >= reranker_min_score,
+            filtered by temporal validity if filters provided.
         """
         from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_CROSS_ENCODER
+        from graphiti_core.search.search_filters import SearchFilters, DateFilter, ComparisonOperator
+        from datetime import datetime
 
         # Use search_() (with underscore) for advanced search with custom config
         # search_() supports the config parameter, search() does not
         config = COMBINED_HYBRID_SEARCH_CROSS_ENCODER.model_copy(deep=True)
         config.reranker_min_score = reranker_min_score
 
-        results = await self.graphiti.search_(query, config=config)
+        # Note: Temporal filtering is applied client-side in query_temporal_impl()
+        # rather than via Graphiti's search filters, which have shown unreliable behavior.
+        # This approach is more transparent and easier to debug.
+
+        results = await self.graphiti.search_(query, config=config, search_filter=None)
 
         # search_() returns SearchResults object with .edges, .nodes, .episodes, .communities
         # Graphiti internally filters by reranker_min_score, so we just return edges

@@ -1611,12 +1611,20 @@ def graph_query_relationships(query, limit, threshold, verbose):
 @graph.command("query-temporal")
 @click.argument("query")
 @click.option("--limit", default=10, help="Maximum number of timeline items to return")
-def graph_query_temporal(query, limit):
+@click.option("--valid-from", default=None, help="ISO 8601 date - only facts valid after this date (e.g., 2025-12-01T00:00:00)")
+@click.option("--valid-until", default=None, help="ISO 8601 date - only facts valid before this date (e.g., 2025-12-31T23:59:59)")
+def graph_query_temporal(query, limit, valid_from, valid_until):
     """
     Query how knowledge evolved over time using temporal reasoning.
 
-    Example:
+    Supports temporal filtering to find decisions or facts from specific time windows.
+
+    Examples:
         rag graph query-temporal "How has quantum computing understanding evolved?" --limit 10
+
+        rag graph query-temporal "What decisions did I make?" \\
+          --valid-from "2025-12-01T00:00:00" \\
+          --valid-until "2025-12-31T23:59:59"
     """
     try:
         from graphiti_core import Graphiti
@@ -1640,9 +1648,17 @@ def graph_query_temporal(query, limit):
 
         console.print(f"[bold blue]Searching Knowledge Graph Timeline...[/bold blue]\n")
         console.print(f"Query: {query}\n")
+        if valid_from or valid_until:
+            console.print(f"[cyan]Temporal filters: from={valid_from}, until={valid_until}[/cyan]\n")
 
         # Call business logic layer (same as MCP tool)
-        result = asyncio.run(query_temporal_impl(graph_store, query, num_results=limit))
+        result = asyncio.run(query_temporal_impl(
+            graph_store,
+            query,
+            num_results=limit,
+            valid_from=valid_from,
+            valid_until=valid_until
+        ))
 
         if result["status"] == "unavailable":
             console.print("[yellow]Knowledge Graph is not available. Only RAG search is enabled.[/yellow]")

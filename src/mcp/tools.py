@@ -1157,12 +1157,21 @@ async def query_temporal_impl(
     graph_store,
     query: str,
     num_results: int = 10,
+    valid_from: str = None,
+    valid_until: str = None,
 ) -> Dict[str, Any]:
     """
     Implementation of query_temporal tool.
 
     Queries how knowledge has evolved over time. Shows facts with their
     temporal validity intervals to understand how information changed.
+
+    Args:
+        graph_store: GraphStore instance
+        query: Natural language query about temporal changes
+        num_results: Max results to return
+        valid_from: (OPTIONAL) ISO 8601 date - filter facts valid after this date
+        valid_until: (OPTIONAL) ISO 8601 date - filter facts valid before this date
     """
     try:
         if not graph_store:
@@ -1172,8 +1181,13 @@ async def query_temporal_impl(
                 "timeline": []
             }
 
-        # Search the knowledge graph (Graphiti handles temporal queries automatically)
-        results = await graph_store.search_relationships(query, num_results=num_results)
+        # Search the knowledge graph with optional temporal filters
+        results = await graph_store.search_relationships(
+            query,
+            num_results=num_results,
+            valid_from=valid_from,
+            valid_until=valid_until
+        )
 
         # Handle both old API (object with .edges) and new API (returns list directly)
         if hasattr(results, 'edges'):
@@ -1182,6 +1196,48 @@ async def query_temporal_impl(
             edges = results
         else:
             edges = []
+
+        # Post-process filtering if temporal parameters provided
+        # (handles cases where Graphiti filters didn't work as expected)
+        if valid_from or valid_until:
+            from datetime import datetime
+            filtered_edges = []
+            for i, edge in enumerate(edges):
+                include_edge = True
+
+                # Temporal logic: For a fact to be valid during window [valid_from, valid_until]:
+                # - It must have STARTED on or before valid_from (valid_at <= valid_from)
+                # - It must NOT have EXPIRED before valid_until (invalid_at >= valid_until OR invalid_at is NULL)
+
+                logger.debug(f"EDGE {i}: valid_at={getattr(edge, 'valid_at', None)}, invalid_at={getattr(edge, 'invalid_at', None)}, fact={getattr(edge, 'fact', '')[:50]}...")
+
+                if valid_from:
+                    try:
+                        valid_from_dt = datetime.fromisoformat(valid_from)
+                        # Exclude if fact started AFTER our window begins
+                        if hasattr(edge, 'valid_at') and edge.valid_at:
+                            if edge.valid_at > valid_from_dt:
+                                include_edge = False
+                    except Exception:
+                        pass
+
+                if include_edge and valid_until:
+                    try:
+                        valid_until_dt = datetime.fromisoformat(valid_until)
+                        # Exclude if fact expired BEFORE our window ends
+                        # (only exclude if invalid_at exists AND is before valid_until)
+                        if hasattr(edge, 'invalid_at') and edge.invalid_at:
+                            if edge.invalid_at <= valid_until_dt:
+                                logger.debug(f"FILTER: Excluding edge (expired before window): invalid_at={edge.invalid_at} <= {valid_until_dt}")
+                                include_edge = False
+                    except Exception as e:
+                        logger.warning(f"Temporal filter error on valid_until: {e}")
+
+                if include_edge:
+                    filtered_edges.append(edge)
+
+            edges = filtered_edges[:num_results]
+            logger.debug(f"Post-process temporal filtering: {len(results) if isinstance(results, list) else len(results.edges)} → {len(edges)} edges")
 
         # Convert to timeline format, grouped by temporal validity
         timeline_items = []
