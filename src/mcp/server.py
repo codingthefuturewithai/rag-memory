@@ -1319,7 +1319,7 @@ async def query_temporal(
 
     **What it does:**
     - Tracks how facts changed over time
-    - Shows current vs expired knowledge
+    - Shows current vs superseded knowledge
     - Reveals evolution of your understanding
     - Identifies outdated vs current information
 
@@ -1357,10 +1357,10 @@ async def query_temporal(
                     "fact": str,  # Human-readable description
                     "relationship_type": str,  # Type of relationship
                     "valid_from": str,  # ISO 8601 (when this became true)
-                    "valid_until": str,  # ISO 8601 (when this expired, null if current)
-                    "status": str,  # "current" or "expired"
+                    "valid_until": str,  # ISO 8601 (when this no longer applied, null if current)
+                    "status": str,  # "current" (still valid) or "superseded" (no longer the active version)
                     "created_at": str,  # ISO 8601 (when fact was added to graph)
-                    "expired_at": str  # ISO 8601 (when fact was marked expired)
+                    "expired_at": str  # ISO 8601 (when fact was marked superseded)
                 }
             ]
         }

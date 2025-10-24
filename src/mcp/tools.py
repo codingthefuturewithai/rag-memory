@@ -1252,7 +1252,7 @@ async def query_temporal_impl(
 
                 if hasattr(edge, 'invalid_at') and edge.invalid_at:
                     item["valid_until"] = edge.invalid_at.isoformat()
-                    item["status"] = "expired"
+                    item["status"] = "superseded"
                 else:
                     item["valid_until"] = None
                     item["status"] = "current"
