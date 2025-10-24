@@ -1,0 +1,284 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2025-10-23",
+    "description": "Benchmark test queries for Knowledge Graph relationship search",
+    "collections": [
+      "AI & Machine Learning",
+      "Cloud Computing & DevOps",
+      "Ancient History & Archaeology"
+    ]
+  },
+  "tests": [
+    {
+      "id": 1,
+      "category": "ai_ml_direct",
+      "query": "How does machine learning relate to neural networks?",
+      "expected_min_results": 1,
+      "expected_max_results": 5,
+      "should_contain": ["machine learning", "neural networks"],
+      "description": "Direct relationship from AI/ML content"
+    },
+    {
+      "id": 2,
+      "category": "ai_ml_direct",
+      "query": "What is the relationship between neural networks and deep learning?",
+      "expected_min_results": 1,
+      "expected_max_results": 5,
+      "should_contain": ["neural networks", "deep learning"],
+      "description": "Fundamental relationship in neural network hierarchy"
+    },
+    {
+      "id": 3,
+      "category": "ai_ml_direct",
+      "query": "How do transformers use attention mechanisms?",
+      "expected_min_results": 1,
+      "expected_max_results": 4,
+      "should_contain": ["transformers", "attention"],
+      "description": "Specific architectural relationship"
+    },
+    {
+      "id": 4,
+      "category": "ai_ml_direct",
+      "query": "What connects BERT and transformers?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["BERT", "transformers"],
+      "description": "Model-to-architecture relationship"
+    },
+    {
+      "id": 5,
+      "category": "ai_ml_direct",
+      "query": "How do large language models use embeddings?",
+      "expected_min_results": 1,
+      "expected_max_results": 4,
+      "should_contain": ["language models", "embeddings"],
+      "description": "Technical component relationship"
+    },
+    {
+      "id": 6,
+      "category": "ai_ml_direct",
+      "query": "What is the relationship between fine-tuning and pre-training?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["fine-tuning", "pre-training"],
+      "description": "Training methodology relationship"
+    },
+    {
+      "id": 7,
+      "category": "ai_ml_direct",
+      "query": "How do GPT models relate to large language models?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["GPT", "language models"],
+      "description": "Specific model to category relationship"
+    },
+    {
+      "id": 8,
+      "category": "ai_ml_direct",
+      "query": "What is the connection between backpropagation and gradient descent?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["backpropagation", "gradient"],
+      "description": "Training algorithm relationship"
+    },
+    {
+      "id": 9,
+      "category": "ai_ml_direct",
+      "query": "How do artificial intelligence and machine learning relate?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["artificial intelligence", "machine learning"],
+      "description": "Hierarchical relationship in AI field"
+    },
+    {
+      "id": 10,
+      "category": "ai_ml_direct",
+      "query": "What is the relationship between convolutional neural networks and image processing?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["convolutional", "image"],
+      "description": "Application-specific neural network"
+    },
+    {
+      "id": 11,
+      "category": "cloud_devops_direct",
+      "query": "How does Kubernetes relate to containers?",
+      "expected_min_results": 1,
+      "expected_max_results": 5,
+      "should_contain": ["Kubernetes", "containers"],
+      "description": "Orchestration-to-container relationship"
+    },
+    {
+      "id": 12,
+      "category": "cloud_devops_direct",
+      "query": "What is the connection between DevOps and continuous integration?",
+      "expected_min_results": 1,
+      "expected_max_results": 4,
+      "should_contain": ["DevOps", "continuous integration"],
+      "description": "Practice-to-principle relationship"
+    },
+    {
+      "id": 13,
+      "category": "cloud_devops_direct",
+      "query": "How do Docker containers relate to Docker images?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["Docker", "image"],
+      "description": "Container technology relationship"
+    },
+    {
+      "id": 14,
+      "category": "cloud_devops_direct",
+      "query": "What is the relationship between AWS and cloud computing?",
+      "expected_min_results": 1,
+      "expected_max_results": 4,
+      "should_contain": ["AWS", "cloud"],
+      "description": "Provider-to-service category"
+    },
+    {
+      "id": 15,
+      "category": "cloud_devops_direct",
+      "query": "How does infrastructure as code relate to DevOps?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["infrastructure", "DevOps"],
+      "description": "Practice relationship"
+    },
+    {
+      "id": 16,
+      "category": "cloud_devops_direct",
+      "query": "What connects microservices and Kubernetes?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["microservices", "Kubernetes"],
+      "description": "Architecture-and-tool relationship"
+    },
+    {
+      "id": 17,
+      "category": "cloud_devops_direct",
+      "query": "How does continuous deployment relate to continuous integration?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["deployment", "integration"],
+      "description": "Related automation practices"
+    },
+    {
+      "id": 18,
+      "category": "cloud_devops_direct",
+      "query": "What is the relationship between Google Cloud and cloud providers?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["Google", "cloud"],
+      "description": "Provider-category relationship"
+    },
+    {
+      "id": 19,
+      "category": "cloud_devops_direct",
+      "query": "How does monitoring relate to observability?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["monitoring", "observability"],
+      "description": "Related operational concepts"
+    },
+    {
+      "id": 20,
+      "category": "history_direct",
+      "query": "How do ancient Egypt and ancient Greece relate?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["Egypt", "Greece"],
+      "description": "Two major ancient civilizations"
+    },
+    {
+      "id": 21,
+      "category": "history_direct",
+      "query": "What is the relationship between the Roman Empire and Roman Republic?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["Roman Empire", "Roman Republic"],
+      "description": "Political evolution relationship"
+    },
+    {
+      "id": 22,
+      "category": "history_direct",
+      "query": "How does archaeology relate to historical research?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["archaeology", "history"],
+      "description": "Discipline relationship"
+    },
+    {
+      "id": 23,
+      "category": "history_direct",
+      "query": "What connects the Silk Road and trade?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["Silk Road", "trade"],
+      "description": "Trade route and commerce"
+    },
+    {
+      "id": 24,
+      "category": "history_direct",
+      "query": "How do pyramids relate to ancient Egypt?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["pyramids", "Egypt"],
+      "description": "Monument-to-civilization"
+    },
+    {
+      "id": 25,
+      "category": "history_direct",
+      "query": "What is the connection between Mesopotamia and cuneiform writing?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["Mesopotamia", "cuneiform"],
+      "description": "Civilization-to-technology"
+    },
+    {
+      "id": 26,
+      "category": "history_direct",
+      "query": "How do fortifications relate to ancient warfare?",
+      "expected_min_results": 1,
+      "expected_max_results": 3,
+      "should_contain": ["fortifications", "warfare"],
+      "description": "Defense technology relationship"
+    },
+    {
+      "id": 27,
+      "category": "cross_domain_negative",
+      "query": "How do medieval castles relate to Kubernetes orchestration?",
+      "expected_min_results": 0,
+      "expected_max_results": 0,
+      "should_contain": [],
+      "description": "Intentional mismatch: history and DevOps should not match"
+    },
+    {
+      "id": 28,
+      "category": "cross_domain_negative",
+      "query": "What is the connection between ancient Greece philosophers and neural network training?",
+      "expected_min_results": 0,
+      "expected_max_results": 0,
+      "should_contain": [],
+      "description": "Intentional mismatch: history and ML should not match"
+    },
+    {
+      "id": 29,
+      "category": "cross_domain_negative",
+      "query": "How do Egyptian mummies relate to cloud computing infrastructure?",
+      "expected_min_results": 0,
+      "expected_max_results": 0,
+      "should_contain": [],
+      "description": "Intentional mismatch: history and cloud should not match"
+    },
+    {
+      "id": 30,
+      "category": "cross_domain_negative",
+      "query": "What connects pyramid construction to DevOps practices?",
+      "expected_min_results": 0,
+      "expected_max_results": 0,
+      "should_contain": [],
+      "description": "Intentional mismatch: history and DevOps should not match"
+    }
+  ]
+}

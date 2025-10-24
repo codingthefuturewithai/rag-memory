@@ -352,21 +352,36 @@ class GraphStore:
     async def search_relationships(
         self,
         query: str,
-        num_results: int = 5
+        num_results: int = 5,
+        reranker_min_score: float = 0.35
     ) -> list[Any]:
         """
         Search for relationships in the knowledge graph.
 
+        Uses cross-encoder reranking for relevance filtering.
+
         Args:
             query: Natural language query (e.g., "How does my YouTube channel relate to my business?")
             num_results: Number of results to return
+            reranker_min_score: Cross-encoder confidence threshold (0.0-1.0, default 0.35).
+                               Higher values filter more strictly (fewer, more accurate results).
+                               Lower values are more permissive (more results, including potentially less relevant ones).
 
         Returns:
-            List of search results (structure depends on Graphiti version)
-            Note: API changed - now returns list directly instead of object with .edges
+            List of search results (edges) with cross-encoder scores >= reranker_min_score
         """
-        results = await self.graphiti.search(query, num_results=num_results)
-        return results
+        from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_CROSS_ENCODER
+
+        # Use search_() (with underscore) for advanced search with custom config
+        # search_() supports the config parameter, search() does not
+        config = COMBINED_HYBRID_SEARCH_CROSS_ENCODER.model_copy(deep=True)
+        config.reranker_min_score = reranker_min_score
+
+        results = await self.graphiti.search_(query, config=config)
+
+        # search_() returns SearchResults object with .edges, .nodes, .episodes, .communities
+        # Graphiti internally filters by reranker_min_score, so we just return edges
+        return results.edges if hasattr(results, 'edges') else []
 
     async def close(self):
         """Close the Graphiti connection."""

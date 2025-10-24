@@ -1075,12 +1075,19 @@ async def query_relationships_impl(
     graph_store,
     query: str,
     num_results: int = 5,
+    threshold: float = 0.35,
 ) -> Dict[str, Any]:
     """
     Implementation of query_relationships tool.
 
     Searches the knowledge graph for entity relationships using natural language.
     Returns relationships (edges) between entities that match the query.
+
+    Args:
+        graph_store: GraphStore instance
+        query: Natural language query
+        num_results: Maximum number of results to return
+        threshold: Relationship confidence threshold (0.0-1.0, default 0.35)
     """
     try:
         if not graph_store:
@@ -1090,8 +1097,12 @@ async def query_relationships_impl(
                 "relationships": []
             }
 
-        # Search the knowledge graph
-        results = await graph_store.search_relationships(query, num_results=num_results)
+        # Search the knowledge graph with specified threshold
+        results = await graph_store.search_relationships(
+            query,
+            num_results=num_results,
+            reranker_min_score=threshold
+        )
 
         # Handle both old API (object with .edges) and new API (returns list directly)
         if hasattr(results, 'edges'):

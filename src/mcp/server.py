@@ -1228,6 +1228,7 @@ def list_documents(
 async def query_relationships(
     query: str,
     num_results: int = 5,
+    threshold: float = 0.35,
 ) -> dict:
     """
     Search the knowledge graph for entity relationships using natural language.
@@ -1249,10 +1250,19 @@ async def query_relationships(
     **Note:** Knowledge Graph must be enabled and available. If unavailable,
     returns status="unavailable" with an empty relationships list.
 
+    **About the threshold parameter:**
+    The threshold controls result relevance filtering (0.0 = permissive, 1.0 = strict):
+    - **Lower values (0.0-0.3):** More results, including less certain matches
+    - **Default (0.35):** Balanced - filters obvious mismatches while keeping good results
+    - **Higher values (0.5-0.7):** Fewer results, only high-confidence matches
+    Useful for tuning result quality vs quantity when defaults don't fit your needs.
+
     Args:
         query: (REQUIRED) Natural language query about relationships
                (e.g., "How does my content strategy support my business?")
         num_results: Maximum number of relationships to return (default: 5, max: 20)
+        threshold: Relationship confidence threshold (default: 0.35, range: 0.0-1.0)
+                  Controls relevance filtering - higher values = stricter filtering
 
     Returns:
         {
@@ -1276,7 +1286,8 @@ async def query_relationships(
         # Discover business relationships
         result = query_relationships(
             query="How does my YouTube channel relate to my product strategy?",
-            num_results=5
+            num_results=5,
+            threshold=0.35
         )
 
         for rel in result['relationships']:
@@ -1288,6 +1299,7 @@ async def query_relationships(
         graph_store,
         query,
         num_results,
+        threshold=threshold,
     )
 
 
