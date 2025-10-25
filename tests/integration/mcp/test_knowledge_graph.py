@@ -51,6 +51,31 @@ class TestQueryRelationships:
         # Should have status field
         assert "status" in data, "Should indicate graph status"
 
+    async def test_query_relationships_with_collection_filter(self, mcp_session, setup_test_collection):
+        """Test querying relationships with collection_name filter."""
+        session, transport = mcp_session
+        collection = setup_test_collection
+
+        # Ingest content with entities
+        await session.call_tool("ingest_text", {
+            "content": "Python and Java are programming languages used in software development.",
+            "collection_name": collection,
+            "document_title": "Languages"
+        })
+
+        # Query with collection filter (should only search this collection)
+        result = await session.call_tool("query_relationships", {
+            "query": "What programming languages are mentioned?",
+            "collection_name": collection
+        })
+
+        assert result is not None
+        text = extract_text_content(result)
+        data = json.loads(text) if text else {}
+
+        # Should have status field
+        assert "status" in data, "Should indicate graph status"
+
 
 class TestQueryTemporal:
     """Test query_temporal tool."""
@@ -84,6 +109,31 @@ class TestQueryTemporal:
         # Query temporal (may or may not work depending on graph)
         result = await session.call_tool("query_temporal", {
             "query": "How did the project evolve over time?"
+        })
+
+        assert result is not None
+        text = extract_text_content(result)
+        data = json.loads(text) if text else {}
+
+        # Should have status field
+        assert "status" in data, "Should indicate graph status"
+
+    async def test_query_temporal_with_collection_filter(self, mcp_session, setup_test_collection):
+        """Test temporal queries with collection_name filter."""
+        session, transport = mcp_session
+        collection = setup_test_collection
+
+        # Ingest content
+        await session.call_tool("ingest_text", {
+            "content": "The system was designed in Q1 2024 and implemented in Q2 2024.",
+            "collection_name": collection,
+            "document_title": "Timeline"
+        })
+
+        # Query with collection filter
+        result = await session.call_tool("query_temporal", {
+            "query": "When was the system designed and implemented?",
+            "collection_name": collection
         })
 
         assert result is not None

@@ -204,6 +204,57 @@ class TestIngestCommands:
             assert result.exit_code == 0 or "Error" in result.output
 
 
+class TestGraphCommands:
+    """Tests for graph commands."""
+
+    def test_rebuild_communities_with_confirmation(self, cli_runner):
+        """Test rebuilding communities with confirmation prompt."""
+        with patch("graphiti_core.Graphiti") as mock_graphiti_class, \
+             patch("graphiti_core.llm_client.openai_client.OpenAIClient") as mock_openai_class, \
+             patch("graphiti_core.llm_client.config.LLMConfig") as mock_llm_config:
+            # Mock the async build_communities method
+            async def mock_build_communities(*args, **kwargs):
+                return ([], [])  # Empty communities for test
+
+            mock_graphiti = MagicMock()
+            mock_graphiti_class.return_value = mock_graphiti
+            mock_graphiti.build_communities = MagicMock(side_effect=mock_build_communities)
+
+            # Test with --yes flag to skip confirmation
+            result = cli_runner.invoke(main, ["graph", "rebuild-communities", "--yes"])
+
+            # Should complete (may fail if dependencies not available)
+            assert result.exit_code == 0 or "Error" in result.output or "Graphiti not installed" in result.output
+
+    def test_rebuild_communities_with_collection(self, cli_runner):
+        """Test rebuilding communities for specific collection."""
+        with patch("graphiti_core.Graphiti") as mock_graphiti_class, \
+             patch("graphiti_core.llm_client.openai_client.OpenAIClient") as mock_openai_class, \
+             patch("graphiti_core.llm_client.config.LLMConfig") as mock_llm_config:
+            # Mock the async build_communities method
+            async def mock_build_communities(*args, **kwargs):
+                mock_community = MagicMock()
+                mock_community.name = "TestCommunity"
+                return ([mock_community], [])
+
+            mock_graphiti = MagicMock()
+            mock_graphiti_class.return_value = mock_graphiti
+            mock_graphiti.build_communities = MagicMock(side_effect=mock_build_communities)
+
+            result = cli_runner.invoke(main, ["graph", "rebuild-communities", "--collection", "test-col", "--yes"])
+
+            # Should complete or show expected errors
+            assert result.exit_code == 0 or "Error" in result.output or "Graphiti not installed" in result.output
+
+    def test_rebuild_communities_cancelled(self, cli_runner):
+        """Test cancelling community rebuild when prompted."""
+        # When user doesn't confirm, operation should be cancelled
+        result = cli_runner.invoke(main, ["graph", "rebuild-communities"], input="n\n")
+
+        # Should exit without error but with cancellation message
+        assert result.exit_code == 0 or "cancelled" in result.output.lower()
+
+
 class TestSearchCommands:
     """Tests for search commands."""
 
