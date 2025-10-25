@@ -25,8 +25,8 @@ class TestAnalyzeWebsite:
 
         # Analyze a real website known to have sitemap
         result = await session.call_tool("analyze_website", {
-            "base_url": "https://example.com",
-            "timeout": 10,
+            "base_url": "https://codingthefuture.ai",
+            "timeout": 15,
             "include_url_lists": False,
             "max_urls_per_pattern": 10
         })
@@ -43,7 +43,7 @@ class TestAnalyzeWebsite:
         # Verify core response structure (always present)
         assert isinstance(response, dict), "Response should be a dict"
         assert "base_url" in response, "Response should echo base_url"
-        assert response["base_url"] == "https://example.com", "Should match input URL"
+        assert response["base_url"] == "https://codingthefuture.ai", "Should match input URL"
         assert "analysis_method" in response, "Should include analysis_method"
         assert response["analysis_method"] in ("sitemap", "not_found", "error"), \
             "analysis_method should be sitemap/not_found/error"
@@ -61,8 +61,8 @@ class TestAnalyzeWebsite:
         session, transport = mcp_session
 
         result = await session.call_tool("analyze_website", {
-            "base_url": "https://example.com",
-            "timeout": 10,
+            "base_url": "https://codingthefuture.ai",
+            "timeout": 15,
             "include_url_lists": False,
             "max_urls_per_pattern": 5
         })
@@ -100,8 +100,8 @@ class TestAnalyzeWebsite:
         session, transport = mcp_session
 
         result = await session.call_tool("analyze_website", {
-            "base_url": "https://example.com",
-            "timeout": 10,
+            "base_url": "https://codingthefuture.ai",
+            "timeout": 15,
             "include_url_lists": True,
             "max_urls_per_pattern": 5
         })
@@ -135,8 +135,8 @@ class TestAnalyzeWebsite:
         session, transport = mcp_session
 
         result = await session.call_tool("analyze_website", {
-            "base_url": "https://example.com",
-            "timeout": 10,
+            "base_url": "https://codingthefuture.ai",
+            "timeout": 15,
             "include_url_lists": False,
             "max_urls_per_pattern": 5
         })
