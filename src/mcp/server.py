@@ -329,6 +329,18 @@ def create_collection(
     Collections are required before ingesting documents. Each collection must
     have a meaningful description to help users understand its purpose.
 
+    **BEST PRACTICE - Domain-Specific Collections:**
+    Create separate collections for different domains or document types rather than
+    mixing unrelated content. This ensures:
+    - Better search relevance (domain-specific context)
+    - Appropriate metadata schemas per domain
+    - Cleaner organization of knowledge
+
+    Examples:
+    - "api-docs" for API documentation
+    - "meeting-notes" for meeting transcripts
+    - "research-papers" for academic papers
+
     Once created, collections are immutable - you cannot change the description or schema.
     If you need to change it, delete the collection and create a new one.
 
@@ -336,7 +348,7 @@ def create_collection(
         name: (REQUIRED) Collection identifier (unique, lowercase recommended)
         description: (REQUIRED) Human-readable description of the collection's purpose.
                     Collections without descriptions are not allowed.
-        metadata_schema: (OPTIONAL) Fixed metadata schema declaration.
+        metadata_schema: (OPTIONAL) Schema for custom metadata fields.
                         Format: {
                             "custom": {
                                 "field_name": {
@@ -344,9 +356,10 @@ def create_collection(
                                     "required": false,
                                     "enum": ["value1", "value2"]
                                 }
-                            },
-                            "system": ["field1", "field2"]
+                            }
                         }
+                        Note: System automatically adds metadata (domain, crawl_depth, etc.)
+                        when ingesting from URLs/files. All metadata is searchable.
                         Defaults to empty schema if not provided.
 
     Returns:
@@ -369,8 +382,7 @@ def create_collection(
                 "custom": {
                     "version": {"type": "string"},
                     "status": {"type": "string", "enum": ["draft", "published"]}
-                },
-                "system": ["file_type", "ingested_at"]
+                }
             }
         )
     """
@@ -735,10 +747,17 @@ async def ingest_url(
     mode: str = "crawl",
     follow_links: bool = False,
     max_depth: int = 1,
+    metadata: dict | None = None,
     include_document_ids: bool = False,
 ) -> dict:
     """
     Crawl and ingest content from a web URL with duplicate prevention.
+
+    **DOMAIN GUIDANCE:**
+    Websites often contain diverse content types. Consider creating separate collections for:
+    - Different documentation sections (API docs vs tutorials vs guides)
+    - Different content purposes (blog posts vs product pages vs support articles)
+    Use analyze_website() first to understand the site structure and plan your strategy.
 
     Scrapes web pages, processes the content, and ingests into both vector store
     and knowledge graph. Supports single-page or multi-page crawling with link following.
@@ -778,6 +797,8 @@ async def ingest_url(
               - "recrawl": Update existing. Deletes old pages from this URL and re-ingests fresh content.
         follow_links: If True, follows internal links for multi-page crawl (default: False)
         max_depth: Maximum crawl depth when following links (default: 1, max: 3)
+        metadata: Custom metadata to apply to ALL crawled pages (merged with page metadata).
+                  Must match collection's metadata_schema if defined.
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
@@ -813,23 +834,26 @@ async def ingest_url(
                    mode="recrawl" to update.
 
     Example:
-        # First, create collection
-        create_collection("example-docs", "Example.com documentation")
+        # First, create collection with metadata schema
+        create_collection("example-docs", "Example.com documentation",
+                         metadata_schema={"source": "str", "doc_type": "str"})
 
-        # New crawl (will error if URL already crawled)
+        # New crawl with metadata (will error if URL already crawled)
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
-            mode="crawl"
+            mode="crawl",
+            metadata={"source": "official", "doc_type": "api"}
         )
 
-        # Update existing crawl
+        # Update existing crawl with metadata
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
             mode="recrawl",
             follow_links=True,
-            max_depth=2
+            max_depth=2,
+            metadata={"source": "official", "doc_type": "api"}
         )
 
         # Check collection info to see if URL already crawled
@@ -841,7 +865,7 @@ async def ingest_url(
     your crawling strategy (single large crawl vs multiple smaller crawls).
     """
     return await ingest_url_impl(
-        db, doc_store, unified_mediator, graph_store, url, collection_name, follow_links, max_depth, mode, include_document_ids
+        db, doc_store, unified_mediator, graph_store, url, collection_name, follow_links, max_depth, mode, metadata, include_document_ids
     )
 
 
@@ -941,10 +965,18 @@ async def ingest_directory(
     collection_name: str,
     file_extensions: list | None = None,
     recursive: bool = False,
+    metadata: dict | None = None,
     include_document_ids: bool = False,
 ) -> dict:
     """
     Ingest multiple text-based files from a directory.
+
+    **DOMAIN GUIDANCE:**
+    Before ingesting a directory, assess whether all files share the same domain/purpose.
+    If the directory contains mixed content (e.g., code + docs + configs), consider:
+    1. Creating separate collections for each domain
+    2. Using file_extensions to filter specific types per collection
+    3. Applying appropriate metadata schemas per domain
 
     **FILE SYSTEM ACCESS REQUIREMENT:**
     This tool requires the MCP server to have access to the directory path you provide.
@@ -986,6 +1018,8 @@ async def ingest_directory(
         file_extensions: List of extensions to process (e.g., [".txt", ".md"]).
                         If None, defaults to [".txt", ".md"]
         recursive: If True, searches subdirectories (default: False)
+        metadata: Custom metadata to apply to ALL files in directory (merged with file metadata).
+                  Must match collection's metadata_schema if defined.
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
@@ -1015,15 +1049,17 @@ async def ingest_directory(
         ValueError: If collection doesn't exist - "Collection '{collection_name}' does not exist. Create it first using create_collection('{collection_name}', 'description')."
 
     Example:
-        # First, create collection
-        create_collection("kb", "Knowledge base articles and documentation")
+        # First, create collection with metadata schema
+        create_collection("kb", "Knowledge base articles and documentation",
+                         metadata_schema={"category": "str", "version": "str"})
 
-        # Ingest all markdown files in directory
+        # Ingest all markdown files in directory with shared metadata
         result = ingest_directory(
             directory_path="/Users/agent/knowledge-base",
             collection_name="kb",
             file_extensions=[".md", ".txt"],
-            recursive=True
+            recursive=True,
+            metadata={"category": "documentation", "version": "v2.0"}
         )
 
         print(f"Ingested {result['files_ingested']} files with {result['total_chunks']} chunks")
@@ -1037,6 +1073,7 @@ async def ingest_directory(
         collection_name,
         file_extensions,
         recursive,
+        metadata,
         include_document_ids,
     )
 

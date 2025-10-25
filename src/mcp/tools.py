@@ -617,6 +617,7 @@ async def ingest_url_impl(
     follow_links: bool = False,
     max_depth: int = 1,
     mode: str = "crawl",
+    metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -719,12 +720,16 @@ async def ingest_url_impl(
             try:
                 page_title = result.metadata.get("title", result.url)
 
+                # Merge user metadata with page metadata
+                page_metadata = metadata.copy() if metadata else {}
+                page_metadata.update(result.metadata)
+
                 logger.info(f"Ingesting page through unified mediator: {page_title}")
                 ingest_result = await unified_mediator.ingest_text(
                     content=result.content,
                     collection_name=collection_name,
                     document_title=page_title,
-                    metadata=result.metadata
+                    metadata=page_metadata
                 )
                 document_ids.append(ingest_result["source_document_id"])
                 total_chunks += ingest_result["num_chunks"]
@@ -855,6 +860,7 @@ async def ingest_directory_impl(
     collection_name: str,
     file_extensions: Optional[List[str]] = None,
     recursive: bool = False,
+    metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
 ) -> Dict[str, Any]:
     """
@@ -920,11 +926,12 @@ async def ingest_directory_impl(
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                     content = f.read()
 
-                # Build metadata
-                file_metadata = {
+                # Build metadata: merge user metadata with file metadata
+                file_metadata = metadata.copy() if metadata else {}
+                file_metadata.update({
                     "file_type": file_type,
                     "file_size": file_size,
-                }
+                })
 
                 ingest_result = await unified_mediator.ingest_text(
                     content=content,
