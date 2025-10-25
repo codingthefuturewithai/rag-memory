@@ -383,6 +383,55 @@ def collection_create(name, description):
         sys.exit(1)
 
 
+@collection.command("update-metadata")
+@click.argument("name")
+@click.option("--add-fields", required=True, help="JSON dict of new fields to add")
+def collection_update_metadata(name, add_fields):
+    """Update collection metadata schema (additive only).
+
+    Add new optional metadata fields to an existing collection.
+    Cannot remove existing fields or change their types.
+
+    Examples:
+        # Add simple fields
+        uv run rag collection update-metadata my-docs \\
+            --add-fields '{"priority": "string", "reviewed": "boolean"}'
+
+        # Add fields with enums
+        uv run rag collection update-metadata my-docs \\
+            --add-fields '{"status": {"type": "string", "enum": ["draft", "published"]}}'
+    """
+    try:
+        db = get_database()
+        mgr = get_collection_manager(db)
+
+        # Parse JSON fields
+        import json
+        try:
+            new_fields = json.loads(add_fields)
+        except json.JSONDecodeError as e:
+            console.print(f"[bold red]Invalid JSON: {e}[/bold red]")
+            sys.exit(1)
+
+        # Update the collection
+        result = mgr.update_collection_metadata_schema(name, new_fields)
+
+        console.print(f"[bold green]✓ Updated collection '{name}' metadata schema[/bold green]")
+        console.print(f"  Fields added: {len(new_fields) if isinstance(new_fields, dict) else 0}")
+        console.print(f"  Total custom fields: {len(result['metadata_schema'].get('custom', {}))}")
+
+        # Show the updated schema
+        console.print("\n[bold]Updated schema:[/bold]")
+        console.print_json(data=result['metadata_schema'])
+
+    except ValueError as e:
+        console.print(f"[bold red]Validation error: {e}[/bold red]")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error: {e}[/bold red]")
+        sys.exit(1)
+
+
 @collection.command("list")
 def collection_list():
     """List all collections."""

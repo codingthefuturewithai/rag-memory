@@ -165,6 +165,48 @@ def list_collections_impl(coll_mgr: CollectionManager) -> List[Dict[str, Any]]:
         raise
 
 
+def update_collection_metadata_impl(
+    coll_mgr: CollectionManager,
+    collection_name: str,
+    new_fields: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Implementation of update_collection_metadata tool.
+
+    Updates a collection's metadata schema (additive only).
+    """
+    try:
+        # Wrap new_fields in custom if not already
+        if "custom" not in new_fields:
+            new_fields = {"custom": new_fields}
+
+        # Get current schema for comparison
+        current = coll_mgr.get_collection(collection_name)
+        if not current:
+            raise ValueError(f"Collection '{collection_name}' not found")
+
+        current_field_count = len(current["metadata_schema"].get("custom", {}))
+
+        # Update the schema
+        updated = coll_mgr.update_collection_metadata_schema(collection_name, new_fields)
+
+        new_field_count = len(updated["metadata_schema"].get("custom", {}))
+
+        return {
+            "name": updated["name"],
+            "description": updated["description"],
+            "metadata_schema": updated["metadata_schema"],
+            "fields_added": new_field_count - current_field_count,
+            "total_fields": new_field_count
+        }
+    except ValueError as e:
+        logger.warning(f"update_collection_metadata failed: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"update_collection_metadata error: {e}")
+        raise
+
+
 def create_collection_impl(
     coll_mgr: CollectionManager,
     name: str,

@@ -236,6 +236,120 @@ class CollectionManager:
 
         return schema
 
+    def update_collection_metadata_schema(
+        self, name: str, new_fields: dict
+    ) -> dict:
+        """
+        Update a collection's metadata schema (additive only).
+
+        Allows adding new optional fields to an existing collection's metadata schema.
+        Cannot remove existing fields or change their types to maintain data integrity.
+
+        Args:
+            name: Collection name to update.
+            new_fields: New schema fields to add/update. Format:
+                {
+                    "custom": {
+                        "new_field": {
+                            "type": "string",
+                            "description": "optional",
+                            "enum": ["value1", "value2"]
+                        }
+                    }
+                }
+
+        Returns:
+            Updated collection info with new schema.
+
+        Raises:
+            ValueError: If collection not found, trying to remove fields,
+                       or changing field types.
+
+        Example:
+            # Add new optional field to existing collection
+            result = update_collection_metadata_schema(
+                "my-docs",
+                {
+                    "custom": {
+                        "priority": {"type": "string", "enum": ["high", "medium", "low"]}
+                    }
+                }
+            )
+        """
+        # Get existing collection
+        collection = self.get_collection(name)
+        if not collection:
+            raise ValueError(f"Collection '{name}' not found")
+
+        current_schema = collection["metadata_schema"]
+
+        # Ensure new_fields has proper structure
+        if "custom" not in new_fields:
+            new_fields = {"custom": new_fields}
+
+        # Validate no field removals
+        for field in current_schema.get("custom", {}):
+            if field not in new_fields.get("custom", {}):
+                raise ValueError(
+                    f"Cannot remove existing field '{field}'. "
+                    f"Schema updates are additive-only to preserve data integrity."
+                )
+
+        # Validate no type changes
+        for field, spec in current_schema.get("custom", {}).items():
+            if field in new_fields.get("custom", {}):
+                new_spec = new_fields["custom"][field]
+                if not isinstance(new_spec, dict):
+                    new_spec = {"type": str(new_spec)}
+
+                if spec.get("type") != new_spec.get("type"):
+                    raise ValueError(
+                        f"Cannot change type of field '{field}' from "
+                        f"'{spec.get('type')}' to '{new_spec.get('type')}'. "
+                        f"Type changes would break existing documents."
+                    )
+
+        # Force all new fields to be optional
+        for field, spec in new_fields.get("custom", {}).items():
+            if field not in current_schema.get("custom", {}):
+                if not isinstance(spec, dict):
+                    spec = {"type": str(spec)}
+                spec["required"] = False
+                new_fields["custom"][field] = spec
+
+        # Merge schemas
+        updated_schema = current_schema.copy()
+        updated_schema["custom"].update(new_fields.get("custom", {}))
+
+        # Validate the merged schema
+        validated_schema = self._validate_metadata_schema(updated_schema)
+
+        # Update in database
+        conn = self.db.connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE collections
+                SET metadata_schema = %s
+                WHERE name = %s
+                RETURNING id
+                """,
+                (Jsonb(validated_schema), name)
+            )
+
+            if cur.rowcount == 0:
+                raise ValueError(f"Failed to update collection '{name}'")
+
+            collection_id = cur.fetchone()[0]
+
+        logger.info(
+            f"Updated metadata schema for collection '{name}' (ID: {collection_id}). "
+            f"Added {len(new_fields.get('custom', {})) - len(current_schema.get('custom', {}))} new fields."
+        )
+
+        # Return updated collection info
+        return self.get_collection(name)
+
     def delete_collection(self, name: str) -> bool:
         """
         Delete a collection by name and clean up orphaned documents.

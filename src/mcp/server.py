@@ -364,8 +364,24 @@ def create_collection(
         description: (REQUIRED) Human-readable description of the collection's purpose.
                     Collections without descriptions are not allowed.
         metadata_schema: (OPTIONAL) Schema for custom metadata fields.
+
+                        **RECOMMENDED FIELDS** for better domain organization:
+                        - domain: High-level category (e.g., "ai_engineering", "finance")
+                        - context_type: Type of content ("development", "planning", "research", "conversation")
+                        - preferred_chunk_size: Domain-optimized chunk size (default: 1000)
+
                         Format: {
                             "custom": {
+                                "domain": {
+                                    "type": "string",
+                                    "required": false,
+                                    "description": "Knowledge domain category"
+                                },
+                                "context_type": {
+                                    "type": "string",
+                                    "required": false,
+                                    "enum": ["development", "planning", "research", "conversation", "documentation"]
+                                },
                                 "field_name": {
                                     "type": "string|number|boolean|array|object",
                                     "required": false,
@@ -493,6 +509,69 @@ async def delete_collection(name: str, confirm: bool = False) -> dict:
         print(result["message"])  # Confirmation with details
     """
     return await delete_collection_impl(coll_mgr, name, confirm, graph_store, db)
+
+
+@mcp.tool()
+def update_collection_metadata(
+    collection_name: str,
+    new_fields: dict
+) -> dict:
+    """
+    Update a collection's metadata schema (additive only).
+
+    Allows adding new optional metadata fields to an existing collection.
+    Existing fields cannot be removed or have their types changed to maintain
+    data integrity for documents already in the collection.
+
+    **IMPORTANT - Additive Only:**
+    - Can ADD new optional fields
+    - Cannot REMOVE existing fields
+    - Cannot CHANGE field types
+    - All new fields automatically become optional
+
+    This ensures existing documents remain valid while allowing schema evolution.
+
+    Args:
+        collection_name: (REQUIRED) Name of collection to update
+        new_fields: (REQUIRED) New metadata fields to add. Format:
+                   {
+                       "field_name": {
+                           "type": "string|number|boolean|array|object",
+                           "description": "optional field description",
+                           "enum": ["value1", "value2"]  # optional for strings
+                       }
+                   }
+                   Or shorthand: {"field_name": "type"}
+
+    Returns:
+        {
+            "name": str,
+            "description": str,
+            "metadata_schema": dict,  # Updated schema
+            "fields_added": int,       # Number of new fields
+            "total_fields": int        # Total custom fields after update
+        }
+
+    Raises:
+        ValueError: If collection not found, removing fields, or changing types
+
+    Example:
+        # Add new optional fields to existing collection
+        result = update_collection_metadata(
+            collection_name="project-docs",
+            new_fields={
+                "priority": {
+                    "type": "string",
+                    "enum": ["high", "medium", "low"]
+                },
+                "reviewed": {"type": "boolean"}
+            }
+        )
+
+    Note: Existing documents will not have the new fields. Only documents
+          ingested after this update will be able to use the new metadata fields.
+    """
+    return update_collection_metadata_impl(coll_mgr, collection_name, new_fields)
 
 
 @mcp.tool()
