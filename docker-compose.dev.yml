@@ -30,7 +30,7 @@ services:
       # Enable persistent mode for development
       POSTGRES_INITDB_ARGS: "-c shared_buffers=256MB -c work_mem=16MB"
     ports:
-      - "${DEV_POSTGRES_PORT:-54320}:5432"
+      - "${DEV_POSTGRES_PORT:-54325}:5432"
     volumes:
       - pgvector_data_dev:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -53,8 +53,8 @@ services:
     image: neo4j:5.26-community
     container_name: rag-memory-neo4j-dev
     ports:
-      - "${DEV_NEO4J_HTTP_PORT:-7474}:7474"  # HTTP - Neo4j Browser UI
-      - "${DEV_NEO4J_BOLT_PORT:-7687}:7687"  # Bolt - Database protocol
+      - "${DEV_NEO4J_HTTP_PORT:-7477}:7474"  # HTTP - Neo4j Browser UI
+      - "${DEV_NEO4J_BOLT_PORT:-7690}:7687"  # Bolt - Database protocol
     environment:
       # Authentication
       NEO4J_AUTH: neo4j/dev-password
