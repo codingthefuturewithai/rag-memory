@@ -756,7 +756,8 @@ def ingest_file_cmd(path, collection, metadata):
     "--extensions", default=".txt,.md", help="Comma-separated file extensions"
 )
 @click.option("--recursive", is_flag=True, help="Search subdirectories")
-def ingest_directory(path, collection, extensions, recursive):
+@click.option("--metadata", help="Additional metadata as JSON string to apply to all files")
+def ingest_directory(path, collection, extensions, recursive, metadata):
     """Ingest all files from a directory with automatic chunking.
 
     Routes through unified mediator to update both RAG store and Knowledge Graph.
@@ -764,12 +765,17 @@ def ingest_directory(path, collection, extensions, recursive):
     """
     async def run_ingest():
         try:
+            # Parse metadata if provided
+            metadata_dict = json.loads(metadata) if metadata else None
+
             ext_list = [ext.strip() for ext in extensions.split(",")]
             path_obj = Path(path)
 
             console.print(
                 f"[bold blue]Ingesting files from: {path} (extensions: {ext_list})[/bold blue]"
             )
+            if metadata_dict:
+                console.print(f"[dim]Applying metadata: {metadata}[/dim]")
 
             # Find all matching files
             files = []
@@ -798,11 +804,12 @@ def ingest_directory(path, collection, extensions, recursive):
                         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                             file_content = f.read()
 
-                        # Build file metadata
-                        file_metadata = {
+                        # Build file metadata: merge user metadata with file metadata
+                        file_metadata = metadata_dict.copy() if metadata_dict else {}
+                        file_metadata.update({
                             "file_type": file_path.suffix.lstrip(".").lower() or "text",
                             "file_size": file_path.stat().st_size,
-                        }
+                        })
 
                         result = await local_unified_mediator.ingest_text(
                             content=file_content,
@@ -853,7 +860,8 @@ def ingest_directory(path, collection, extensions, recursive):
 @click.option("--chunk-overlap", type=int, default=300, help="Chunk overlap (default: 300)")
 @click.option("--follow-links", is_flag=True, help="Follow internal links (multi-page crawl)")
 @click.option("--max-depth", type=int, default=1, help="Maximum crawl depth when following links (default: 1)")
-def ingest_url(url, collection, mode, headless, verbose, chunk_size, chunk_overlap, follow_links, max_depth):
+@click.option("--metadata", help="Additional metadata as JSON string to apply to all pages")
+def ingest_url(url, collection, mode, headless, verbose, chunk_size, chunk_overlap, follow_links, max_depth, metadata):
     """Crawl and ingest a web page with automatic chunking.
 
     Routes through unified mediator to update both RAG store and Knowledge Graph.
@@ -880,6 +888,11 @@ def ingest_url(url, collection, mode, headless, verbose, chunk_size, chunk_overl
     """
     async def run_ingest():
         try:
+            # Parse metadata if provided
+            metadata_dict = json.loads(metadata) if metadata else None
+            if metadata_dict:
+                console.print(f"[dim]Applying metadata: {metadata}[/dim]")
+
             # Handle recrawl mode: delete old documents first
             if mode.lower() == "recrawl":
                 console.print(f"[bold blue]Re-crawling: {url}[/bold blue]")
@@ -967,13 +980,17 @@ def ingest_url(url, collection, mode, headless, verbose, chunk_size, chunk_overl
                         continue
 
                     try:
+                        # Merge user metadata with page metadata
+                        page_metadata = metadata_dict.copy() if metadata_dict else {}
+                        page_metadata.update(result.metadata)
+
                         # Use unified mediator if available
                         if local_unified_mediator:
                             ingest_result = await local_unified_mediator.ingest_text(
                                 content=result.content,
                                 collection_name=collection,
                                 document_title=result.metadata.get("title", result.url),
-                                metadata=result.metadata
+                                metadata=page_metadata
                             )
                             total_chunks += ingest_result['num_chunks']
                             total_entities += ingest_result.get('entities_extracted', 0)
@@ -994,7 +1011,7 @@ def ingest_url(url, collection, mode, headless, verbose, chunk_size, chunk_overl
                                 content=result.content,
                                 filename=result.metadata.get("title", result.url),
                                 collection_name=collection,
-                                metadata=result.metadata,
+                                metadata=page_metadata,
                                 file_type="web_page",
                             )
                             total_chunks += len(chunk_ids)
@@ -1040,13 +1057,17 @@ def ingest_url(url, collection, mode, headless, verbose, chunk_size, chunk_overl
 
                 console.print(f"[green]✓ Successfully crawled page ({len(result.content)} chars)[/green]")
 
+                # Merge user metadata with page metadata
+                page_metadata = metadata_dict.copy() if metadata_dict else {}
+                page_metadata.update(result.metadata)
+
                 # Use unified mediator if available
                 if local_unified_mediator:
                     ingest_result = await local_unified_mediator.ingest_text(
                         content=result.content,
                         collection_name=collection,
                         document_title=result.metadata.get("title", url),
-                        metadata=result.metadata
+                        metadata=page_metadata
                     )
 
                     if mode.lower() == "recrawl":
@@ -1073,7 +1094,7 @@ def ingest_url(url, collection, mode, headless, verbose, chunk_size, chunk_overl
                         content=result.content,
                         filename=result.metadata.get("title", url),
                         collection_name=collection,
-                        metadata=result.metadata,
+                        metadata=page_metadata,
                         file_type="web_page",
                     )
 
@@ -1562,6 +1583,138 @@ def graph_query_temporal(query, limit, valid_from, valid_until):
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")
         sys.exit(1)
+
+
+@graph.command("rebuild-communities")
+@click.option("--collection", help="Rebuild communities for specific collection only")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
+def graph_rebuild_communities(collection, yes):
+    """
+    Rebuild community detection for the Knowledge Graph (admin operation).
+
+    Community detection groups related entities together based on their relationships.
+    This is a computationally expensive operation that should be run periodically
+    (e.g., nightly or after major ingestions).
+
+    WARNING: This will clear all existing communities and rebuild from scratch.
+
+    Examples:
+        # Rebuild all communities (requires confirmation)
+        rag graph rebuild-communities
+
+        # Rebuild for specific collection only
+        rag graph rebuild-communities --collection project-docs
+
+        # Skip confirmation prompt
+        rag graph rebuild-communities --yes
+    """
+    async def run_rebuild():
+        try:
+            from graphiti_core import Graphiti
+            from graphiti_core.llm_client.openai_client import OpenAIClient
+            from graphiti_core.llm_client.config import LLMConfig
+
+            # Show warning and confirm
+            if not yes:
+                if collection:
+                    console.print(f"\n[bold yellow]⚠️  WARNING: This will rebuild communities for collection '{collection}'[/bold yellow]")
+                else:
+                    console.print(f"\n[bold yellow]⚠️  WARNING: This will rebuild ALL communities in the Knowledge Graph[/bold yellow]")
+                console.print("[yellow]This is a computationally expensive operation that may take several minutes.[/yellow]")
+                console.print("[yellow]Existing communities will be cleared and rebuilt from scratch.[/yellow]\n")
+
+                confirm = click.confirm("Are you sure you want to proceed?", default=False)
+                if not confirm:
+                    console.print("[dim]Rebuild cancelled[/dim]")
+                    return
+
+            console.print(f"[bold blue]Initializing Knowledge Graph...[/bold blue]")
+
+            # Initialize Graphiti (similar to initialize_graph_components but simpler)
+            neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7687")
+            neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+            neo4j_password = os.getenv("NEO4J_PASSWORD", "graphiti-password")
+
+            # Read optional Graphiti LLM model configuration
+            graphiti_model = os.getenv("GRAPHITI_MODEL")
+            graphiti_small_model = os.getenv("GRAPHITI_SMALL_MODEL")
+
+            # Create LLM client with optional model overrides
+            llm_config_kwargs = {
+                'api_key': os.getenv("OPENAI_API_KEY")
+            }
+            if graphiti_model:
+                llm_config_kwargs['model'] = graphiti_model
+                logger.info(f"Using configured Graphiti model: {graphiti_model}")
+            if graphiti_small_model:
+                llm_config_kwargs['small_model'] = graphiti_small_model
+                logger.info(f"Using configured Graphiti small model: {graphiti_small_model}")
+
+            llm_config = LLMConfig(**llm_config_kwargs)
+            llm_client = OpenAIClient(config=llm_config)
+
+            graphiti = Graphiti(
+                uri=neo4j_uri,
+                user=neo4j_user,
+                password=neo4j_password,
+                llm_client=llm_client
+            )
+
+            # Prepare group_ids if collection specified
+            group_ids = [collection] if collection else None
+
+            if collection:
+                console.print(f"[bold blue]Rebuilding communities for collection: {collection}[/bold blue]")
+            else:
+                console.print(f"[bold blue]Rebuilding ALL communities in the Knowledge Graph...[/bold blue]")
+
+            console.print("[dim]This may take several minutes depending on graph size...[/dim]\n")
+
+            # Start timer
+            import time
+            start_time = time.time()
+
+            # Call Graphiti's build_communities method
+            communities, community_edges = await graphiti.build_communities(group_ids=group_ids)
+
+            # Calculate duration
+            duration = time.time() - start_time
+            minutes = int(duration // 60)
+            seconds = int(duration % 60)
+
+            # Display results
+            console.print(f"\n[bold green]✅ Community rebuild complete![/bold green]")
+            console.print(f"  Communities created: {len(communities)}")
+            console.print(f"  Community edges: {len(community_edges)}")
+            console.print(f"  Duration: {minutes}m {seconds}s")
+
+            if collection:
+                console.print(f"  Collection: {collection}")
+
+            # Show sample communities if any were created
+            if communities and len(communities) > 0:
+                console.print(f"\n[bold cyan]Sample communities (first 3):[/bold cyan]")
+                for i, community in enumerate(communities[:3], 1):
+                    # Communities have name and summary attributes
+                    console.print(f"  {i}. {getattr(community, 'name', 'Unnamed')}")
+                    if hasattr(community, 'summary'):
+                        # Truncate summary if too long
+                        summary = getattr(community, 'summary', '')
+                        if len(summary) > 100:
+                            summary = summary[:100] + "..."
+                        console.print(f"     [dim]{summary}[/dim]")
+
+        except ImportError:
+            console.print("[bold red]Error: Graphiti not installed. Knowledge Graph features unavailable.[/bold red]")
+            sys.exit(1)
+        except Exception as e:
+            console.print(f"[bold red]Error during community rebuild: {e}[/bold red]")
+            import traceback
+            traceback.print_exc()
+            sys.exit(1)
+
+    # Run the async function
+    asyncio.run(run_rebuild())
 
 
 if __name__ == "__main__":
