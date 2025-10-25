@@ -217,6 +217,11 @@ def search_documents(
     TIP: Ask questions as if talking to a person. The system understands meaning,
     not just matching words.
 
+    **Collection Scoping:**
+    Specifying collection_name limits search to that domain's vector embeddings.
+    For relationship queries in the same domain, use query_graph_relationships
+    with the same collection_name.
+
     By default, returns minimal response optimized for AI agent context windows
     (only content, similarity, source_document_id, and source_filename). Use
     include_metadata=True to get extended chunk details.
@@ -329,20 +334,30 @@ def create_collection(
     Collections are required before ingesting documents. Each collection must
     have a meaningful description to help users understand its purpose.
 
+    **Collection-Based Domain Partitioning:**
+    Collections provide domain isolation for both similarity search and
+    relationship queries. Documents in one collection are typically kept
+    separate from others, ensuring focused search results. This isolation
+    applies to both:
+    - Similarity searches (find similar text)
+    - Relationship queries (find how concepts connect)
+
     **BEST PRACTICE - Domain-Specific Collections:**
-    Create separate collections for different domains or document types rather than
+    Create separate collections for different knowledge domains rather than
     mixing unrelated content. This ensures:
     - Better search relevance (domain-specific context)
     - Appropriate metadata schemas per domain
+    - Isolated knowledge graphs per domain
     - Cleaner organization of knowledge
 
     Examples:
     - "api-docs" for API documentation
     - "meeting-notes" for meeting transcripts
-    - "research-papers" for academic papers
+    - "engineering" for software engineering knowledge
+    - "finance" for financial planning and records
 
-    Once created, collections are immutable - you cannot change the description or schema.
-    If you need to change it, delete the collection and create a new one.
+    Once created, collections are immutable - you cannot change the name or core schema.
+    Metadata schemas support additive updates only (can add new optional fields).
 
     Args:
         name: (REQUIRED) Collection identifier (unique, lowercase recommended)
@@ -492,7 +507,13 @@ async def ingest_text(
     Ingest text content into a collection with automatic chunking.
 
     This is the primary way for agents to add knowledge to the RAG system.
-    Content is chunked, embedded, and ingested into both vector store and knowledge graph.
+    Content is stored in dual architecture:
+    1. Vector store (pgvector) - for semantic similarity search
+    2. Knowledge Graph (Neo4j) - for relationship queries
+
+    The collection_name serves dual purpose:
+    - Collection identifier in vector store
+    - Domain partition for knowledge graph (isolates entities/relationships)
 
     IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
 
@@ -1264,6 +1285,7 @@ def list_documents(
 @mcp.tool()
 async def query_relationships(
     query: str,
+    collection_name: str = None,
     num_results: int = 5,
     threshold: float = 0.35,
 ) -> dict:
@@ -1273,6 +1295,15 @@ async def query_relationships(
     This tool searches for connections and relationships between entities in your
     knowledge graph. Use it to understand how concepts, people, projects, and ideas
     relate to each other.
+
+    **Collection Scoping:**
+    - Specify collection_name to search within a single domain
+    - Omit collection_name to search across all domains
+    - Uses the same collection names as similarity search (search_documents)
+
+    Collections are designed to isolate domains, though some overlap may occur
+    if content has been miscategorized. Searching a specific collection typically
+    returns only that domain's relationships.
 
     **What it does:**
     - Finds relationships between entities (e.g., "How does X relate to Y?")
@@ -1297,6 +1328,7 @@ async def query_relationships(
     Args:
         query: (REQUIRED) Natural language query about relationships
                (e.g., "How does my content strategy support my business?")
+        collection_name: Optional collection to scope search. If None, searches all collections.
         num_results: Maximum number of relationships to return (default: 5, max: 20)
         threshold: Relationship confidence threshold (default: 0.35, range: 0.0-1.0)
                   Controls relevance filtering - higher values = stricter filtering
@@ -1335,6 +1367,7 @@ async def query_relationships(
     return await query_relationships_impl(
         graph_store,
         query,
+        collection_name,
         num_results,
         threshold=threshold,
     )
@@ -1343,6 +1376,7 @@ async def query_relationships(
 @mcp.tool()
 async def query_temporal(
     query: str,
+    collection_name: str = None,
     num_results: int = 10,
     valid_from: str = None,
     valid_until: str = None,
@@ -1353,6 +1387,11 @@ async def query_temporal(
     This tool reveals how your knowledge and understanding have changed over time.
     It shows facts with their validity periods, helping you understand what was
     true when, and how information has evolved.
+
+    **Collection Scoping:**
+    - Specify collection_name to search within a single domain's timeline
+    - Omit collection_name to search across all domains
+    - Uses the same collection names as similarity search (search_documents)
 
     **What it does:**
     - Tracks how facts changed over time
@@ -1378,6 +1417,7 @@ async def query_temporal(
     Args:
         query: (REQUIRED) Natural language query about temporal changes
                (e.g., "How has my business vision evolved?")
+        collection_name: Optional collection to scope search. If None, searches all collections.
         num_results: Maximum number of timeline items to return (default: 10, max: 50)
         valid_from: (OPTIONAL) ISO 8601 date (e.g., "2025-12-01T00:00:00")
                    Only return facts valid after this date
@@ -1426,6 +1466,7 @@ async def query_temporal(
     return await query_temporal_impl(
         graph_store,
         query,
+        collection_name,
         num_results,
         valid_from=valid_from,
         valid_until=valid_until,

@@ -1081,6 +1081,7 @@ def list_documents_impl(
 async def query_relationships_impl(
     graph_store,
     query: str,
+    collection_name: str = None,
     num_results: int = 5,
     threshold: float = 0.35,
 ) -> Dict[str, Any]:
@@ -1093,6 +1094,7 @@ async def query_relationships_impl(
     Args:
         graph_store: GraphStore instance
         query: Natural language query
+        collection_name: Optional collection to scope search
         num_results: Maximum number of results to return
         threshold: Relationship confidence threshold (0.0-1.0, default 0.35)
     """
@@ -1104,11 +1106,15 @@ async def query_relationships_impl(
                 "relationships": []
             }
 
-        # Search the knowledge graph with specified threshold
+        # Convert collection_name to group_ids for internal implementation
+        group_ids = [collection_name] if collection_name else None
+
+        # Search the knowledge graph with specified threshold and collection scope
         results = await graph_store.search_relationships(
             query,
             num_results=num_results,
-            reranker_min_score=threshold
+            reranker_min_score=threshold,
+            group_ids=group_ids
         )
 
         # Handle both old API (object with .edges) and new API (returns list directly)
@@ -1163,6 +1169,7 @@ async def query_relationships_impl(
 async def query_temporal_impl(
     graph_store,
     query: str,
+    collection_name: str = None,
     num_results: int = 10,
     valid_from: str = None,
     valid_until: str = None,
@@ -1176,6 +1183,7 @@ async def query_temporal_impl(
     Args:
         graph_store: GraphStore instance
         query: Natural language query about temporal changes
+        collection_name: Optional collection to scope search
         num_results: Max results to return
         valid_from: (OPTIONAL) ISO 8601 date - filter facts valid after this date
         valid_until: (OPTIONAL) ISO 8601 date - filter facts valid before this date
@@ -1188,12 +1196,16 @@ async def query_temporal_impl(
                 "timeline": []
             }
 
-        # Search the knowledge graph with optional temporal filters
+        # Convert collection_name to group_ids for internal implementation
+        group_ids = [collection_name] if collection_name else None
+
+        # Search the knowledge graph with optional temporal filters and collection scope
         results = await graph_store.search_relationships(
             query,
             num_results=num_results,
             valid_from=valid_from,
-            valid_until=valid_until
+            valid_until=valid_until,
+            group_ids=group_ids
         )
 
         # Handle both old API (object with .edges) and new API (returns list directly)
