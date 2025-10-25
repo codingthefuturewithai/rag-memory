@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 """
-RAG Memory Local Setup Script
+RAG Memory Local Deployment Setup Script
 
-One-command setup for local development:
-1. Checks Docker installed
-2. Checks if containers already running
+One-command setup for end users deploying RAG Memory locally:
+1. Checks Docker is installed and running
+2. Checks for existing local containers
 3. Prompts for OpenAI API key
-4. Detects available ports
-5. Creates .env.local with configuration
-6. Builds and starts containers
-7. Validates all services are healthy
-8. Provides connection details for exploration
+4. Prompts for backup schedule and location
+5. Prompts for directory mounts
+6. Creates system-level configuration files
+7. Builds and starts containers
+8. Validates all services are healthy
+9. Provides connection details and management commands
 
 Cross-platform: macOS, Linux, Windows (with Docker Desktop)
 """
@@ -64,14 +65,17 @@ def print_info(text: str):
     print(f"{Colors.BLUE}ℹ {text}{Colors.RESET}")
 
 
-def run_command(cmd: list, check: bool = True) -> Tuple[int, str, str]:
+def run_command(cmd: list, check: bool = True, timeout: int = None, env: dict = None) -> Tuple[int, str, str]:
     """Run shell command and return exit code, stdout, stderr"""
     try:
+        # If env is provided, use it; otherwise use os.environ
+        run_env = env if env is not None else os.environ
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=10
+            timeout=timeout,
+            env=run_env
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -112,56 +116,34 @@ def check_docker_running() -> bool:
 
 
 def check_existing_containers() -> bool:
-    """Check if RAG Memory user-level containers are already running"""
+    """Check if RAG Memory local deployment containers are already running"""
     print_header("STEP 3: Checking for Existing RAG Memory Containers")
 
-    # Check for USER-LEVEL containers ONLY (rag-memory-postgres and rag-memory-neo4j, NOT -dev or -test)
-    postgres_code, _, _ = run_command(["docker", "container", "inspect", "rag-memory-postgres"])
-    neo4j_code, _, _ = run_command(["docker", "container", "inspect", "rag-memory-neo4j"])
+    # Check for LOCAL deployment containers (rag-memory-postgres-local, rag-memory-neo4j-local, NOT -dev or -test)
+    postgres_code, _, _ = run_command(["docker", "container", "inspect", "rag-memory-postgres-local"])
+    neo4j_code, _, _ = run_command(["docker", "container", "inspect", "rag-memory-neo4j-local"])
 
     postgres_exists = postgres_code == 0
     neo4j_exists = neo4j_code == 0
 
     if not (postgres_exists or neo4j_exists):
-        print_info("No existing user-level containers found")
+        print_info("No existing RAG Memory local containers found")
         return False
 
-    # Found user-level containers
-    print_warning("Found existing RAG Memory containers")
+    # Found existing local containers
+    print_warning("Found existing RAG Memory local containers")
     print_warning("This will destroy any data in PostgreSQL and Neo4j")
 
-    response = input(f"\n{Colors.YELLOW}Proceed with setup? This will overwrite .env.local and rebuild containers (yes/no): {Colors.RESET}").strip().lower()
+    response = input(f"\n{Colors.YELLOW}Proceed with setup? This will rebuild containers (yes/no): {Colors.RESET}").strip().lower()
 
     if response != "yes":
         print_info("Setup cancelled")
         return True
 
     print_info("Stopping and removing existing containers...")
-    run_command(["docker-compose", "-f", "docker-compose.local.yml", "down", "-v"])
+    run_command(["docker-compose", "down", "-v"])
     print_success("Existing containers removed")
     return False
-
-
-def check_env_local_exists() -> bool:
-    """Check if .env.local already exists"""
-    print_header("STEP 4: Checking Configuration")
-
-    env_local = Path(".env.local")
-
-    if not env_local.exists():
-        print_info("No existing .env.local found")
-        return False
-
-    print_warning(".env.local already exists")
-    response = input(f"\n{Colors.YELLOW}Overwrite and reconfigure? (yes/no): {Colors.RESET}").strip().lower()
-
-    if response == "yes":
-        env_local.unlink()
-        print_success(".env.local removed")
-        return False
-
-    print_info("Setup cancelled")
-    return True
 
 
 def prompt_for_api_key() -> str:
@@ -303,65 +285,248 @@ def configure_directory_mounts() -> list:
     return mounts
 
 
-def create_config_yaml(api_key: str, ports: dict, mounts: list):
-    """Create YAML configuration file in OS-standard location"""
-    print_header("STEP 8: Creating Configuration File")
+def prompt_for_backup_schedule() -> str:
+    """
+    Prompt user for backup schedule in user-friendly format and convert to cron.
+
+    Returns:
+        Cron schedule string (e.g., "5 2 * * *" for 2:05 AM)
+    """
+    print_header("STEP 8: Configure Backup Schedule")
+
+    print_info("Backups will run automatically at the time you specify")
+    print_info("(Format: HH:MM in 24-hour format, e.g., 02:05 for 2:05 AM)\n")
+
+    while True:
+        backup_time = input(f"{Colors.CYAN}Enter backup time (HH:MM, default: 02:05): {Colors.RESET}").strip()
+
+        # Use default if empty
+        if not backup_time:
+            backup_time = "02:05"
+
+        # Validate format
+        try:
+            parts = backup_time.split(':')
+            if len(parts) != 2:
+                print_error("Invalid format. Use HH:MM (e.g., 14:30)")
+                continue
+
+            hour = int(parts[0])
+            minute = int(parts[1])
+
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                print_error("Invalid time. Hour must be 0-23, minute must be 0-59")
+                continue
+
+            # Convert to cron format (minute hour * * *)
+            cron_schedule = f"{minute} {hour} * * *"
+            print_success(f"Backup schedule: Daily at {backup_time} → cron: {cron_schedule}")
+            return cron_schedule
+
+        except ValueError:
+            print_error("Invalid format. Use HH:MM (e.g., 14:30)")
+
+
+def prompt_for_backup_location() -> str:
+    """
+    Prompt user for backup archive directory location.
+
+    Returns:
+        Path to backup directory (can be absolute or relative)
+    """
+    print_header("STEP 9: Configure Backup Location")
+
+    print_info("Backups will be stored as .tar.gz files in this directory")
+    print_info("Use absolute path (e.g., /Users/name/rag-backups) or relative (e.g., ./backups)\n")
+
+    default_location = "./backups"
+    backup_location = input(f"{Colors.CYAN}Backup directory (default: {default_location}): {Colors.RESET}").strip()
+
+    if not backup_location:
+        backup_location = default_location
+
+    print_success(f"Backup location: {backup_location}")
+    return backup_location
+
+
+def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str, backup_dir: str):
+    """Create all configuration files in OS-standard system directory"""
+    print_header("STEP 10: Creating Configuration Files")
 
     import platformdirs
     import yaml
 
-    # Get OS-appropriate config directory
+    # Get OS-appropriate config directory (Windows, macOS, Linux compatible)
     config_dir = Path(platformdirs.user_config_dir('rag-memory', appauthor=False))
     config_dir.mkdir(parents=True, exist_ok=True)
-    config_path = config_dir / 'config.yaml'
 
-    config = {
-        'server': {
-            'openai_api_key': api_key,
-            'database_url': f'postgresql://raguser:ragpassword@localhost:{ports["postgres"]}/rag_memory',
-            'neo4j_uri': f'bolt://localhost:{ports["neo4j_bolt"]}',
-            'neo4j_user': 'neo4j',
-            'neo4j_password': 'graphiti-password'
-        },
-        'mounts': mounts if mounts else []
-    }
+    # Read the template from repo
+    template_path = Path(__file__).parent.parent / 'config' / 'config.local.yaml'
+    project_root = Path(__file__).parent.parent
 
     try:
+        # 1. Create config.yaml from template
+        config_path = config_dir / 'config.yaml'
+        with open(template_path, 'r') as f:
+            config_content = f.read()
+
+        # Build database URLs with CONTAINER ports (right side of docker-compose mappings)
+        # These are used for container-to-container communication
+        database_url = f"postgresql://raguser:ragpassword@postgres-local:5432/rag_memory"
+        neo4j_uri = f"bolt://neo4j-local:7687"
+
+        # Substitute all placeholders in config.yaml
+        config_content = config_content.replace(
+            'PLACEHOLDER_OPENAI_API_KEY_REPLACE_ME',
+            api_key
+        )
+        config_content = config_content.replace(
+            'PLACEHOLDER_POSTGRES_PORT_REPLACE_ME',
+            str(ports['postgres'])
+        )
+        config_content = config_content.replace(
+            'PLACEHOLDER_NEO4J_BOLT_PORT_REPLACE_ME',
+            str(ports['neo4j_bolt'])
+        )
+        config_content = config_content.replace(
+            'PLACEHOLDER_NEO4J_HTTP_PORT_REPLACE_ME',
+            str(ports['neo4j_http'])
+        )
+        config_content = config_content.replace(
+            'PLACEHOLDER_BACKUP_CRON_SCHEDULE_REPLACE_ME',
+            backup_cron
+        )
+        config_content = config_content.replace(
+            'PLACEHOLDER_BACKUP_ARCHIVE_DIR_REPLACE_ME',
+            backup_dir
+        )
+        config_content = config_content.replace(
+            'PLACEHOLDER_MCP_SSE_PORT_REPLACE_ME',
+            str(ports['mcp'])
+        )
+
+        # Add mounts to config
+        if mounts:
+            mounts_yaml = "\n".join([f"  - path: {mount['path']}\n    read_only: {str(mount['read_only']).lower()}" for mount in mounts])
+            config_content = config_content.replace(
+                "mounts:\n  # Read-only directory mounts for file/directory ingestion\n  # Setup.py will prompt you to configure these\n  # Add entries like:\n  # - path: /Users/yourname/Documents\n  #   read_only: true\n  # - path: /Users/yourname/Downloads\n  #   read_only: true",
+                f"mounts:\n{mounts_yaml}"
+            )
+
         with open(config_path, 'w') as f:
-            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+            f.write(config_content)
+
+        # Set restrictive permissions
+        try:
+            if os.name != 'nt':
+                os.chmod(config_path, 0o600)
+        except Exception:
+            pass
 
         print_success(f"Configuration created: {config_path}")
-        return True
+
+        # 2. Create .env file for docker-compose in the repo root
+        env_path = project_root / '.env'
+        env_content = f"""# Docker Compose Environment Variables
+# Generated by setup.py
+# These are HOST ports (left side of docker-compose port mappings)
+RAG_CONFIG_DIR={config_dir}
+PROD_POSTGRES_PORT={ports['postgres']}
+PROD_NEO4J_BOLT_PORT={ports['neo4j_bolt']}
+PROD_NEO4J_HTTP_PORT={ports['neo4j_http']}
+MCP_SSE_PORT={ports['mcp']}
+BACKUP_CRON_SCHEDULE={backup_cron}
+BACKUP_ARCHIVE_DIR={backup_dir}
+"""
+        with open(env_path, 'w') as f:
+            f.write(env_content)
+
+        # Note: .env in repo doesn't need restrictive permissions since it's gitignored
+        print_success(f"Environment file created: {env_path}")
+
+        # 3. Generate docker-compose.yml from template with user mounts
+        template_path = project_root / 'docker-compose.template.yml'
+        compose_path = project_root / 'docker-compose.yml'
+
+        with open(template_path, 'r') as f:
+            compose_content = f.read()
+
+        # Prepare mount lines
+        mount_lines = ""
+        if mounts:
+            for mount in mounts:
+                mount_path = mount['path']
+                mount_lines += f"      - {mount_path}:{mount_path}:ro\n"
+
+        # Replace placeholder with actual mounts
+        if mount_lines:
+            # Replace the placeholder line with actual mounts
+            compose_content = compose_content.replace(
+                "      # USER_MOUNTS_PLACEHOLDER - Setup script will insert user directory mounts here",
+                "      # User directory mounts (read-only)\n" + mount_lines.rstrip()
+            )
+        else:
+            # Just remove the placeholder if no mounts
+            compose_content = compose_content.replace(
+                "      # USER_MOUNTS_PLACEHOLDER - Setup script will insert user directory mounts here\n",
+                ""
+            )
+
+        with open(compose_path, 'w') as f:
+            f.write(compose_content)
+
+        print_success(f"Docker Compose configuration created: {compose_path}")
+
+        return True, config_dir
     except Exception as e:
         print_error(f"Failed to create configuration: {e}")
-        return False
+        return False, None
 
 
-def build_and_start_containers() -> bool:
+def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
     """Build and start Docker containers"""
     print_header("STEP 8: Building and Starting Containers")
 
-    print_info("Building Docker images...")
-    code, _, stderr = run_command(["docker-compose", "-f", "docker-compose.local.yml", "build"])
+    project_root = Path(__file__).parent.parent
+    env_file = config_dir / '.env'
 
-    if code != 0:
-        print_error(f"Build failed: {stderr}")
-        return False
+    # Change to project root for docker-compose
+    original_cwd = os.getcwd()
+    os.chdir(project_root)
 
-    print_success("Build completed")
+    try:
+        # Run docker-compose from the repo directory
+        print_info("Building Docker images...")
+        code, _, stderr = run_command([
+            "docker-compose",
+            "build"
+        ], timeout=None)
 
-    print_info("Starting containers...")
-    code, _, stderr = run_command(["docker-compose", "-f", "docker-compose.local.yml", "up", "-d"])
+        if code != 0:
+            print_error(f"Build failed: {stderr}")
+            return False
 
-    if code != 0:
-        print_error(f"Failed to start containers: {stderr}")
-        return False
+        print_success("Build completed")
 
-    print_success("Containers started")
-    return True
+        print_info("Starting containers...")
+        code, _, stderr = run_command([
+            "docker-compose",
+            "up", "-d"
+        ], timeout=None)
+
+        if code != 0:
+            print_error(f"Failed to start containers: {stderr}")
+            return False
+
+        print_success("Containers started")
+        return True
+
+    finally:
+        # Restore original directory
+        os.chdir(original_cwd)
 
 
-def wait_for_health_checks(ports: dict, timeout_seconds: int = 300, check_interval: int = 30) -> bool:
+def wait_for_health_checks(ports: dict, config_dir: Path, timeout_seconds: int = 300, check_interval: int = 30) -> bool:
     """Wait for all services to be healthy with status updates"""
     print_header("STEP 9: Waiting for Services to Be Ready")
 
@@ -376,49 +541,106 @@ def wait_for_health_checks(ports: dict, timeout_seconds: int = 300, check_interv
 
         print_info(f"[{elapsed}s] Health check #{checks_performed}...")
 
-        # Check PostgreSQL
-        pg_code, _, _ = run_command([
-            "docker", "exec", "rag-memory-postgres",
-            "pg_isready", "-U", "raguser"
+        # Check PostgreSQL health status AND test connection
+        pg_code, pg_stdout, _ = run_command([
+            "docker", "ps", "--filter", "name=rag-memory-postgres-local",
+            "--format", "{{.Status}}"
         ])
-        pg_ready = pg_code == 0
+        pg_container_ready = pg_code == 0 and "healthy" in pg_stdout
 
-        # Check Neo4j
-        neo4j_code, _, _ = run_command([
-            "docker", "exec", "rag-memory-neo4j",
-            "curl", "-s", "-f", f"http://localhost:7474/browser"
+        # Test actual PostgreSQL connection
+        pg_connectable = False
+        if pg_container_ready:
+            test_code, _, _ = run_command([
+                "docker", "exec", "rag-memory-postgres-local",
+                "psql", "-U", "raguser", "-d", "rag_memory", "-c", "SELECT 1"
+            ])
+            pg_connectable = test_code == 0
+
+        # Check Neo4j health status AND test connection
+        neo4j_code, neo4j_stdout, _ = run_command([
+            "docker", "ps", "--filter", "name=rag-memory-neo4j-local",
+            "--format", "{{.Status}}"
         ])
-        neo4j_ready = neo4j_code == 0
+        neo4j_container_ready = neo4j_code == 0 and "healthy" in neo4j_stdout
 
-        # Check MCP
-        mcp_code, _, _ = run_command(["docker", "ps", "-f", "name=rag-memory-mcp"])
-        mcp_running = "rag-memory-mcp" in mcp_code
+        # Test actual Neo4j connection
+        neo4j_connectable = False
+        if neo4j_container_ready:
+            test_code, _, _ = run_command([
+                "docker", "exec", "rag-memory-neo4j-local",
+                "cypher-shell", "-u", "neo4j", "-p", "graphiti-password",
+                "RETURN 1"
+            ])
+            neo4j_connectable = test_code == 0
 
-        if pg_ready and neo4j_ready and mcp_running:
-            print_success("PostgreSQL is ready")
-            print_success("Neo4j is ready")
-            print_success("MCP server is running")
+        # Check MCP running status AND test SSE endpoint
+        mcp_code, mcp_stdout, _ = run_command([
+            "docker", "ps", "--filter", "name=rag-memory-mcp-local",
+            "--format", "{{.Status}}"
+        ])
+        mcp_container_running = mcp_code == 0 and "Up" in mcp_stdout
+
+        # Test actual MCP SSE endpoint (using curl to test if port is open)
+        mcp_responding = False
+        if mcp_container_running:
+            import socket
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(2)
+                result = sock.connect_ex(('127.0.0.1', ports['mcp']))
+                sock.close()
+                mcp_responding = result == 0
+            except Exception:
+                mcp_responding = False
+
+        if pg_connectable and neo4j_connectable and mcp_responding:
+            print_success("PostgreSQL is ready and accepting connections")
+            print_success("Neo4j is ready and accepting connections")
+            print_success("MCP server is running and responding on port " + str(ports['mcp']))
             return True
 
-        if not pg_ready:
-            print_info("  - PostgreSQL: waiting...")
+        if not pg_connectable:
+            if not pg_container_ready:
+                print_info("  - PostgreSQL: container starting...")
+            else:
+                print_warning("  - PostgreSQL: container healthy but not accepting connections")
         else:
             print_success("  - PostgreSQL: ready")
 
-        if not neo4j_ready:
-            print_info("  - Neo4j: waiting...")
+        if not neo4j_connectable:
+            if not neo4j_container_ready:
+                print_info("  - Neo4j: container starting...")
+            else:
+                print_warning("  - Neo4j: container healthy but not accepting connections")
         else:
             print_success("  - Neo4j: ready")
 
-        if not mcp_running:
-            print_info("  - MCP: waiting...")
+        if not mcp_responding:
+            if not mcp_container_running:
+                print_info("  - MCP: container starting...")
+            else:
+                print_warning(f"  - MCP: container running but not responding on port {ports['mcp']}")
+                # Check logs for errors
+                log_code, log_output, _ = run_command([
+                    "docker", "logs", "--tail", "5", "rag-memory-mcp-local"
+                ])
+                if log_code == 0 and "error" in log_output.lower():
+                    print_error("  - MCP logs show errors (last 5 lines):")
+                    for line in log_output.split('\n')[-5:]:
+                        if line.strip():
+                            print(f"    {line}")
         else:
-            print_success("  - MCP: running")
+            print_success("  - MCP: ready")
 
         if time.time() - start_time < timeout_seconds:
             time.sleep(check_interval)
 
     print_error(f"Services did not become ready within {timeout_seconds} seconds")
+    print_error("Check docker logs for more information:")
+    print_info("  docker logs rag-memory-postgres-local")
+    print_info("  docker logs rag-memory-neo4j-local")
+    print_info("  docker logs rag-memory-mcp-local")
     return False
 
 
@@ -429,7 +651,7 @@ def validate_schemas(ports: dict) -> bool:
     # Check PostgreSQL schema
     print_info("Checking PostgreSQL schema...")
     code, stdout, _ = run_command([
-        "docker", "exec", "rag-memory-postgres",
+        "docker", "exec", "rag-memory-postgres-local",
         "psql", "-U", "raguser", "-d", "rag_memory", "-c",
         "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'"
     ])
@@ -443,7 +665,7 @@ def validate_schemas(ports: dict) -> bool:
     # Check Neo4j
     print_info("Checking Neo4j...")
     code, _, _ = run_command([
-        "docker", "exec", "rag-memory-neo4j",
+        "docker", "exec", "rag-memory-neo4j-local",
         "cypher-shell", "-u", "neo4j", "-p", "graphiti-password",
         "MATCH (n) RETURN COUNT(n)"
     ])
@@ -456,52 +678,92 @@ def validate_schemas(ports: dict) -> bool:
     return True
 
 
-def print_connection_info(ports: dict):
-    """Print connection details and URLs for exploration"""
-    print_header("STEP 11: Connection Information")
+def print_final_summary(ports: dict, config_dir: Path):
+    """Print final summary with all connection info and management commands"""
+    print_header("✨ Setup Complete!")
 
-    print_info("RAG Memory is now running! Here's how to explore your setup:")
+    print(f"{Colors.GREEN}{Colors.BOLD}RAG Memory is now running on your machine!{Colors.RESET}")
+    print(f"You have a fully functional knowledge management system with:")
+    print(f"  • Semantic search (PostgreSQL + pgvector)")
+    print(f"  • Entity relationships (Neo4j)")
+    print(f"  • CLI tool and MCP server for AI agents")
     print()
 
-    print(f"{Colors.BOLD}PostgreSQL{Colors.RESET}")
-    print(f"  Connection String: postgresql://raguser:ragpassword@localhost:{ports['postgres']}/rag_memory")
-    print(f"  Environment variables in .env.local:")
-    print(f"    - DATABASE_URL")
-    print(f"    - POSTGRES_HOST: localhost")
-    print(f"    - POSTGRES_PORT: {ports['postgres']}")
-    print(f"    - POSTGRES_USER: raguser")
-    print(f"    - POSTGRES_PASSWORD: ragpassword")
-    print(f"  Tools:")
-    print(f"    - DBeaver (free): https://dbeaver.io")
-    print(f"    - psql command line: psql -U raguser -h localhost -p {ports['postgres']} -d rag_memory")
-    print(f"    - VS Code PostgreSQL extension")
+    # Configuration location
+    print(f"{Colors.BOLD}Configuration Location{Colors.RESET}")
+    print(f"  {Colors.CYAN}{config_dir}{Colors.RESET}")
+    print(f"  Contains: config.yaml, .env (for docker-compose)")
     print()
 
-    print(f"{Colors.BOLD}Neo4j Browser{Colors.RESET}")
-    print(f"  URL: http://localhost:{ports['neo4j_http']}")
-    print(f"  Username: neo4j")
-    print(f"  Password: graphiti-password")
-    print(f"  Environment variables in .env.local:")
-    print(f"    - NEO4J_URI: bolt://localhost:{ports['neo4j_bolt']}")
-    print(f"    - NEO4J_USER: neo4j")
-    print(f"    - NEO4J_PASSWORD: graphiti-password")
-    print()
-    print(f"  Try this query in the browser to verify connection:")
-    print(f"    {Colors.CYAN}MATCH (n) RETURN COUNT(n) as total_nodes{Colors.RESET}")
-    print(f"  (Will return 0 until you populate your knowledge base)")
+    # Connection information
+    print(f"{Colors.BOLD}Service URLs{Colors.RESET}")
+    print(f"  PostgreSQL: postgresql://raguser:ragpassword@localhost:{ports['postgres']}/rag_memory")
+    print(f"  Neo4j Browser: http://localhost:{ports['neo4j_http']} (user: neo4j, pass: graphiti-password)")
+
+    # Neo4j Bolt port warning if not using default port
+    if ports['neo4j_bolt'] != 7687:
+        print(f"    {Colors.YELLOW}⚠️  IMPORTANT: When Neo4j Browser opens, change connection URL from:{Colors.RESET}")
+        print(f"    {Colors.YELLOW}  Default: bolt://localhost:7687{Colors.RESET}")
+        print(f"    {Colors.YELLOW}  To:      {Colors.CYAN}bolt://localhost:{ports['neo4j_bolt']}{Colors.RESET}")
+
+    print(f"  MCP Server: http://localhost:{ports['mcp']}/sse")
     print()
 
-    print(f"{Colors.BOLD}MCP Server{Colors.RESET}")
-    print(f"  Running on: localhost:{ports['mcp']}")
-    print(f"  For Claude Code integration: Connect to http://localhost:{ports['mcp']}")
+    # Container management
+    project_root = Path(__file__).parent.parent
+
+    print(f"{Colors.BOLD}Managing Containers{Colors.RESET}")
+    print(f"  From the repository directory ({project_root}):")
+    print()
+    print(f"  Stop containers:")
+    print(f"    {Colors.CYAN}docker-compose down{Colors.RESET}")
+    print()
+    print(f"  Start containers:")
+    print(f"    {Colors.CYAN}docker-compose up -d{Colors.RESET}")
+    print()
+    print(f"  View logs:")
+    print(f"    {Colors.CYAN}docker-compose logs{Colors.RESET}")
     print()
 
+    # CLI commands
+    print(f"{Colors.BOLD}Try These Commands{Colors.RESET}")
+    print(f"  {Colors.CYAN}rag status{Colors.RESET} - Check database connections")
+    print(f"  {Colors.CYAN}rag collection create my-notes --description \"My personal notes\"{Colors.RESET}")
+    print(f"  {Colors.CYAN}rag ingest text \"Your first document\" --collection my-notes{Colors.RESET}")
+    print(f"  {Colors.CYAN}rag search \"document\" --collection my-notes{Colors.RESET}")
+    print()
+
+    # Next steps
     print(f"{Colors.BOLD}Next Steps{Colors.RESET}")
-    print(f"  1. Create a collection: Use the 'create_collection' MCP tool")
-    print(f"  2. Ingest documents: Use the 'ingest_text' or 'ingest_file' tools")
-    print(f"  3. Search: Use the 'search_documents' tool")
-    print(f"  4. Explore in Neo4j: Run 'MATCH (n) RETURN n LIMIT 10'")
+    print(f"  • For Claude Code: Run {Colors.CYAN}/getting-started{Colors.RESET} in Claude Code")
+    print(f"  • For CLI help: Run {Colors.CYAN}rag --help{Colors.RESET}")
+    print(f"  • Documentation: {Colors.CYAN}.reference/README.md{Colors.RESET}")
     print()
+
+    print(f"Start using it now - try the commands above! 🚀")
+    print()
+
+
+def install_cli_tool() -> bool:
+    """Install the RAG Memory CLI tool using uv tool install"""
+    print_header("STEP 13: Installing CLI Tool")
+
+    print_info("Installing rag-memory CLI tool globally...")
+    project_root = Path(__file__).parent.parent
+
+    # Run uv tool install from the project root
+    code, _, stderr = run_command(
+        ["uv", "tool", "install", str(project_root)],
+        timeout=300
+    )
+
+    if code != 0:
+        print_error(f"Failed to install CLI tool: {stderr}")
+        return False
+
+    print_success("CLI tool installed successfully")
+    print_info("You can now run 'rag' commands from anywhere")
+    return True
 
 
 def main():
@@ -526,7 +788,7 @@ def main():
         sys.exit(0)
 
     # Step 4: Check if configuration already exists
-    # (Check for both old .env.local and new YAML config for migration purposes)
+    # (User can reconfigure if desired)
     import platformdirs
     config_dir = Path(platformdirs.user_config_dir('rag-memory', appauthor=False))
     config_path = config_dir / 'config.yaml'
@@ -550,29 +812,37 @@ def main():
     if mounts is None:
         sys.exit(1)
 
-    # Step 8: Create YAML configuration
-    if not create_config_yaml(api_key, ports, mounts):
+    # Step 8: Configure backup schedule
+    backup_cron = prompt_for_backup_schedule()
+
+    # Step 9: Configure backup location
+    backup_dir = prompt_for_backup_location()
+
+    # Step 10: Create YAML configuration from template
+    success, config_dir = create_config_yaml(api_key, ports, mounts, backup_cron, backup_dir)
+    if not success:
         sys.exit(1)
 
-    # Step 9: Build and start
-    if not build_and_start_containers():
+    # Step 11: Build and start
+    if not build_and_start_containers(config_dir, ports):
         sys.exit(1)
 
-    # Step 10: Wait for health
-    if not wait_for_health_checks(ports):
+    # Step 12: Wait for health
+    if not wait_for_health_checks(ports, config_dir):
         print_error("Setup completed but services are not responding")
-        print_info("Try: docker-compose -f docker-compose.local.yml logs")
+        print_info("Try: docker-compose logs")
         sys.exit(1)
 
-    # Step 11: Validate schemas
+    # Step 13: Install CLI tool
+    if not install_cli_tool():
+        print_warning("Failed to install CLI tool, but setup is otherwise complete")
+
+    # Step 14: Validate schemas
     if not validate_schemas(ports):
         print_warning("Schema validation had issues, but setup may still work")
 
-    # Step 12: Print connection info
-    print_connection_info(ports)
-
-    print_success("Setup complete! RAG Memory is ready for local development")
-    print()
+    # Step 14: Print final summary
+    print_final_summary(ports, config_dir)
 
 
 if __name__ == "__main__":

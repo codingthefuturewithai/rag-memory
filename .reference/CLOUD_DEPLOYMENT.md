@@ -1,358 +1,611 @@
-# Cloud Deployment Guide
+# Cloud Deployment Reference Guide
 
-**For users who want to move RAG Memory from local to cloud.**
+**For interactive step-by-step guidance, run:** `/cloud-setup` custom command
 
-This guide assumes you have RAG Memory working locally. We'll help you set up the cloud versions of PostgreSQL, Neo4j, and the MCP server.
-
----
-
-## Prerequisites
-
-Before starting, you need:
-- A working local RAG Memory setup (local Docker Compose)
-- An OpenAI API key (already have one? Good)
-- A Supabase account (or will create during setup)
-- A Neo4j Aura account (or will create during setup)
-- A Fly.io account (or will create during setup)
-
-**Time required:** ~30 minutes of your time + ~15 minutes of waiting for services to start
+This document is the detailed reference for cloud deployment. It includes detailed information about each service, troubleshooting, costs, and advanced configuration.
 
 ---
 
-## Overview: What You're Building
+## Overview
 
-Your cloud setup will have:
+RAG Memory can run in three configurations:
+
+| Configuration | Best For | Setup Time |
+|---|---|---|
+| **Local Docker** | Development, testing, learning | 30 minutes |
+| **Cloud Production** | Production, team access, remote agents | 1 hour |
+| **Hybrid** | Local + cloud together | 1.5 hours |
+
+This guide covers **Cloud Production** (Supabase + Neo4j Aura + Fly.io).
+
+---
+
+## Architecture: What You're Building
 
 ```
-Supabase (Cloud PostgreSQL + pgvector)
-    ↓
-RAG Memory Search & Storage
-
-Neo4j Aura (Cloud Graph Database)
-    ↓
-Knowledge Graph & Relationships
-
-Fly.io (MCP Server)
-    ↓
-Your AI agents access both databases
+Your Cloud Setup:
+├─ Supabase (us-east-1 or your choice)
+│  ├─ PostgreSQL 17
+│  ├─ pgvector extension
+│  └─ Session pooler (persistent connections)
+│
+├─ Neo4j Aura (same region as Supabase)
+│  ├─ Knowledge graph database
+│  └─ Graphiti schema (auto-initialized)
+│
+└─ Fly.io (iad region, Ashburn VA)
+   ├─ Docker container (MCP server)
+   ├─ SSE transport (HTTP + WebSocket)
+   ├─ Streamable HTTP (for webhooks)
+   └─ Auto-stop/start (scale-to-zero)
 ```
 
-Each vendor is separate, but they work together seamlessly once connected.
+All three services connect securely:
+- Fly.io → Supabase (via DATABASE_URL)
+- Fly.io → Neo4j Aura (via NEO4J_URI)
+- Cloud agents → Fly.io (via HTTPS)
 
 ---
 
-## Step 1: Create Supabase Project (PostgreSQL + pgvector)
+## Service 1: Supabase (PostgreSQL + pgvector)
 
-### What This Does
-Supabase hosts PostgreSQL with pgvector extension pre-installed. This replaces your local Docker PostgreSQL.
+### What is Supabase?
 
-### How to Do It
+PostgreSQL with pgvector extension hosted in the cloud. Replaces your local Docker PostgreSQL.
 
-**1. Go to https://supabase.com**
-- Sign up or log in
-- Click "New Project"
-- Choose:
-  - Name: `rag-memory` (or whatever you want)
-  - Region: Choose one close to you (us-east-1, eu-west-1, etc.)
-  - Password: Generate a strong one (save it somewhere safe)
+### Create Account & Project
 
-**2. Wait for project to start** (~2 minutes)
+1. Go to: https://supabase.com/dashboard
+2. Sign up (GitHub or email)
+3. Click "New Project"
+4. Choose:
+   - **Name:** `rag-memory` or your choice
+   - **Region:** Pick one close to your location
+     - US users: `us-east-1` (Ashburn, VA) — closest to Fly.io
+     - EU users: `eu-west-1` (Ireland)
+     - Asia users: `ap-southeast-1` (Singapore)
+   - **Database Password:** Generate strong password, save in password manager
+5. Wait for project startup (~2 minutes)
 
-**3. Get your connection details:**
-- Go to Project Settings → Database
-- Find "Connection String" section
-- Copy the `postgresql://` URL
-- Replace `[YOUR-PASSWORD]` with the password you set
+### Get Connection Details
 
-Example format: `postgresql://postgres:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres`
+**From Supabase Dashboard:**
+1. Go to: **Settings → Database → Connection Strings**
+2. Select: **Session Pooler** (NOT "Direct Connection")
+3. Copy: `postgresql://postgres.[REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres`
+4. Replace `[PASSWORD]` with your actual password
 
-**4. Initialize schema:**
-From your local rag-memory directory, run:
+**Why Session Pooler?** Fly.io can have transient connections. Session pooler handles this.
+
+### Initialize Schema
+
+Use Alembic to create the RAG Memory schema:
 
 ```bash
-PGPASSWORD="[YOUR-PASSWORD]" psql "[CONNECTION-STRING]" < init.sql
+export DATABASE_URL="postgresql://postgres.[REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres"
+cd /path/to/rag-memory
+uv run alembic upgrade head
 ```
 
-(This creates the RAG tables in the cloud PostgreSQL)
+**Expected output:**
+```
+INFO  [alembic.runtime.migration] Running upgrade  -> 001_baseline, baseline_fresh_schema
+```
 
-**When you're done, save:**
-- Project name
-- Connection string (with password replaced)
+### Verify Schema Created
+
+```bash
+psql "$DATABASE_URL" -c "\dt"
+```
+
+Should show:
+```
+public | alembic_version       | table | postgres
+public | chunk_collections     | table | postgres
+public | collections           | table | postgres
+public | document_chunks       | table | postgres
+public | source_documents      | table | postgres
+```
+
+### Verify pgvector Installed
+
+```bash
+psql "$DATABASE_URL" -c "SELECT extname FROM pg_extension WHERE extname = 'vector';"
+```
+
+Should show: `vector`
+
+### Costs
+
+| Tier | Storage | Cost | When to Use |
+|---|---|---|---|
+| **Free** | 500 MB | $0 | Personal, testing, small projects |
+| **Pro** | 8 GB | $25/month | Production with regular updates |
+
+For current pricing details, visit: https://supabase.com/pricing
+
+**Typical RAG Memory usage:** 50,000 documents = ~50-100 MB storage. Most users stay on free tier.
+
+### Troubleshooting
+
+**"Connection refused"**
+- Verify Session Pooler URL (not Direct Connection)
+- Check password is correct
+- Verify region in URL matches what you selected
+
+**"pgvector extension not found"**
+- Supabase pre-installs pgvector
+- If missing, run: `psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"`
+
+**"Pool limit exceeded"**
+- Session Pooler default: 25 connections
+- RAG Memory uses 1-2, so this shouldn't happen
+- If it does, upgrade to Pro tier
 
 ---
 
-## Step 2: Create Neo4j Aura Instance (Graph Database)
+## Service 2: Neo4j Aura (Knowledge Graph)
 
-### What This Does
-Neo4j Aura hosts the graph database for entity relationships. This replaces your local Docker Neo4j.
+### What is Neo4j Aura?
 
-### How to Do It
+Managed Neo4j database in the cloud for entity relationships and temporal tracking. Optional but recommended for production.
 
-**1. Go to https://neo4j.com/cloud/platform/**
-- Sign up or log in with your Neo4j account
+### Create Account & Instance
 
-**2. Click "New Instance"**
-- Name: `rag-memory` (or whatever you want)
-- Type: Select "AuraDB Free" (free tier available)
-- Region: Choose one close to you
-- Click "Create"
+1. Go to: https://neo4j.com/cloud/platform/
+2. Sign up (Google, GitHub, or email)
+3. Click "New Instance"
+4. Configure:
+   - **Instance Name:** `rag-memory` or your choice
+   - **Instance Type:**
+     - Free tier: `Aura Free` (4 GB)
+     - Paid tier: `AuraDB Professional` (starts at 4 GB)
+   - **Region:** Same as Supabase if possible (us-east-1, eu-west-1, etc.)
+5. Click "Create"
+6. Wait for instance startup (~5 minutes)
 
-**3. Wait for instance to start** (~5 minutes)
+### Get Connection Details
 
-**4. Get your connection details:**
-- Aura shows connection info on the dashboard
-- Copy the connection URI (looks like: `neo4j+s://[ID].databases.neo4j.io`)
-- Copy the password (shown once, save it!)
-- Username is: `neo4j`
+**From Neo4j Aura Dashboard:**
+1. Instance details show connection information
+2. Copy these three values:
+   - **Connection URI:** `neo4j+s://abc123xyz.databases.neo4j.io` or `bolt://`
+   - **Username:** `neo4j` (default)
+   - **Password:** Auto-generated, shown once. Save in password manager!
 
-**When you're done, save:**
-- Connection URI
-- Username: `neo4j`
-- Password
+### Verify Connection
+
+**Option 1: Neo4j Browser (Web)**
+1. Go to: https://[YOUR-INSTANCE-ID].databases.neo4j.io
+2. Username: `neo4j`
+3. Password: Your auto-generated password
+4. Run query:
+   ```cypher
+   MATCH (n) RETURN count(n) as total_nodes
+   ```
+5. Should return `0` (empty is normal for new instance)
+
+**Option 2: Command Line (if cypher-shell installed)**
+```bash
+cypher-shell -a "neo4j://abc123xyz.databases.neo4j.io:7687" -u neo4j -p "your-password" \
+  "MATCH (n) RETURN count(n) as total_nodes"
+```
+
+### Initialize Graphiti Schema
+
+RAG Memory uses Graphiti for automatic entity extraction. Graphiti schema initializes automatically when you first ingest documents.
+
+No manual initialization needed.
+
+### Costs
+
+| Tier | Storage | Cost | When to Use |
+|---|---|---|---|
+| **Free** | 4 GB | $0 | Personal, testing, small projects |
+| **Professional** | 10+ GB | $42-150/month | Production, larger projects |
+
+For current pricing details, visit: https://neo4j.com/pricing/
+
+**Typical RAG Memory usage:** 50,000 documents = ~500 MB to 2 GB in graph. Most users stay on free tier.
+
+### Troubleshooting
+
+**"Connection refused"**
+- Verify URI uses `neo4j+s://` (secure) or `bolt://`
+- Check password is correct
+- Instance might still be starting, wait 5 minutes
+
+**"Graphiti schema not initialized"**
+- Schema initializes automatically on first ingest
+- If issues occur, check logs in MCP server
 
 ---
 
-## Step 3: Deploy MCP Server to Fly.io
+## Service 3: Fly.io (MCP Server)
 
-### What This Does
-Deploys your RAG Memory MCP server to Fly.io so your AI agents can access it from anywhere.
+### What is Fly.io?
 
-### How to Do It
+Container hosting platform. Runs your MCP server so cloud agents can access it.
 
-**1. Install Fly.io CLI:**
+### Create Account
+
+1. Go to: https://fly.io
+2. Sign up (GitHub or email)
+3. Add payment method (charges only for usage)
+
+### Install Fly CLI
 
 ```bash
 curl -L https://fly.io/install.sh | sh
 ```
 
-**2. Log in to Fly.io:**
+Verify:
+```bash
+fly version
+```
+
+### Authenticate
 
 ```bash
 fly auth login
 ```
 
-**3. From your rag-memory directory, create a Fly.io app:**
+Opens browser for login.
+
+### Create App
+
+From rag-memory directory:
 
 ```bash
-fly launch --name rag-memory-cloud --no-deploy
+fly launch --region iad --name rag-memory-mcp --no-deploy
 ```
 
-**4. Set environment secrets:**
+This creates the app definition but doesn't deploy yet.
+
+**What `--region iad` means:**
+- `iad` = Ashburn, Virginia (US East)
+- Closest to Supabase us-east-1 (low latency)
+- Choose other regions if deploying elsewhere
+
+### Set Secrets (Credentials)
 
 ```bash
 fly secrets set \
-  OPENAI_API_KEY="sk-your-api-key" \
-  DATABASE_URL="postgresql://postgres:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres" \
-  NEO4J_URI="neo4j+s://[ID].databases.neo4j.io" \
+  OPENAI_API_KEY="sk-your-actual-api-key" \
+  DATABASE_URL="postgresql://postgres.[REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres" \
+  NEO4J_URI="neo4j+s://[YOUR-INSTANCE-ID].databases.neo4j.io" \
   NEO4J_USER="neo4j" \
-  NEO4J_PASSWORD="[YOUR-NEO4J-PASSWORD]" \
-  --app rag-memory-cloud
+  NEO4J_PASSWORD="your-neo4j-password" \
+  --app rag-memory-mcp
 ```
 
-(Replace all bracketed values with your actual connection details)
+**Important:**
+- `DATABASE_URL` should be exactly what you used with `alembic upgrade`
+- Use `neo4j+s://` for Aura (secure)
+- All credentials stored securely in Fly's vault
 
-**5. Deploy:**
+### Deploy
 
 ```bash
-fly deploy --app rag-memory-cloud
+fly deploy --app rag-memory-mcp
 ```
 
-**6. Wait for deployment** (~3-5 minutes)
+**What happens:**
+1. Docker image builds (includes Playwright, Crawl4AI, dependencies)
+2. Pushed to Fly.io registry
+3. Container starts on VM
+4. Exposed on https://rag-memory-mcp.fly.dev
 
-**7. Get your Fly.io app URL:**
+**Takes 3-5 minutes first time (includes Docker build), 30-60 seconds after.**
+
+### Get Your Public URL
 
 ```bash
-fly status --app rag-memory-cloud
+fly status --app rag-memory-mcp
 ```
 
-Look for the URL (something like: `https://rag-memory-cloud.fly.dev`)
+Look for `URL:` line. Should be something like:
+```
+https://rag-memory-mcp.fly.dev
+```
 
-**Save this URL - you'll need it next.**
+### Verify Deployment
+
+```bash
+# Check if container is running
+fly status --app rag-memory-mcp
+
+# View logs
+fly logs --app rag-memory-mcp
+
+# Test MCP endpoint
+curl https://rag-memory-mcp.fly.dev/sse
+```
+
+### Costs
+
+| Configuration | CPU | Memory | Idle Cost | Active Cost |
+|---|---|---|---|---|
+| **Current Setup** | shared (1) | 1 GB | $0/month* | ~$3-10/month |
+| **Upgraded** | shared (2) | 2 GB | $0/month* | ~$7-20/month |
+| **Large** | 4-CPU | 8 GB | $0/month* | $30-100+/month |
+
+*With scale-to-zero enabled (default in fly.toml)
+
+**Breakdown for current setup:**
+- Machine active: $0.0000008/second
+- ~60 hours/month active: $1.73
+- Plus fixed IP (if added): ~$2/month
+- Plus data transfer (usually minimal): <$1/month
+- **Total: ~$3-5/month for typical usage**
+
+For detailed pricing: https://fly.io/docs/about/pricing/
+
+### Auto-Stop Configuration
+
+Fly.io's `fly.toml` includes:
+```toml
+[http_service]
+auto_stop_machines = "suspend"
+auto_start_machines = true
+```
+
+**What this does:**
+- After 5 minutes idle: Container suspends (costs $0)
+- On request: Automatically starts (2-5 second cold start)
+- Perfect for low-usage scenarios
+
+### Updating After Deployment
+
+When you update code locally:
+
+```bash
+# Pull latest changes
+git pull
+
+# Redeploy
+fly deploy --app rag-memory-mcp
+```
+
+Takes 30-60 seconds (just rebuilds Docker, no cold start).
+
+### Troubleshooting
+
+**"Port 8000 already in use"**
+- Previous container didn't shut down
+- Solution: `fly restart --app rag-memory-mcp`
+
+**"Dockerfile not found"**
+- Make sure you're running from rag-memory directory
+- Verify `Dockerfile` exists: `ls -la Dockerfile`
+
+**"Connection refused" from Fly.io to Supabase**
+- Check `DATABASE_URL` secret is set correctly
+- Verify Supabase Session Pooler URL (not Direct Connection)
+- Test locally: `psql "$DATABASE_URL" -c "SELECT 1"`
+
+**"Neo4j connection timeout"**
+- Check `NEO4J_URI` secret format (should be `neo4j+s://...`)
+- Verify Aura instance is running (check dashboard)
+- Test timeout: `fly logs --app rag-memory-mcp | grep -i neo4j`
 
 ---
 
-## Step 4: Update Your AI Agent Configuration
+## Connecting AI Agents to Your Cloud Server
 
-### For Claude Code
-
-The simplest approach: use the remote MCP server endpoint from Fly.io.
-
-From your terminal, run:
+### Claude Code
 
 ```bash
-claude mcp add-json --scope user rag-memory-cloud '{
-  "type": "sse",
-  "url": "https://rag-memory-cloud.fly.dev/sse",
-  "env": {
-    "OPENAI_API_KEY": "sk-your-api-key"
-  }
-}'
+claude mcp add rag-memory \
+  --type sse \
+  --url https://rag-memory-mcp.fly.dev/sse
 ```
 
-Replace:
-- `https://rag-memory-cloud.fly.dev/sse` with your actual Fly.io URL + `/sse`
-- `sk-your-api-key` with your OpenAI API key
+Restart Claude Code, then test:
+```
+"List my RAG Memory collections"
+```
 
-Then restart Claude Code.
+### Claude Desktop
 
-### For Claude Desktop
-
-Claude Desktop cannot directly connect to remote MCP servers via SSE. You have two options:
-
-**Option 1: Install RAG Memory locally and configure**
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
+Edit: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "rag-memory": {
       "command": "uv",
-      "args": ["--directory", "/path/to/rag-memory", "run", "python", "-m", "src.mcp.server"],
+      "args": ["--directory", "/Users/you/rag-memory", "run", "python", "-m", "src.mcp.server"],
       "env": {
         "OPENAI_API_KEY": "sk-your-api-key",
-        "DATABASE_URL": "your-supabase-connection-string",
-        "NEO4J_URI": "your-neo4j-uri",
+        "DATABASE_URL": "postgresql://...",
+        "NEO4J_URI": "neo4j+s://...",
         "NEO4J_USER": "neo4j",
-        "NEO4J_PASSWORD": "your-neo4j-password"
+        "NEO4J_PASSWORD": "..."
       }
     }
   }
 }
 ```
 
-Then restart Claude Desktop.
+Restart Claude Desktop.
 
-**Option 2: Use Claude Code instead (recommended)**
+### ChatGPT, Make.com, Zapier, Custom Agents
 
-Claude Code has better support for remote MCP servers and is easier to configure. See "For Claude Code" section above.
-
-### For Cursor or Other Agents
-
-Add the Fly.io SSE endpoint as a remote MCP server:
-
+Use the SSE endpoint:
 ```
-https://rag-memory-cloud.fly.dev/sse
+https://rag-memory-mcp.fly.dev/sse
 ```
 
-With header: `Authorization: Bearer [your-openai-api-key]`
+With Bearer token (if required):
+```
+Authorization: Bearer sk-your-openai-api-key
+```
 
 ---
 
-## Step 5: Verify Everything Works
+## Cost Summary
 
-### Test 1: Supabase Connection
+| Service | Free Tier | Typical Monthly | When You'd Pay |
+|---|---|---|---|
+| **OpenAI** | $5 credit (3 months) | <$1 | Only on ingestion, not search |
+| **Supabase** | 500 MB (unlimited ops) | $0-25 | Exceeding 500 MB storage |
+| **Neo4j Aura** | 4 GB (free tier) | $0-42 | Exceeding 4 GB storage |
+| **Fly.io** | Included credits | $3-10 | Usage beyond free credits |
+| **Total** | All free tier | **~$3-10/month** | **Only if high usage** |
 
-From your local rag-memory directory:
+Most personal and team deployments stay entirely on free tiers.
+
+---
+
+## Production Checklist
+
+Before going to production:
+
+- [ ] Supabase project created with strong database password
+- [ ] PostgreSQL schema initialized with `alembic upgrade head`
+- [ ] Neo4j Aura instance created with saved password
+- [ ] Fly.io app created and secrets configured
+- [ ] MCP server deployed successfully
+- [ ] Public URL working (`curl https://rag-memory-mcp.fly.dev/sse`)
+- [ ] At least one agent connected and tested
+- [ ] PostgreSQL and Neo4j health checked
+- [ ] Cost monitoring dashboard set up (optional)
+
+---
+
+## Hybrid Setup (Local + Cloud)
+
+You can run both local and cloud simultaneously:
+
+**Local config:**
+```bash
+export DATABASE_URL="postgresql://raguser:pass@localhost:54320/rag_memory"
+export NEO4J_URI="bolt://localhost:7687"
+rag status  # Uses local
+```
+
+**Cloud config:**
+```bash
+export DATABASE_URL="postgresql://postgres.[REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:5432/postgres"
+export NEO4J_URI="neo4j+s://[INSTANCE].databases.neo4j.io"
+rag status  # Uses cloud
+```
+
+Switch between them by changing environment variables. Both can coexist.
+
+---
+
+## Updating Your Deployment
+
+### Update RAG Memory Code
 
 ```bash
-psql "[YOUR-CONNECTION-STRING]" -c "\dt"
+cd /path/to/rag-memory
+git pull  # Get latest code
+
+# Redeploy to Fly.io
+fly deploy --app rag-memory-mcp
 ```
 
-(Should show the RAG tables)
+### Update Secrets
 
-### Test 2: Neo4j Connection
-
-Go to the Neo4j Browser in your web browser:
-
-```
-neo4j+s://[ID].databases.neo4j.io
+```bash
+fly secrets set \
+  OPENAI_API_KEY="sk-new-key" \
+  --app rag-memory-mcp
 ```
 
-Then enter:
-- Username: `neo4j`
-- Password: Your Neo4j password
+Changed secrets apply on next deployment.
 
-Run this query:
-```cypher
-MATCH (n) RETURN count(n) as count
+### Rollback Deployment
+
+```bash
+fly releases --app rag-memory-mcp  # See release history
+fly scale count 1 --app rag-memory-mcp  # Revert to previous version
 ```
-
-(Should return 0 if new, or show existing nodes count)
-
-### Test 3: MCP Server
-
-In your AI agent, ask:
-
-```
-"Search RAG collections"
-```
-
-(Should return empty list if new, or show existing collections)
 
 ---
 
-## Step 6: Migrate Your Local Data (Optional)
+## Monitoring & Maintenance
 
-If you have documents already ingested locally, you can migrate them by creating a backup of your local PostgreSQL and restoring it to Supabase.
+### Check Logs
 
-This is an advanced operation. For now, your cloud instance starts fresh. You can re-ingest documents using:
-- `uv run rag ingest text "content"` - Text content
-- `uv run rag ingest file path/to/file.txt` - Files
-- `uv run rag ingest directory path/to/docs/` - Entire directories
-- `uv run rag ingest url "https://example.com/docs"` - Web pages
+```bash
+fly logs --app rag-memory-mcp --recent
+fly logs --app rag-memory-mcp --follow  # Real-time
+```
 
-Contact support if you need help migrating your existing data.
+### Check Database Usage
 
----
+**Supabase:**
+- Dashboard → Database → Usage
+- Shows storage, connections, queries
 
-## Troubleshooting
+**Neo4j Aura:**
+- Dashboard → Instance details → Metrics
+- Shows storage, operations, queries
 
-### "Connection refused" on Supabase
-- Check password is correct
-- Check connection string includes `?ssl=require` at the end
-- Verify you copied the pooler connection string, not direct connection
+**Fly.io:**
+- Dashboard → Machines
+- Shows CPU, memory, network usage
 
-### "Neo4j connection timeout"
-- Check Neo4j Aura instance is running (check dashboard)
-- Verify connection URI is correct (includes `neo4j+s://`)
-- Check firewall/network settings
+### Backup Strategy
 
-### "MCP server not showing up in AI agent"
-- Restart your AI agent (quit and reopen)
-- Check Fly.io deployment logs: `fly logs --app rag-memory-cloud`
-- Verify all environment secrets are set: `fly secrets list --app rag-memory-cloud`
+**PostgreSQL:**
+- Supabase includes automated daily backups
+- Dashboard → Database → Backups
+- No action needed, automatic
 
-### "Searches returning no results"
-- Verify PostgreSQL connection working (Test 1 above)
-- Ingest test data: Ask your AI agent to "Create test collection and add 5 documents"
-- Check Neo4j is empty (that's normal - graph data is optional)
-
----
-
-## Cost Breakdown
-
-| Service | Free Tier | Cost |
-|---------|-----------|------|
-| Supabase | 500 MB database | $0-25/month if you exceed |
-| Neo4j Aura | 4 GB free | $0-42/month if you exceed |
-| Fly.io | $3/month minimum | $3-100+/month depending on usage |
-| OpenAI | Usage-based | ~$0.02-5/month (search is free) |
-| **Total** | **All free** | **~$3-10/month for small usage** |
-
-All three services have generous free tiers. You only pay if you exceed limits.
-
----
-
-## What Changed From Local?
-
-| Component | Local | Cloud |
-|-----------|-------|-------|
-| PostgreSQL | Docker container | Supabase managed |
-| Neo4j | Docker container | Neo4j Aura managed |
-| MCP Server | Your laptop | Fly.io |
-| Backups | docker-compose sidecar | Vendor automatic |
-| Scaling | Manual | Automatic |
-
-Everything else stays the same. Your documents, searches, and AI agents work identically.
+**Neo4j Aura:**
+- Aura Free: No automatic backups
+- Aura Professional: Daily backups
+- Manual backup via Neo4j Browser dump
 
 ---
 
 ## Next Steps
 
-1. **After setup:** Ask your AI agent "Show me RAG Memory statistics"
-2. **Start ingesting:** "Create a collection and ingest some documents"
-3. **Use for real:** Integrate RAG Memory into your actual AI workflows
+1. **Get started:** Run `/cloud-setup` command for interactive guidance
+2. **Verify:** Use health check commands in each service
+3. **Connect agents:** Add MCP server to Claude Code/Desktop
+4. **Monitor:** Set up dashboards for cost and performance
+5. **Scale:** If needed, upgrade machine size or database tiers
 
-For detailed CLI commands, see `.reference/OVERVIEW.md` (CLI section).
-For MCP tool details, see `.reference/MCP_QUICK_START.md`.
+---
+
+## Frequently Asked Questions
+
+**Q: Can I migrate from local to cloud?**
+A: Yes. Export local PostgreSQL dump, import to Supabase. See DATABASE_MIGRATION_GUIDE.md (if applicable).
+
+**Q: Can I use different regions for each service?**
+A: Yes, but latency will be higher. Recommended: US East region for all (iad on Fly, us-east-1 on Supabase/Aura).
+
+**Q: What if a service goes down?**
+A: MCP server gracefully degrades. Neo4j down = RAG-only mode (no graphs). PostgreSQL down = server fails (critical).
+
+**Q: Can I scale to multiple Fly.io machines?**
+A: Yes. Fly.io handles load balancing automatically. Update fly.toml `min_machines_running`.
+
+**Q: How much does data transfer cost?**
+A: Fly.io: Free within regions, $0.02/GB out. Supabase: Included. Neo4j: Included.
+
+**Q: Do I need to restart the server after updating?**
+A: `fly deploy` automatically restarts. Downtime: 30-60 seconds.
+
+---
+
+## Resources
+
+- **Fly.io Docs:** https://fly.io/docs/
+- **Supabase Docs:** https://supabase.com/docs
+- **Neo4j Aura:** https://neo4j.com/docs/aura/
+- **OpenAI Pricing:** https://openai.com/api/pricing/
+- **RAG Memory CLI Reference:** See CLAUDE.md or run `rag --help`
+
+---
+
+**Last Updated:** 2025-10-24
+**Status:** Production Ready
+**Version:** 0.8.0+

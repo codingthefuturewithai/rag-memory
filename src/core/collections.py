@@ -30,7 +30,7 @@ class CollectionManager:
         Args:
             name: Unique name for the collection.
             description: Description of the collection (mandatory).
-            metadata_schema: Optional metadata schema declaration.
+            metadata_schema: Optional metadata schema for custom fields.
                 Format: {
                     "custom": {
                         "field_name": {
@@ -40,10 +40,11 @@ class CollectionManager:
                             "enum": ["value1", "value2"]  # optional
                         },
                         ...
-                    },
-                    "system": ["field1", "field2", ...]
+                    }
                 }
-                Defaults to: {"custom": {}, "system": []}
+                Note: System metadata (domain, crawl_depth, etc.) is added
+                automatically when ingesting from URLs/files.
+                Defaults to: {"custom": {}}
 
         Returns:
             Collection ID.
@@ -185,8 +186,11 @@ class CollectionManager:
 
         if "custom" not in schema:
             raise ValueError("metadata_schema must have 'custom' key")
+
+        # System field is optional - defaults to empty array
+        # (System metadata like domain, crawl_depth are always added automatically)
         if "system" not in schema:
-            raise ValueError("metadata_schema must have 'system' key")
+            schema["system"] = []
 
         # Validate custom schema structure
         if not isinstance(schema["custom"], dict):

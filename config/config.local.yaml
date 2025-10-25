@@ -1,0 +1,61 @@
+# RAG Memory Local Deployment Configuration
+#
+# This file is used as a template by setup.py
+# DO NOT modify this file directly - it is version controlled
+# Your personal configuration is created at: ~/.config/rag-memory/config.yaml
+#
+# The setup.py script will:
+# 1. Read this file as a template
+# 2. Prompt you for your OpenAI API key
+# 3. Prompt you for backup schedule and location
+# 4. Copy this file to ~/.config/rag-memory/config.yaml with your values substituted
+# 5. Keep this template unchanged for version control
+
+server:
+  # OpenAI API Key (required)
+  # Get from: https://platform.openai.com/api-keys
+  # This placeholder will be replaced by setup.py with your actual key
+  openai_api_key: "PLACEHOLDER_OPENAI_API_KEY_REPLACE_ME"
+
+  # Local database connection (docker-compose.yml)
+  # Uses container-internal ports for container-to-container communication
+  database_url: "postgresql://raguser:ragpassword@postgres-local:5432/rag_memory"
+
+  # Local Neo4j connection (docker-compose.yml)
+  # Uses container-internal port for container-to-container communication
+  neo4j_uri: "bolt://neo4j-local:7687"
+  neo4j_http_port: "PLACEHOLDER_NEO4J_HTTP_PORT_REPLACE_ME"
+  neo4j_user: "neo4j"
+  neo4j_password: "graphiti-password"
+
+  # Backup Configuration
+  # Format: cron schedule (minute hour * * *)
+  # Default: 2:05 AM daily = "5 2 * * *"
+  # This placeholder will be replaced by setup.py with user's chosen time
+  backup_cron_schedule: "PLACEHOLDER_BACKUP_CRON_SCHEDULE_REPLACE_ME"
+
+  # Backup archive directory (where .tar.gz files are stored)
+  # Can be absolute path or relative to current directory
+  # This placeholder will be replaced by setup.py with user's chosen location
+  backup_archive_dir: "PLACEHOLDER_BACKUP_ARCHIVE_DIR_REPLACE_ME"
+
+  # Neo4j HTTP Port (for browser access)
+  # This placeholder will be replaced by setup.py with detected port
+  neo4j_http_port_value: "PLACEHOLDER_NEO4J_HTTP_PORT_REPLACE_ME"
+
+  # MCP SSE Port (for MCP server access)
+  # This placeholder will be replaced by setup.py with detected port
+  mcp_sse_port: "PLACEHOLDER_MCP_SSE_PORT_REPLACE_ME"
+
+  # Graphiti LLM Models (optional - uses Graphiti defaults if not specified)
+  #graphiti_model: gpt-5          # Main extraction model (default: gpt-5-mini)
+  #graphiti_small_model: gpt-5-nano    # Small task model (default: gpt-5-nano)
+
+mounts:
+  # Read-only directory mounts for file/directory ingestion
+  # Setup.py will prompt you to configure these
+  # Add entries like:
+  # - path: /Users/yourname/Documents
+  #   read_only: true
+  # - path: /Users/yourname/Downloads
+  #   read_only: true

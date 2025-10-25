@@ -1,27 +1,34 @@
 version: '3.9'
 
 # ================================================================================
-# Environment Configuration
+# RAG Memory Local Deployment - Docker Compose Configuration
 # ================================================================================
-# Load environment variables from .env.local
-# Usage:
-#   docker-compose -f docker-compose.local.yml up -d
+# This file defines all services for local development
+# Configuration files are stored in OS-standard location (e.g., ~/.config/rag-memory/)
+#   - config.yaml (application configuration, created by setup.py)
 #
-# Or set COMPOSE_FILE environment variable to auto-load:
-#   export COMPOSE_FILE=docker-compose.local.yml
-#   docker-compose up -d
+# Usage:
+#   This is a template file. Run setup.py to generate docker-compose.yml
+#   After setup: docker-compose up -d
+# Environment variables (set by setup.py):
+#   - PROD_POSTGRES_PORT (default: 54320)
+#   - PROD_NEO4J_BOLT_PORT (default: 7687)
+#   - PROD_NEO4J_HTTP_PORT (default: 7474)
+#   - PROD_MCP_PORT (default: 8000)
+#   - BACKUP_CRON_SCHEDULE (default: 5 2 * * *)
+#   - BACKUP_ARCHIVE_DIR (default: ./backups)
 # ================================================================================
 
 services:
-  postgres:
+  postgres-local:
     image: pgvector/pgvector:pg16
-    container_name: rag-memory-postgres
+    container_name: rag-memory-postgres-local
     environment:
       POSTGRES_USER: raguser
       POSTGRES_PASSWORD: ragpassword
       POSTGRES_DB: rag_memory
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_local:/var/lib/postgresql/data
       - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U raguser"]
@@ -33,17 +40,17 @@ services:
     labels:
       - docker-volume-backup.stop-during-backup=true
 
-  neo4j:
+  neo4j-local:
     image: neo4j:5-community
-    container_name: rag-memory-neo4j
+    container_name: rag-memory-neo4j-local
     environment:
       NEO4J_AUTH: neo4j/graphiti-password
       NEO4J_PLUGINS: '["apoc"]'
       NEO4J_server_memory_heap_initial__size: 256m
       NEO4J_server_memory_heap_max__size: 512m
     volumes:
-      - neo4j_data:/var/lib/neo4j/data
-      - neo4j_logs:/var/lib/neo4j/logs
+      - neo4j_data_local:/var/lib/neo4j/data
+      - neo4j_logs_local:/var/lib/neo4j/logs
     healthcheck:
       test: ["CMD-SHELL", "cypher-shell -u neo4j -p graphiti-password 'RETURN 1' || exit 1"]
       interval: 10s
@@ -55,61 +62,54 @@ services:
     labels:
       - docker-volume-backup.stop-during-backup=true
 
-  rag-mcp:
+  rag-mcp-local:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: rag-memory-mcp
-    environment:
-      DATABASE_URL: postgresql://raguser:ragpassword@postgres:5432/rag_memory
-      NEO4J_URI: bolt://neo4j:7687
-      NEO4J_USER: neo4j
-      NEO4J_PASSWORD: graphiti-password
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    container_name: rag-memory-mcp-local
     volumes:
       # Mount config directory so MCP server can read config.yaml
       # Config includes server settings and directory mount specifications
-      - ~/.config/rag-memory:/app/.config/rag-memory:ro
+      - ${RAG_CONFIG_DIR}:/root/.config/rag-memory:ro
+      # USER_MOUNTS_PLACEHOLDER - Setup script will insert user directory mounts here
     ports:
-      - "${PROD_MCP_PORT:-8000}:8000"
+      - "${MCP_SSE_PORT:-8000}:8000"
     depends_on:
-      postgres:
+      postgres-local:
         condition: service_healthy
-      neo4j:
+      neo4j-local:
         condition: service_healthy
     restart: on-failure
 
   # ============================================================================
   # Automated Backups - Creates daily TAR archives of database volumes
   # ============================================================================
-  backup:
+  backup-local:
     image: offen/docker-volume-backup:latest
-    container_name: rag-memory-backup
+    container_name: rag-memory-backup-local
     restart: always
-    env_file: ./.env.local
     volumes:
-      - postgres_data:/backup/postgres:ro
-      - neo4j_data:/backup/neo4j:ro
-      - neo4j_logs:/backup/neo4j_logs:ro
+      - postgres_data_local:/backup/postgres:ro
+      - neo4j_data_local:/backup/neo4j:ro
+      - neo4j_logs_local:/backup/neo4j_logs:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./backups:/archive
     depends_on:
-      - postgres
-      - neo4j
+      - postgres-local
+      - neo4j-local
     environment:
       BACKUP_SOURCES: /backup
       BACKUP_FILENAME_EXPAND: "true"
-      # Backup schedule: 2:05 AM daily by default (override in .env.local)
       BACKUP_CRON_SCHEDULE: "${BACKUP_CRON_SCHEDULE:-5 2 * * *}"
+      BACKUP_ARCHIVE_DIR: "${BACKUP_ARCHIVE_DIR:-./backups}"
     labels:
       description: "RAG Memory - Automated Daily Backups"
-      backup_location: "./backups"
-      backup_schedule: "Daily (configurable via BACKUP_CRON_SCHEDULE in .env.local)"
+      backup_location: "Configured in system config"
+      backup_schedule: "Configured via environment variables"
 
 volumes:
-  postgres_data:
+  postgres_data_local:
     driver: local
-  neo4j_data:
+  neo4j_data_local:
     driver: local
-  neo4j_logs:
+  neo4j_logs_local:
     driver: local

@@ -264,11 +264,11 @@ Key principle: `.env` is ONLY for secrets (OPENAI_API_KEY), everything else is i
 3. **Check if RAG Memory local containers running**
    - If YES: "Containers exist. Tear down and rebuild (volumes preserved)? (yes/no)"
      - If NO: HALT and EXIT
-     - If YES: Run `docker-compose -f docker-compose.local.yml down`, continue
+     - If YES: Run `docker-compose down`, continue
    - If NO: Continue
 
 4. **Start containers**
-   - Run `docker-compose -f docker-compose.local.yml up -d`
+   - Run `docker-compose up -d`
    - Wait for health checks to pass
 
 5. **Check if system config exists**

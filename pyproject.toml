@@ -1,6 +1,6 @@
 [project]
 name = "rag-memory"
-version = "0.8.0"
+version = "0.9.0"
 description = "PostgreSQL pgvector-based RAG memory system with MCP server"
 readme = "README.md"
 requires-python = ">=3.10"

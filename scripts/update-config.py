@@ -301,7 +301,7 @@ def main():
             print_header("Next Steps")
             print_info("Your configuration has been updated.")
             print_info("To apply these changes, rebuild and restart Docker containers:\n")
-            console.print(f"{Colors.BOLD}docker-compose -f docker-compose.local.yml up -d --build{Colors.RESET}\n")
+            console.print(f"{Colors.BOLD}docker-compose up -d --build{Colors.RESET}\n")
             print_warning("Note: This will restart your services (databases may be unavailable briefly)")
         else:
             sys.exit(1)

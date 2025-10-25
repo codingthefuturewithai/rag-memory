@@ -4,20 +4,41 @@ Welcome! This directory contains all the reference documentation for RAG Memory.
 
 ---
 
+## 🚀 Quick Start: Choose Your Path
+
+### Are you setting up locally or in the cloud?
+
+**👨‍💻 LOCAL SETUP (Docker on your machine)**
+- Best for: Development, testing, learning
+- Time: 30 minutes
+- Command: `/getting-started`
+- Read next: [OVERVIEW.md](OVERVIEW.md)
+
+**☁️ CLOUD DEPLOYMENT (Supabase + Aura + Fly.io)**
+- Best for: Production, team access, cloud AI agents
+- Time: 1 hour
+- Command: `/cloud-setup`
+- Read next: [CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md)
+
+---
+
 ## Quick Navigation
 
 ### 🎯 Starting Out?
-**Start here:** Run `/getting-started` command in Claude Code
+**Choose above, then come back here for reference.**
 
-Then read: [OVERVIEW.md](OVERVIEW.md)
+For detailed CLI commands: [OVERVIEW.md](OVERVIEW.md)
 
 ### 🔍 Looking for Something Specific?
+
+**"How do I deploy to the cloud?"**
+→ [CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md) - Complete reference guide
 
 **"How do I set up an MCP server?"**
 → [MCP_QUICK_START.md](MCP_QUICK_START.md)
 
-**"What are the 16 MCP tools and how do I use them?"**
-→ [MCP_QUICK_START.md](MCP_QUICK_START.md) - "Available Tools (16 Total)"
+**"What are the 17 MCP tools and how do I use them?"**
+→ [MCP_QUICK_START.md](MCP_QUICK_START.md) - "Available Tools (17 Total)"
 
 **"How does the search work? Is it good?"**
 → [SEARCH_OPTIMIZATION.md](SEARCH_OPTIMIZATION.md)
@@ -25,14 +46,11 @@ Then read: [OVERVIEW.md](OVERVIEW.md)
 **"What's this Knowledge Graph thing?"**
 → [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md)
 
-**"How much will this cost me?"**
+**"How much will this cost me (OpenAI)?"**
 → [PRICING.md](PRICING.md)
 
 **"Tell me everything about RAG Memory"**
 → [OVERVIEW.md](OVERVIEW.md)
-
-**"What got updated in documentation?"**
-→ [DOCUMENTATION_UPDATE_SUMMARY.md](DOCUMENTATION_UPDATE_SUMMARY.md)
 
 ---
 

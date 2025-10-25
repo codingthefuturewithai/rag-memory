@@ -54,7 +54,7 @@ def validate_config_exists() -> bool:
         console.print("[cyan]To update configuration, run:[/cyan]")
         console.print("[bold]  python scripts/update-config.py[/bold]\n")
         console.print("[dim]Then rebuild Docker containers:[/dim]")
-        console.print("[dim]  docker-compose -f docker-compose.local.yml up -d --build[/dim]\n")
+        console.print("[dim]  docker-compose up -d --build[/dim]\n")
         return False
 
     return True

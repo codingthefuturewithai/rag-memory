@@ -45,10 +45,9 @@ def get_config_dir() -> Path:
     Detection logic (in order of priority):
     1. If RAG_CONFIG_PATH env var is set: use that directory
     2. If repo-local config exists (./config/): use that (dev/test scenarios)
-    3. If running in Docker container: use /app/.config/rag-memory
-    4. Otherwise (system CLI): use platformdirs for OS-standard locations:
+    3. Otherwise: use platformdirs for OS-standard locations:
        - macOS: ~/Library/Application Support/rag-memory
-       - Linux: ~/.config/rag-memory (respects $XDG_CONFIG_HOME)
+       - Linux (including Docker): ~/.config/rag-memory (respects $XDG_CONFIG_HOME)
        - Windows: %LOCALAPPDATA%\rag-memory
 
     Returns:
@@ -60,12 +59,11 @@ def get_config_dir() -> Path:
     # 2. Check for repo-local config (when running from within repo)
     elif (repo_local := Path('./config')).exists():
         config_dir = repo_local
-    # 3. Check if running in Docker container (MCP server scenario)
-    elif Path('/.dockerenv').exists():
-        # Inside Docker: config mounted at /app/.config/rag-memory
-        config_dir = Path('/app/.config/rag-memory')
     else:
-        # 4. System-level CLI: use OS-standard locations
+        # 3. System-level CLI and Docker: use OS-standard locations
+        # - macOS: ~/Library/Application Support/rag-memory
+        # - Linux (including Docker): ~/.config/rag-memory
+        # - Windows: %LOCALAPPDATA%\rag-memory
         config_dir = Path(platformdirs.user_config_dir('rag-memory', appauthor=False))
 
     config_dir.mkdir(parents=True, exist_ok=True)

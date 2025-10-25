@@ -5,135 +5,120 @@ allowed-tools: ["Read", "Bash"]
 
 # Welcome to RAG Memory!
 
-This guide will walk you through setting up RAG Memory locally. You'll have a Docker-based knowledge store with both a command-line tool and an MCP server that works with Claude Code, Claude Desktop, and other AI agents.
+You're about to set up a local knowledge management system with PostgreSQL, Neo4j, and an MCP server. You'll be able to use it via command-line tools or AI agents like Claude Code and Claude Desktop.
 
-**Estimated time:** 30-40 minutes
-
----
-
-## PHASE 1: EDUCATION - Understand What RAG Memory Is
-
-### Step 1: What is RAG Memory?
-
-RAG Memory is a knowledge management system that stores documents (text, PDFs, web pages, code) and lets you search them semantically with AI. It uses PostgreSQL with vector search and Neo4j for relationship mapping.
-
-**Two ways to use it:**
-1. **MCP Server** - Connect from Claude Code, Claude Desktop, Cursor (the AI agent way)
-2. **CLI Tool** - Use `rag` commands directly from your terminal (the power-user way)
-
-You can use both at the same time - they talk to the same local databases.
-
-**Ready to learn more, or do you have questions?**
+**Estimated time:** 30-40 minutes (most of it is just waiting for Docker containers to start)
 
 ---
 
-### Step 2: How Does It Work Locally?
+## What You're About to Set Up
 
-When you set up RAG Memory locally, you get:
-- **PostgreSQL + pgvector** (database for document storage and semantic search)
-- **Neo4j** (graph database for entity relationships)
-- **MCP Server** (connects your AI agents to the databases)
-- **Automated backups** (daily encrypted backups of your data)
+- **PostgreSQL + pgvector** - For semantic search (finds documents by meaning, not keywords)
+- **Neo4j** - For relationship mapping (what entities are connected to what)
+- **MCP Server** - So Claude Code, Claude Desktop, and other AI agents can access your knowledge base
+- **CLI Tool** - The `rag` command for terminal access
 
-All running in Docker containers, so nothing else on your machine needs to be installed.
-
-**Does this make sense? Ready to proceed to setup?**
+**Cost:** Zero for local usage (you run everything on your machine)
 
 ---
 
-### Step 3: Cost
+## PHASE 1: RUN THE SETUP SCRIPT
 
-**Cost is ZERO for local usage.** You run everything on your machine.
-
-If you later want to move to cloud (Supabase + Neo4j Aura + Fly.io), you'll have optional costs (~$3-15/month for small usage).
-
-**Ready to set up locally?**
-
----
-
-## PHASE 2: LOCAL SETUP - Get It Running
-
-### Step 4: Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/rag-memory.git
-cd rag-memory
-```
-
-Replace `yourusername` with your GitHub username if you're using a fork, or use the official repository.
-
-This gives you the Docker Compose files and everything else you need.
-
-**Done with clone? Continue to next step.**
-
----
-
-### Step 5: Run the Setup Script
-
-RAG Memory provides a single setup script that handles everything:
+You already have the repository cloned. Now let's run the automated setup:
 
 ```bash
 python scripts/setup.py
 ```
 
 This script will:
-1. Check if Docker is installed and running
-2. Start PostgreSQL and Neo4j containers
-3. Create your local configuration file
-4. Ask for your OpenAI API key
-5. Initialize the databases
-6. Install the CLI tool globally
-7. Verify everything works
+1. ✅ Check if Docker is installed and running
+2. ✅ Start PostgreSQL and Neo4j containers
+3. ✅ Create your local configuration
+4. ✅ Ask for your OpenAI API key (for embeddings)
+5. ✅ Initialize the databases
+6. ✅ Install the CLI tool globally
+7. ✅ Verify everything works
 
-**Follow the prompts. If you don't have Docker running, the script will guide you through that first.**
-
-**Completed setup.py? Continue to next step.**
+**Follow the interactive prompts. If you don't have Docker running, the script will tell you to start it.**
 
 ---
 
-### Step 6: Verify Everything Works
+**When setup.py completes, it will show you what you now have and suggest first commands to try.**
 
-Let's verify the setup completed successfully:
+---
+
+## PHASE 2: VERIFY THE MCP SERVER IS RUNNING
+
+After setup.py completes, the MCP server is automatically running in Docker on **localhost:8000**. Let's verify it:
 
 ```bash
-rag status
+curl http://localhost:8000/sse
 ```
 
-Should show:
-- PostgreSQL connection: ✅ OK
-- Neo4j connection: ✅ OK
-- Collections: 0 (empty for now, that's normal)
-- Documents: 0
-
-**See success for both databases? Good! Continue to next step.**
+You should get a response (might be streaming data). If you get an error or no response, the MCP server didn't start. Check the troubleshooting section below.
 
 ---
 
-## PHASE 4: CONNECT YOUR MCP SERVER - Use from Claude Code/Desktop
+## PHASE 3: TRY YOUR FIRST COMMANDS
 
-### Step 7: Connect RAG Memory to Claude Code
+Once setup completes and you've verified the MCP server, try these commands in your terminal to get a feel for how RAG Memory works:
 
-RAG Memory includes an MCP server that's already running in Docker. Now connect it to Claude Code:
+### Create Your First Collection
+```bash
+rag collection create my-first-notes --description "My first RAG Memory collection"
+```
 
+This creates a named collection where you can organize your documents by topic.
+
+### Add a Document
+```bash
+rag ingest text "RAG Memory combines PostgreSQL with pgvector for semantic search and Neo4j for knowledge graphs. You can store any text content and search by meaning." --collection my-first-notes
+```
+
+This adds a document to your collection and makes it searchable.
+
+### Search Your Knowledge Base
+```bash
+rag search "semantic search" --collection my-first-notes
+```
+
+This searches your collection by meaning. You should see the document you just added with a similarity score.
+
+### List What You Have
+```bash
+rag collection list
+```
+
+Shows all your collections.
+
+---
+
+## PHASE 4: CONNECT TO CLAUDE CODE OR CLAUDE DESKTOP
+
+Now that the MCP server is running, you can connect it to AI agents:
+
+### Option A: Claude Code
+
+In your terminal:
 ```bash
 claude mcp add rag-memory --type sse --url http://localhost:8000/sse
 ```
 
-This registers RAG Memory as an available MCP server in Claude Code.
+Restart Claude Code, then ask:
+```
+"List my RAG Memory collections"
+```
 
-**Note:** You may need to restart Claude Code for it to recognize the new server.
+Or:
+```
+"Search my knowledge base for semantic search"
+```
 
-**Done? Continue to next step.**
+### Option B: Claude Desktop (Optional)
 
----
+Edit: `~/Library/Application Support/Claude/claude_desktop_config.json`
 
-### Step 8: Connect RAG Memory to Claude Desktop (Optional)
-
-If you also use Claude Desktop, add it there too:
-
-**Location:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-**Add this JSON:**
+Add this configuration:
 ```json
 {
   "mcpServers": {
@@ -145,151 +130,112 @@ If you also use Claude Desktop, add it there too:
 }
 ```
 
-Then restart Claude Desktop.
+Save the file, then restart Claude Desktop completely.
 
-**Note:** Claude Desktop runs RAG Memory as a subprocess (stdio transport), while Claude Code connects via HTTP (SSE transport). Both access the same local databases.
-
-**Done? Continue to testing.**
+**Note:** Both Claude Code and Claude Desktop connect to the same local databases. You can use either or both.
 
 ---
 
-## PHASE 5: TEST IT OUT
+## WHAT YOU NOW HAVE
 
-### Step 13: Test the CLI Tool
+Congratulations! Your RAG Memory setup is complete. Here's what's running:
 
-In your terminal:
-
-```bash
-rag search "artificial intelligence"
-```
-
-You'll get:
-```
-No results found (empty database)
-```
-
-This is normal - you haven't ingested any documents yet. The important thing is that the command ran without errors.
-
-**Worked? Continue to test MCP.**
+✅ **PostgreSQL Database** - Stores documents and embeddings for semantic search
+✅ **Neo4j Graph Database** - Tracks relationships between entities
+✅ **MCP Server** - Running on localhost:8000, ready for AI agents
+✅ **CLI Tool** - The `rag` command is available in your terminal from anywhere
 
 ---
 
-### Step 14: Test the MCP Server in Claude Code
+## NEXT STEPS
 
-In Claude Code, ask your AI agent:
+### For Terminal Users (Power Users)
 
-```
-"List my RAG Memory collections"
-```
+Use the `rag` command to ingest, search, and manage:
+- See all commands: `rag --help`
+- Complete reference: `.reference/OVERVIEW.md`
 
-Or:
+### For Claude Code / Claude Desktop Users
 
-```
-"Show me RAG Memory status"
-```
+The MCP server gives your AI agent 17 tools:
+- Create collections
+- Search documents
+- Ingest from web pages, files, directories
+- Manage documents
+- View entity relationships (knowledge graph)
 
-If it works, you'll get a response about your empty knowledge base.
+See all tools: `.reference/MCP_QUICK_START.md`
 
-**Works? Congrats! Local setup is complete.**
+### Common Next Steps
 
----
-
-## NEXT STEPS - Start Using RAG Memory
-
-Now that you have RAG Memory running, you can:
-
-### Add Documents
+**I want to add more documents:**
 ```bash
-rag ingest text "Your text here"
-rag ingest file path/to/document.txt
-rag ingest url https://example.com/article
+rag ingest file /path/to/document.txt --collection my-first-notes
+rag ingest url https://example.com/article --collection my-first-notes
+rag ingest directory ~/my-documents --collection my-first-notes
 ```
 
-### Search
-```bash
-rag search "what is machine learning"
-```
+**I want to search better:**
+See `.reference/SEARCH_OPTIMIZATION.md` for tuning tips.
 
-### Use from AI Agents
-Ask Claude Code or Claude Desktop:
-- "Create a RAG Memory collection called 'my-notes'"
-- "Add this document to my collection"
-- "Search my knowledge base for..."
-
-### Manage Collections
-```bash
-rag collection list
-rag collection create my-new-collection
-rag collection delete my-old-collection
-```
+**I want to deploy to the cloud:**
+When ready, run `/cloud-setup` for step-by-step guidance on Supabase, Neo4j Aura, and Fly.io.
 
 ---
 
 ## TROUBLESHOOTING
 
-### "Connection refused" error
-The Docker containers might not be running:
+### "Connection refused" / "Can't connect to database"
+Containers might not be running:
 ```bash
 docker-compose -f docker-compose.dev.yml ps
 ```
 
-If any are stopped, restart them:
+If any show "Exited", restart:
 ```bash
 docker-compose -f docker-compose.dev.yml up -d
 ```
 
 ### "rag: command not found"
-The CLI tool wasn't installed globally:
+CLI tool wasn't installed. From the repo directory:
 ```bash
 uv tool install .
 ```
 
-Then verify:
+### "MCP server not responding"
+Check if it's running:
 ```bash
-which rag
+docker-compose -f docker-compose.dev.yml logs mcp-server
 ```
 
+Look for error messages.
+
 ### "Configuration not found"
-First-run wizard didn't complete. Run:
+The setup wizard didn't complete. Run:
 ```bash
 rag status
 ```
 
-And follow the prompts to create `~/.rag-memory-env`.
+And follow the prompts.
 
-### MCP server not appearing in Claude Code
-Try restarting Claude Code completely (quit and reopen).
-
-If it still doesn't work:
+### "MCP server not appearing in Claude Code"
+Try restarting Claude Code completely (quit and reopen). If it still doesn't show:
 ```bash
-docker-compose -f docker-compose.dev.yml logs
+claude mcp list
 ```
 
-Look for errors in the output.
+Should show `rag-memory` with URL `http://localhost:8000/sse`.
 
 ---
 
-## WHAT HAPPENS NEXT?
+## Documentation
 
-Now that RAG Memory is running locally, check out the documentation:
-
-**For detailed CLI commands:**
-- Run: `rag --help`
-- Or see `.reference/OVERVIEW.md` for complete reference
-
-**For MCP tool reference:**
-- See `.reference/MCP_QUICK_START.md`
-- Lists all 17 tools available for AI agents
-
-**For cloud deployment (when ready):**
-- See `.reference/CLOUD_DEPLOYMENT.md`
-- Covers Supabase PostgreSQL, Neo4j Aura, Fly.io MCP server
-- Data migration guide (move your local documents to cloud)
-
-**For architecture details:**
-- See `CLAUDE.md` for development reference
-- Explains PostgreSQL + Neo4j dual storage, vector normalization, etc.
+- **CLI Commands:** `.reference/OVERVIEW.md`
+- **MCP Tools (17 total):** `.reference/MCP_QUICK_START.md`
+- **Search Optimization:** `.reference/SEARCH_OPTIMIZATION.md`
+- **Knowledge Graphs:** `.reference/KNOWLEDGE_GRAPH.md`
+- **Cloud Deployment:** `/cloud-setup` command or `.reference/CLOUD_DEPLOYMENT.md`
 
 ---
 
-**You're all set! Start ingesting documents and exploring your knowledge base with AI agents.**
+**You're all set! Start building your knowledge base. 🚀**

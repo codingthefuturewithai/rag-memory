@@ -6,24 +6,24 @@
 
 A production-ready **PostgreSQL + pgvector + Neo4j** knowledge management system with dual storage for semantic search (RAG) and knowledge graphs. Works as an **MCP server for AI agents** and a **standalone CLI tool**.
 
-## ⚡ Quick Start
+## ⚡ Quick Start (30 minutes)
 
-### For Claude Code Users
+Open a new terminal and run:
 
-If you have Claude Code installed, the absolute easiest way to get started:
-
+```bash
+git clone https://github.com/yourusername/rag-memory.git
+cd rag-memory
+python scripts/setup.py
 ```
-/getting-started
-```
 
-This interactive guide will walk you through:
-- Understanding what RAG Memory does
-- Setting up local Docker containers
-- Configuring your API keys
-- Connecting to Claude Code or Claude Desktop
-- Testing with sample data
+This setup script will:
+- ✅ Check you have Docker installed
+- ✅ Start PostgreSQL and Neo4j containers
+- ✅ Ask for your OpenAI API key
+- ✅ Initialize your local knowledge base
+- ✅ Install the `rag` CLI tool
 
-**Estimated time: 30-40 minutes**
+**That's it!** After setup completes, you'll have a working RAG Memory system ready to use.
 
 ---
 
@@ -49,31 +49,9 @@ Both databases work together automatically - when you ingest a document, it's in
 - Full document lifecycle (create, read, update, delete)
 - Cross-platform configuration system
 
-### 📦 Installation
+### For Developers (Code Modifications)
 
-The recommended way to install RAG Memory is to clone the repository and run the setup script:
-
-```bash
-# Clone repository from PyPI
-git clone https://github.com/yourusername/rag-memory.git
-cd rag-memory
-
-# Run the setup script (handles everything)
-python scripts/setup.py
-```
-
-The `setup.py` script will:
-1. Check that Docker is installed
-2. Start PostgreSQL and Neo4j containers
-3. Create your local configuration
-4. Ask for your OpenAI API key
-5. Initialize the databases
-6. Install the `rag` CLI tool globally
-7. Test that everything works
-
-**That's it!** After setup.py completes, you can use `rag` commands from anywhere.
-
-For **developers** who want to modify the code:
+If you want to modify the code:
 
 ```bash
 # Clone repository
