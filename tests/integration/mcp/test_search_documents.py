@@ -79,11 +79,15 @@ class TestSearchDocuments:
 
         await session.call_tool("create_collection", {
             "name": collection_a,
-            "description": "Test collection A"
+            "description": "Test collection A",
+            "domain": "testing",
+            "domain_scope": "Test collection A for search isolation testing"
         })
         await session.call_tool("create_collection", {
             "name": collection_b,
-            "description": "Test collection B"
+            "description": "Test collection B",
+            "domain": "testing",
+            "domain_scope": "Test collection B for search isolation testing"
         })
 
         # Ingest into collection A

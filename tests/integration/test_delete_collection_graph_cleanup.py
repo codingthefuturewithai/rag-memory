@@ -90,6 +90,8 @@ class TestDeleteCollectionGraphCleanup:
         coll_mgr.create_collection(
             collection_name,
             "Test for graph cleanup",
+            domain="testing",
+            domain_scope="Test collection for verifying graph cleanup on collection deletion",
             metadata_schema={"custom": {}, "system": []}
         )
 

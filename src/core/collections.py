@@ -22,42 +22,73 @@ class CollectionManager:
         self.db = database
 
     def create_collection(
-        self, name: str, description: str, metadata_schema: dict = None
+        self,
+        name: str,
+        description: str,
+        domain: str,
+        domain_scope: str,
+        metadata_schema: dict = None
     ) -> int:
         """
-        Create a new collection with a fixed metadata schema.
+        Create a new collection with mandatory scope fields and optional custom metadata schema.
 
-        Args:
-            name: Unique name for the collection.
-            description: Description of the collection (mandatory).
-            metadata_schema: Optional metadata schema for custom fields.
-                Format: {
-                    "custom": {
-                        "field_name": {
-                            "type": "string|number|boolean|array|object",
-                            "description": "optional",
-                            "required": false,
-                            "enum": ["value1", "value2"]  # optional
-                        },
-                        ...
+        Mandatory Fields (required at creation, define collection scope):
+            - domain: Single knowledge domain for this collection (e.g., "quantum computing")
+              Cannot be changed after creation (immutable).
+            - domain_scope: Natural language description of what is/isn't in this domain
+              Cannot be changed after creation (immutable).
+
+        Custom Fields (optional, user-defined):
+            Declare custom metadata fields per-collection. Format:
+            {
+                "custom": {
+                    "field_name": {
+                        "type": "string|number|boolean|array|object",
+                        "description": "optional",
+                        "required": false,  # new fields must be optional
+                        "enum": [...]       # optional
                     }
                 }
-                Note: System metadata (domain, crawl_depth, etc.) is added
-                automatically when ingesting from URLs/files.
-                Defaults to: {"custom": {}}
+            }
+
+        Args:
+            name: Unique collection name
+            description: Collection description (mandatory, non-empty)
+            domain: Knowledge domain (mandatory, singular, immutable)
+            domain_scope: Description of domain boundaries (mandatory, immutable)
+            metadata_schema: Optional custom fields schema (additive-only)
 
         Returns:
-            Collection ID.
+            Collection ID
 
         Raises:
-            ValueError: If collection with same name already exists or schema is invalid.
+            ValueError: If mandatory fields invalid, custom schema invalid, or collection already exists
         """
         # Validate description is provided
         if not description or description.strip() == "":
             raise ValueError("Collection description is mandatory")
 
-        # Validate and normalize metadata_schema
-        schema = self._validate_metadata_schema(metadata_schema)
+        # Validate mandatory fields
+        if not domain or not isinstance(domain, str) or not domain.strip():
+            raise ValueError("Mandatory field 'domain' must be a non-empty string")
+
+        if not domain_scope or not isinstance(domain_scope, str) or not domain_scope.strip():
+            raise ValueError("Mandatory field 'domain_scope' must be a non-empty string")
+
+        # Build complete schema with mandatory fields
+        complete_schema = {
+            "mandatory": {
+                "domain": domain.strip(),
+                "domain_scope": domain_scope.strip()
+            },
+            "custom": {},
+            "system": []
+        }
+
+        # Validate and merge custom fields if provided
+        if metadata_schema:
+            validated_custom = self._validate_metadata_schema(metadata_schema)
+            complete_schema["custom"] = validated_custom.get("custom", {})
 
         conn = self.db.connect()
         try:
@@ -68,12 +99,13 @@ class CollectionManager:
                     VALUES (%s, %s, %s)
                     RETURNING id;
                     """,
-                    (name, description, Jsonb(schema)),
+                    (name, description, Jsonb(complete_schema)),
                 )
                 collection_id = cur.fetchone()[0]
                 logger.info(
                     f"Created collection '{name}' with ID {collection_id}, "
-                    f"schema: {schema}"
+                    f"domain: {domain}, "
+                    f"custom fields: {len(complete_schema['custom'])}"
                 )
                 return collection_id
         except Exception as e:
@@ -167,30 +199,42 @@ class CollectionManager:
 
     def _validate_metadata_schema(self, schema: dict = None) -> dict:
         """
-        Validate and normalize metadata schema.
+        Validate and normalize metadata schema (custom fields only).
+
+        This method validates ONLY custom fields. Mandatory fields (domain, topics, domain_scope)
+        are validated in create_collection() directly.
+
+        CUSTOM FIELDS (user-defined, additive-only):
+        - User-declared fields with type validation
+        - Can be required or optional
 
         Args:
-            schema: Raw schema dict from user (may be None).
+            schema: Raw schema dict from user (may be None). Expected format:
+                {
+                    "custom": {
+                        "field_name": {
+                            "type": "string|number|boolean|array|object",
+                            "description": "optional",
+                            "required": true|false,
+                            "enum": [...]  # optional
+                        }
+                    }
+                }
 
         Returns:
-            Normalized schema dict ready for storage.
+            Normalized schema dict with custom fields validated
 
         Raises:
-            ValueError: If schema is invalid.
+            ValueError: If schema structure is invalid
         """
         if schema is None:
-            return {"custom": {}, "system": []}
+            return {"custom": {}}
 
         if not isinstance(schema, dict):
             raise ValueError("metadata_schema must be a dictionary")
 
         if "custom" not in schema:
             raise ValueError("metadata_schema must have 'custom' key")
-
-        # System field is optional - defaults to empty array
-        # (System metadata like domain, crawl_depth are always added automatically)
-        if "system" not in schema:
-            schema["system"] = []
 
         # Validate custom schema structure
         if not isinstance(schema["custom"], dict):
@@ -200,6 +244,7 @@ class CollectionManager:
             if not isinstance(field_def, dict):
                 # Allow shorthand: {"name": "string"}
                 field_def = {"type": str(field_def)}
+                schema["custom"][field_name] = field_def
 
             if "type" not in field_def:
                 raise ValueError(f"Field '{field_name}' missing required 'type' key")
@@ -211,70 +256,75 @@ class CollectionManager:
                     f"Allowed: {allowed_types}"
                 )
 
-        # Validate system metadata fields
-        if not isinstance(schema["system"], list):
-            raise ValueError("metadata_schema.system must be a list")
+        return {"custom": schema["custom"]}
 
-        allowed_system_fields = {
-            "file_type",
-            "source_type",
-            "ingested_at",
-            "domain",
-            "status_code",
-            "content_type",
-            "file_path",
-            "crawl_depth",
-            "crawl_root_url",
-        }
+    def validate_document_mandatory_fields(
+        self, collection_name: str, document_metadata: dict
+    ) -> None:
+        """
+        Validate that document's domain matches collection's scope (guidance, not enforcement).
 
-        for field in schema["system"]:
-            if field not in allowed_system_fields:
-                raise ValueError(
-                    f"Unknown system field: '{field}'. "
-                    f"Allowed: {allowed_system_fields}"
-                )
+        This is a GUIDANCE mechanism, not a hard constraint:
+        - LLM clients SHOULD provide domain matching the collection
+        - System WILL NOT reject mismatches (helps with retroactive documents)
+        - But validation helps LLMs understand collection scope
 
-        return schema
+        Args:
+            collection_name: Collection to validate against
+            document_metadata: Metadata dict from ingested document
+
+        Raises:
+            ValueError: If collection not found
+        """
+        collection = self.get_collection(collection_name)
+        if not collection:
+            raise ValueError(f"Collection '{collection_name}' not found")
+
+        mandatory = collection.get("metadata_schema", {}).get("mandatory", {})
+        if not mandatory:
+            # No mandatory fields defined yet (old collection) - skip validation
+            return
+
+        # Get document's domain (may be missing - that's ok)
+        doc_domain = document_metadata.get("domain")
+
+        # Log warnings if mismatches (guidance only, not enforced)
+        if doc_domain and doc_domain != mandatory.get("domain"):
+            logger.warning(
+                f"Document domain '{doc_domain}' does not match collection domain "
+                f"'{mandatory.get('domain')}' - this may indicate scope mismatch"
+            )
 
     def update_collection_metadata_schema(
         self, name: str, new_fields: dict
     ) -> dict:
         """
-        Update a collection's metadata schema (additive only).
+        Update a collection's metadata schema (additive only, mandatory fields immutable).
 
-        Allows adding new optional fields to an existing collection's metadata schema.
-        Cannot remove existing fields or change their types to maintain data integrity.
+        MANDATORY FIELD UPDATE RULES:
+        - domain: IMMUTABLE - cannot be changed after creation
+        - domain_scope: IMMUTABLE - cannot be changed after creation
+
+        CUSTOM FIELD UPDATE RULES:
+        - New custom fields can be added
+        - Existing custom fields cannot be removed (data integrity)
+        - Existing custom field types cannot be changed
 
         Args:
-            name: Collection name to update.
-            new_fields: New schema fields to add/update. Format:
+            name: Collection name to update
+            new_fields: New schema fields to add/update
                 {
                     "custom": {
-                        "new_field": {
-                            "type": "string",
-                            "description": "optional",
-                            "enum": ["value1", "value2"]
-                        }
+                        "new_field": {"type": "string"}
                     }
                 }
 
         Returns:
-            Updated collection info with new schema.
+            Updated collection info with merged schema
 
         Raises:
-            ValueError: If collection not found, trying to remove fields,
-                       or changing field types.
-
-        Example:
-            # Add new optional field to existing collection
-            result = update_collection_metadata_schema(
-                "my-docs",
-                {
-                    "custom": {
-                        "priority": {"type": "string", "enum": ["high", "medium", "low"]}
-                    }
-                }
-            )
+            ValueError: If trying to change immutable mandatory fields (domain, domain_scope),
+                       remove custom fields, or violate other additive-only constraints
         """
         # Get existing collection
         collection = self.get_collection(name)
@@ -282,47 +332,75 @@ class CollectionManager:
             raise ValueError(f"Collection '{name}' not found")
 
         current_schema = collection["metadata_schema"]
+        current_mandatory = current_schema.get("mandatory", {})
 
-        # Ensure new_fields has proper structure
-        if "custom" not in new_fields:
-            new_fields = {"custom": new_fields}
+        # RULE 1: Block updates to immutable mandatory fields
+        if "mandatory" in new_fields:
+            new_mandatory = new_fields["mandatory"]
 
-        # Validate no field removals
-        for field in current_schema.get("custom", {}):
-            if field not in new_fields.get("custom", {}):
+            # Block domain changes
+            if "domain" in new_mandatory and new_mandatory["domain"] != current_mandatory.get("domain"):
                 raise ValueError(
-                    f"Cannot remove existing field '{field}'. "
-                    f"Schema updates are additive-only to preserve data integrity."
+                    f"Cannot change mandatory field 'domain' from "
+                    f"'{current_mandatory.get('domain')}' to '{new_mandatory['domain']}'. "
+                    f"Domain is immutable and defines collection scope."
                 )
 
-        # Validate no type changes
-        for field, spec in current_schema.get("custom", {}).items():
-            if field in new_fields.get("custom", {}):
-                new_spec = new_fields["custom"][field]
-                if not isinstance(new_spec, dict):
-                    new_spec = {"type": str(new_spec)}
+            # Block domain_scope changes
+            if "domain_scope" in new_mandatory and new_mandatory["domain_scope"] != current_mandatory.get("domain_scope"):
+                raise ValueError(
+                    f"Cannot change mandatory field 'domain_scope' once set. "
+                    f"Domain scope is immutable and defines collection boundaries."
+                )
 
-                if spec.get("type") != new_spec.get("type"):
+        # Ensure new_fields has proper structure for custom fields
+        if "custom" in new_fields:
+            # Validate no custom field removals
+            for field in current_schema.get("custom", {}):
+                if field not in new_fields.get("custom", {}):
                     raise ValueError(
-                        f"Cannot change type of field '{field}' from "
-                        f"'{spec.get('type')}' to '{new_spec.get('type')}'. "
-                        f"Type changes would break existing documents."
+                        f"Cannot remove existing field '{field}'. "
+                        f"Schema updates are additive-only to preserve data integrity."
                     )
 
-        # Force all new fields to be optional
-        for field, spec in new_fields.get("custom", {}).items():
-            if field not in current_schema.get("custom", {}):
-                if not isinstance(spec, dict):
-                    spec = {"type": str(spec)}
-                spec["required"] = False
-                new_fields["custom"][field] = spec
+            # Validate no type changes for custom fields
+            for field, spec in current_schema.get("custom", {}).items():
+                if field in new_fields.get("custom", {}):
+                    new_spec = new_fields["custom"][field]
+                    if not isinstance(new_spec, dict):
+                        new_spec = {"type": str(new_spec)}
+
+                    if spec.get("type") != new_spec.get("type"):
+                        raise ValueError(
+                            f"Cannot change type of field '{field}' from "
+                            f"'{spec.get('type')}' to '{new_spec.get('type')}'. "
+                            f"Type changes would break existing documents."
+                        )
+
+            # Force all new custom fields to be optional
+            for field, spec in new_fields.get("custom", {}).items():
+                if field not in current_schema.get("custom", {}):
+                    if not isinstance(spec, dict):
+                        spec = {"type": str(spec)}
+                    spec["required"] = False
+                    new_fields["custom"][field] = spec
 
         # Merge schemas
         updated_schema = current_schema.copy()
-        updated_schema["custom"].update(new_fields.get("custom", {}))
 
-        # Validate the merged schema
-        validated_schema = self._validate_metadata_schema(updated_schema)
+        # Update mandatory fields if provided
+        if "mandatory" in new_fields:
+            if "mandatory" not in updated_schema:
+                updated_schema["mandatory"] = {}
+            updated_schema["mandatory"].update(new_fields["mandatory"])
+
+        # Update custom fields if provided
+        if "custom" in new_fields:
+            if "custom" not in updated_schema:
+                updated_schema["custom"] = {}
+            # Validate the custom fields
+            validated_custom = self._validate_metadata_schema({"custom": new_fields["custom"]})
+            updated_schema["custom"].update(validated_custom["custom"])
 
         # Update in database
         conn = self.db.connect()
@@ -334,7 +412,7 @@ class CollectionManager:
                 WHERE name = %s
                 RETURNING id
                 """,
-                (Jsonb(validated_schema), name)
+                (Jsonb(updated_schema), name)
             )
 
             if cur.rowcount == 0:
@@ -342,9 +420,10 @@ class CollectionManager:
 
             collection_id = cur.fetchone()[0]
 
+        custom_added = len(new_fields.get("custom", {})) - len(current_schema.get("custom", {})) if "custom" in new_fields else 0
         logger.info(
             f"Updated metadata schema for collection '{name}' (ID: {collection_id}). "
-            f"Added {len(new_fields.get('custom', {})) - len(current_schema.get('custom', {}))} new fields."
+            f"Added {custom_added} new custom fields."
         )
 
         # Return updated collection info

@@ -171,33 +171,79 @@ def update_collection_metadata_impl(
     new_fields: Dict[str, Any]
 ) -> Dict[str, Any]:
     """
-    Implementation of update_collection_metadata tool.
+    Implementation of update_collection_metadata MCP tool.
 
-    Updates a collection's metadata schema (additive only).
+    Updates a collection's metadata schema (additive only, mandatory fields immutable).
+
+    MANDATORY FIELD UPDATE RULES:
+
+    domain and domain_scope: IMMUTABLE - cannot be changed after creation.
+        Attempting to change these fields will raise ValueError.
+
+    topics: ADDITIVE-ONLY - new topics can be added, existing topics preserved.
+        When updating topics, provide the new topics to ADD:
+        {
+            "mandatory": {
+                "topics": ["new_topic_1", "new_topic_2"]
+            }
+        }
+        System will merge new topics with existing (deduplicating), so you don't need to
+        provide the full list - just the new ones you want to add.
+
+    CUSTOM FIELD UPDATE RULES:
+
+    New custom fields can be added (required=false, additive-only).
+    Existing custom fields cannot be removed or have types changed.
+
+    Args:
+        coll_mgr: CollectionManager instance
+        collection_name: Collection name to update
+        new_fields: New schema fields to add/merge. Format:
+            {
+                "mandatory": {
+                    "topics": ["new_topic_1", "new_topic_2"]  # Merged with existing
+                },
+                "custom": {
+                    "new_field": {"type": "string", "required": false}
+                }
+            }
+
+    Returns:
+        {
+            "name": str,
+            "description": str,
+            "metadata_schema": dict,
+            "fields_added": int,
+            "total_custom_fields": int
+        }
+
+    Raises:
+        ValueError: If trying to change immutable fields (domain, domain_scope),
+                   remove custom fields, or violate additive-only constraints
     """
     try:
-        # Wrap new_fields in custom if not already
-        if "custom" not in new_fields:
+        # Wrap new_fields in custom if it's just bare fields (backward compatibility)
+        if "custom" not in new_fields and "mandatory" not in new_fields:
             new_fields = {"custom": new_fields}
 
-        # Get current schema for comparison
+        # Get current state before update
         current = coll_mgr.get_collection(collection_name)
         if not current:
             raise ValueError(f"Collection '{collection_name}' not found")
 
-        current_field_count = len(current["metadata_schema"].get("custom", {}))
+        current_custom_count = len(current["metadata_schema"].get("custom", {}))
 
-        # Update the schema
+        # Update the schema (handles mandatory validation)
         updated = coll_mgr.update_collection_metadata_schema(collection_name, new_fields)
 
-        new_field_count = len(updated["metadata_schema"].get("custom", {}))
+        new_custom_count = len(updated["metadata_schema"].get("custom", {}))
 
         return {
             "name": updated["name"],
             "description": updated["description"],
             "metadata_schema": updated["metadata_schema"],
-            "fields_added": new_field_count - current_field_count,
-            "total_fields": new_field_count
+            "fields_added": new_custom_count - current_custom_count,
+            "total_custom_fields": new_custom_count
         }
     except ValueError as e:
         logger.warning(f"update_collection_metadata failed: {e}")
@@ -211,17 +257,84 @@ def create_collection_impl(
     coll_mgr: CollectionManager,
     name: str,
     description: str,
-    metadata_schema: Optional[Dict[str, Any]] = None,
+    domain: str,
+    domain_scope: str = None,
+    metadata_schema: Dict[str, Any] = None,
 ) -> Dict[str, Any]:
     """
-    Implementation of create_collection tool.
+    Implementation of create_collection MCP tool.
 
-    Creates a collection with an optional metadata schema declaration.
+    Creates a collection with mandatory scope fields (domain, domain_scope) and optional custom metadata fields.
+
+    MANDATORY FIELDS (required at creation, define collection scope):
+
+    domain (string, required):
+        Single knowledge domain for this collection. Examples: "quantum computing", "molecular biology", "aviation"
+        Immutable - cannot be changed after creation.
+        Purpose: Partitions knowledge graph by meaningful knowledge areas.
+
+    domain_scope (string, required):
+        Natural language specification of collection boundaries.
+        Example: "Covers quantum computing theory and applications. Excludes quantum biology, quantum cryptography outside computing."
+        Immutable - cannot be changed after creation.
+        Purpose: Helps LLMs understand scope when deciding what documents to ingest.
+
+    CUSTOM FIELDS (optional, user-defined):
+
+    metadata_schema (dict, optional):
+        Declare custom metadata fields for documents in this collection. Format:
+        {
+            "custom": {
+                "doc_type": {
+                    "type": "string",
+                    "description": "Type of document",
+                    "required": false,
+                    "enum": ["article", "paper", "book"]
+                },
+                "priority": {
+                    "type": "string",
+                    "required": false
+                }
+            }
+        }
+        New fields must be optional (required=false or omitted).
+        Custom fields are additive-only - new fields can be added later but never removed.
+
+    Args:
+        coll_mgr: CollectionManager instance
+        name: Unique collection name
+        description: Collection description (mandatory, non-empty)
+        domain: Knowledge domain (mandatory, singular, immutable)
+        domain_scope: Domain boundary description (mandatory, immutable)
+        metadata_schema: Optional custom field declarations
+
+    Returns:
+        {
+            "collection_id": int,
+            "name": str,
+            "description": str,
+            "domain": str,
+            "domain_scope": str,
+            "metadata_schema": dict,
+            "created": true
+        }
+
+    Raises:
+        ValueError: If mandatory fields invalid, custom schema invalid, or collection already exists
     """
     try:
+        # Validate mandatory fields
+        if not domain or not isinstance(domain, str):
+            raise ValueError("domain must be a non-empty string")
+        if not domain_scope or not isinstance(domain_scope, str):
+            raise ValueError("domain_scope must be a non-empty string")
+
+        # Call updated create_collection with mandatory fields
         collection_id = coll_mgr.create_collection(
             name=name,
             description=description,
+            domain=domain,
+            domain_scope=domain_scope,
             metadata_schema=metadata_schema,
         )
 
@@ -231,11 +344,12 @@ def create_collection_impl(
             "collection_id": collection_id,
             "name": name,
             "description": description,
+            "domain": domain,
+            "domain_scope": domain_scope,
             "metadata_schema": collection.get("metadata_schema"),
             "created": True,
         }
     except ValueError as e:
-        # Collection already exists or invalid schema
         logger.warning(f"create_collection failed: {e}")
         raise
     except Exception as e:
@@ -247,29 +361,109 @@ def get_collection_metadata_schema_impl(
     coll_mgr: CollectionManager, collection_name: str
 ) -> Dict[str, Any]:
     """
-    Implementation of get_collection_metadata_schema tool.
+    Implementation of get_collection_metadata_schema MCP tool.
 
-    Returns the metadata schema for a collection, allowing clients to discover
-    available metadata fields before ingesting documents.
+    Returns the metadata schema for a collection showing what fields to use when ingesting
+    and what fields define the collection's scope.
+
+    MANDATORY FIELDS (collection-scoped, immutable):
+    - domain: Single knowledge domain (immutable)
+    - domain_scope: Domain boundaries description (immutable)
+    These define what the collection is about. Domain and domain_scope are automatically applied
+    to all documents ingested into this collection.
+
+    CUSTOM FIELDS (user-defined, required/optional):
+    - User-declared fields for metadata on documents
+    - Each field specifies type and whether it's required when ingesting
+    - New fields can be added later, existing ones never removed
+
+    Note: System fields are NOT included in this response. They are internal implementation
+    details auto-generated during ingestion. LLMs should NOT provide system fields when ingesting.
+
+    Args:
+        coll_mgr: CollectionManager instance
+        collection_name: Collection name to retrieve schema for
+
+    Returns:
+        {
+            "collection_name": str,
+            "description": str,
+            "document_count": int,
+            "metadata_schema": {
+                "mandatory_fields": {
+                    "domain": {
+                        "type": "string",
+                        "value": str,
+                        "immutable": true,
+                        "description": "..."
+                    },
+                    "domain_scope": {
+                        "type": "string",
+                        "value": str,
+                        "immutable": true,
+                        "description": "..."
+                    }
+                },
+                "custom_fields": {
+                    "field_name": {
+                        "type": "string|number|array|object|boolean",
+                        "required": true|false,
+                        "enum": [...],
+                        "description": "..."
+                    },
+                    ...
+                }
+            }
+        }
+
+    Raises:
+        ValueError: If collection not found
     """
     try:
         collection = coll_mgr.get_collection(collection_name)
-
         if not collection:
             raise ValueError(f"Collection '{collection_name}' not found")
+
+        schema = collection.get("metadata_schema", {})
+        mandatory = schema.get("mandatory", {})
+        custom = schema.get("custom", {})
+
+        # Build mandatory fields section
+        mandatory_fields = {}
+        if mandatory:
+            mandatory_fields["domain"] = {
+                "type": "string",
+                "value": mandatory.get("domain"),
+                "immutable": True,
+                "description": "Single knowledge domain for this collection. Set at creation, cannot be changed. Automatically applied to all ingested documents."
+            }
+            mandatory_fields["domain_scope"] = {
+                "type": "string",
+                "value": mandatory.get("domain_scope"),
+                "immutable": True,
+                "description": "Natural language definition of domain boundaries (what is/isn't in scope). Set at creation, cannot be changed. Automatically applied to all ingested documents."
+            }
+
+        # Build custom fields section
+        custom_fields = {}
+        for name, field_def in custom.items():
+            custom_fields[name] = {
+                "type": field_def.get("type", "string"),
+                "required": field_def.get("required", False),
+                "description": field_def.get("description", "")
+            }
+            # Include enum if present
+            if "enum" in field_def:
+                custom_fields[name]["enum"] = field_def["enum"]
 
         return {
             "collection_name": collection_name,
             "description": collection["description"],
-            "metadata_schema": collection.get("metadata_schema"),
-            "custom_fields": {
-                name: field_def.get("type", "unknown")
-                for name, field_def in collection.get("metadata_schema", {})
-                .get("custom", {})
-                .items()
-            },
-            "system_fields": collection.get("metadata_schema", {}).get("system", []),
             "document_count": collection["document_count"],
+            "metadata_schema": {
+                "mandatory_fields": mandatory_fields,
+                "custom_fields": custom_fields
+            }
         }
     except ValueError as e:
         logger.warning(f"get_collection_metadata_schema failed: {e}")
@@ -1213,6 +1407,7 @@ async def query_temporal_impl(
     query: str,
     collection_name: str = None,
     num_results: int = 10,
+    threshold: float = 0.35,
     valid_from: str = None,
     valid_until: str = None,
 ) -> Dict[str, Any]:
@@ -1238,15 +1433,46 @@ async def query_temporal_impl(
                 "timeline": []
             }
 
+        from graphiti_core.search.search_filters import SearchFilters, DateFilter, ComparisonOperator
+        from datetime import datetime
+
         # Convert collection_name to group_ids for internal implementation
         group_ids = [collection_name] if collection_name else None
 
-        # Search the knowledge graph with optional temporal filters and collection scope
-        results = await graph_store.search_relationships(
+        # Build SearchFilters for temporal filtering using Graphiti's API
+        # SearchFilters use list[list[DateFilter]] where:
+        # - Outer list = OR condition
+        # - Inner list = AND condition
+        search_filter = None
+        if valid_from or valid_until:
+            filter_dict = {}
+
+            if valid_until:
+                # Facts must have started on or before valid_until
+                # valid_at <= valid_until
+                valid_until_dt = datetime.fromisoformat(valid_until)
+                filter_dict['valid_at'] = [[DateFilter(date=valid_until_dt, comparison_operator='<=')]]
+
+            if valid_from:
+                # Facts must not have ended before valid_from
+                # (invalid_at >= valid_from) OR (invalid_at IS NULL)
+                valid_from_dt = datetime.fromisoformat(valid_from)
+                filter_dict['invalid_at'] = [
+                    [DateFilter(date=valid_from_dt, comparison_operator='>=')],  # OR
+                    [DateFilter(date=None, comparison_operator='IS NULL')]       # still valid
+                ]
+
+            search_filter = SearchFilters(**filter_dict)
+
+        # Search using Graphiti's search_() with SearchFilters
+        from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_CROSS_ENCODER
+        config = COMBINED_HYBRID_SEARCH_CROSS_ENCODER.model_copy(deep=True)
+        config.reranker_min_score = threshold
+
+        results = await graph_store.graphiti.search_(
             query,
-            num_results=num_results,
-            valid_from=valid_from,
-            valid_until=valid_until,
+            config=config,
+            search_filter=search_filter,
             group_ids=group_ids
         )
 
@@ -1257,44 +1483,6 @@ async def query_temporal_impl(
             edges = results
         else:
             edges = []
-
-        # Post-process filtering if temporal parameters provided
-        # (handles cases where Graphiti filters didn't work as expected)
-        if valid_from or valid_until:
-            from datetime import datetime
-            filtered_edges = []
-            for edge in edges:
-                include_edge = True
-
-                # Temporal logic: For a fact to be valid during window [valid_from, valid_until]:
-                # - It must have STARTED on or before valid_from (valid_at <= valid_from)
-                # - It must NOT have EXPIRED before valid_until (invalid_at >= valid_until OR invalid_at is NULL)
-
-                if valid_from:
-                    try:
-                        valid_from_dt = datetime.fromisoformat(valid_from)
-                        # Exclude if fact started AFTER our window begins
-                        if hasattr(edge, 'valid_at') and edge.valid_at:
-                            if edge.valid_at > valid_from_dt:
-                                include_edge = False
-                    except Exception:
-                        pass
-
-                if include_edge and valid_until:
-                    try:
-                        valid_until_dt = datetime.fromisoformat(valid_until)
-                        # Exclude if fact expired BEFORE our window ends
-                        # (only exclude if invalid_at exists AND is before valid_until)
-                        if hasattr(edge, 'invalid_at') and edge.invalid_at:
-                            if edge.invalid_at <= valid_until_dt:
-                                include_edge = False
-                    except Exception:
-                        pass
-
-                if include_edge:
-                    filtered_edges.append(edge)
-
-            edges = filtered_edges[:num_results]
 
         # Convert to timeline format, grouped by temporal validity
         timeline_items = []

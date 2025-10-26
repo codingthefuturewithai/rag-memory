@@ -94,7 +94,9 @@ async def test_collection(test_infrastructure):
     # Create collection
     collection_mgr.create_collection(
         name=test_collection,
-        description=f"Integration test collection {test_collection}"
+        description=f"Integration test collection {test_collection}",
+        domain="testing",
+        domain_scope="Integration tests for RAG and Graph ingestion"
     )
 
     yield test_collection
@@ -177,7 +179,9 @@ class TestRAGIngestionAndSearch:
             pass
         collection_mgr.create_collection(
             name=collection2,
-            description="Second test collection"
+            description="Second test collection",
+            domain="testing",
+            domain_scope="Test collection for verifying collection-scoped search filtering"
         )
 
         # Ingest different content into each collection

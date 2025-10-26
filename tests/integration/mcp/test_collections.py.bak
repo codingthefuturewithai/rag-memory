@@ -24,6 +24,7 @@ class TestCollections:
             "name": collection_name,
             "description": "Test collection creation",
             "domain": "testing",
+            "topics": ["mcp-integration"],
             "domain_scope": "Test collection for MCP integration testing"
         })
 
@@ -45,6 +46,7 @@ class TestCollections:
             "name": collection_name,
             "description": "For listing test",
             "domain": "testing",
+            "topics": ["mcp-listing"],
             "domain_scope": "Test collection for listing discovery"
         })
 
@@ -85,6 +87,7 @@ class TestCollections:
             "name": collection_name,
             "description": "Test metadata schema",
             "domain": "testing",
+            "topics": ["mcp-metadata-schema"],
             "domain_scope": "Test collection for metadata schema testing",
             "metadata_schema": test_schema
         })
@@ -120,6 +123,7 @@ class TestCollections:
             "name": collection_name,
             "description": "Test collection",
             "domain": "testing",
+            "topics": ["mcp-info"],
             "domain_scope": "Test collection for collection info testing"
         })
 
@@ -154,6 +158,7 @@ class TestCollections:
             "name": collection_name,
             "description": "Collection to test deletion without confirmation",
             "domain": "testing",
+            "topics": ["mcp-delete"],
             "domain_scope": "Test collection for deletion testing without confirmation"
         })
 
@@ -183,6 +188,7 @@ class TestCollections:
             "name": collection_name,
             "description": "Collection to delete with confirmation",
             "domain": "testing",
+            "topics": ["mcp-delete-confirm"],
             "domain_scope": "Test collection for deletion testing with confirmation"
         })
 
@@ -216,6 +222,7 @@ class TestCollections:
             "name": collection_name,
             "description": "Collection with documents to delete",
             "domain": "testing",
+            "topics": ["mcp-delete-docs"],
             "domain_scope": "Test collection for deletion testing with documents"
         })
 
@@ -282,6 +289,7 @@ class TestCollections:
             "name": collection_name,
             "description": "Collection for graph cleanup test",
             "domain": "testing",
+            "topics": ["mcp-graph-cleanup"],
             "domain_scope": "Test collection for graph cleanup testing"
         })
 

@@ -18,6 +18,10 @@ class TestMCPUpdateCollectionMetadata:
             "name": "test-collection",
             "description": "Test collection",
             "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for MCP metadata update testing"
+                },
                 "custom": {
                     "existing": {"type": "string"}
                 }
@@ -29,6 +33,10 @@ class TestMCPUpdateCollectionMetadata:
             "name": "test-collection",
             "description": "Test collection",
             "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for MCP metadata update testing"
+                },
                 "custom": {
                     "existing": {"type": "string"},
                     "new_field": {"type": "boolean", "required": False}
@@ -46,7 +54,7 @@ class TestMCPUpdateCollectionMetadata:
         # Verify
         assert result["name"] == "test-collection"
         assert result["fields_added"] == 1
-        assert result["total_fields"] == 2
+        assert result["total_custom_fields"] == 2
         assert result["metadata_schema"]["custom"]["new_field"]["type"] == "boolean"
 
     def test_update_metadata_impl_wraps_custom(self):
@@ -57,12 +65,24 @@ class TestMCPUpdateCollectionMetadata:
         existing = {
             "name": "test",
             "description": "Test collection",
-            "metadata_schema": {"custom": {}}
+            "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for field wrapping testing"
+                },
+                "custom": {}
+            }
         }
         updated = {
             "name": "test",
             "description": "Test collection",
-            "metadata_schema": {"custom": {"field1": {"type": "string"}}}
+            "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for field wrapping testing"
+                },
+                "custom": {"field1": {"type": "string"}}
+            }
         }
 
         coll_mgr.get_collection.return_value = existing
@@ -94,7 +114,16 @@ class TestMCPUpdateCollectionMetadata:
         # Setup
         coll_mgr = MagicMock()
 
-        existing = {"name": "test", "metadata_schema": {"custom": {"field1": {"type": "string"}}}}
+        existing = {
+            "name": "test",
+            "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for validation error testing"
+                },
+                "custom": {"field1": {"type": "string"}}
+            }
+        }
         coll_mgr.get_collection.return_value = existing
 
         # Mock validation error

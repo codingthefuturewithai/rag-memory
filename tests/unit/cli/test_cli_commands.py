@@ -23,7 +23,7 @@ class TestCollectionCommands:
         result = cli_runner.invoke(main, ["collection", "create", "test-col"])
 
         assert result.exit_code != 0
-        assert "mandatory" in result.output.lower()
+        assert "description" in result.output.lower()
 
     def test_collection_list_empty(self, cli_runner):
         """Test listing collections when none exist."""

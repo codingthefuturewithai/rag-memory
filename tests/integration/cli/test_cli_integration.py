@@ -36,7 +36,10 @@ class TestCollectionLifecycle:
         # 1. Create a collection
         result = cli_runner.invoke(
             main,
-            ["collection", "create", test_collection_name, "--description", "CLI test collection"],
+            ["collection", "create", test_collection_name,
+             "--description", "CLI test collection",
+             "--domain", "testing",
+             "--domain-scope", "Test collection for CLI integration testing"],
         )
         assert result.exit_code == 0, f"Failed to create collection: {result.output}"
         assert "Created collection" in result.output

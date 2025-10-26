@@ -4,6 +4,26 @@
 
 ---
 
+## WE DO NOT DO KEYWORD SEARCHES
+
+**CRITICAL - READ THIS FIRST:**
+
+THIS SYSTEM USES SEMANTIC SIMILARITY SEARCH, NOT KEYWORD SEARCH.
+
+ALL SEARCH QUERIES (RAG, DOCUMENT, GRAPH) MUST BE:
+- ✓ FULL QUESTIONS: "How do I authenticate users in the system?"
+- ✓ ENGLISH STATEMENTS: "I need to troubleshoot database connection issues"
+- ✓ COMPLETE SENTENCES: "What are the security best practices for user management?"
+
+NEVER USE KEYWORD SEARCHES:
+- ✗ "user authentication"
+- ✗ "database connection troubleshooting"
+- ✗ "API endpoints security"
+
+This is SEMANTIC search. It matches MEANING, not keywords. Keyword searches produce poor results.
+
+---
+
 ## Project Overview
 
 RAG Memory is a **PostgreSQL pgvector + Neo4j + MCP server** system for managing AI agent knowledge bases.

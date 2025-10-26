@@ -400,6 +400,8 @@ async def setup_test_collection(collection_mgr, test_collection_name):
     collection_mgr.create_collection(
         name=test_collection_name,
         description="Test collection",
+        domain="testing",
+        domain_scope="Test collection for automated testing",
         metadata_schema=default_schema
     )
 

@@ -26,11 +26,23 @@ class TestWebIngestionIntegration:
         # Create test collection
         collection_name = "test-web-integration"
         try:
-            coll_mgr.create_collection(collection_name, "Test collection for web integration", metadata_schema={"custom": {}, "system": []})
+            coll_mgr.create_collection(
+                collection_name,
+                "Test collection for web integration",
+                domain="testing",
+                domain_scope="Test collection for web content ingestion",
+                metadata_schema={"custom": {}, "system": []}
+            )
         except ValueError:
             # Collection already exists - delete and recreate for clean state
             coll_mgr.delete_collection(collection_name)
-            coll_mgr.create_collection(collection_name, "Test collection for web integration", metadata_schema={"custom": {}, "system": []})
+            coll_mgr.create_collection(
+                collection_name,
+                "Test collection for web integration",
+                domain="testing",
+                domain_scope="Test collection for web content ingestion",
+                metadata_schema={"custom": {}, "system": []}
+            )
 
         yield {
             "db": db,
@@ -125,7 +137,7 @@ class TestWebIngestionIntegration:
 
         # Verify page metadata
         assert "domain" in metadata
-        assert metadata["domain"] == "example.com"
+        assert metadata["domain"] == "testing"  # Auto-applied from collection
         assert "status_code" in metadata
         assert metadata["status_code"] == 200
 

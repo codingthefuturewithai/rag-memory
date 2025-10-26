@@ -26,11 +26,23 @@ class TestWebLinkFollowingIntegration:
         # Create test collection
         collection_name = "test-link-following"
         try:
-            coll_mgr.create_collection(collection_name, "Test collection for link following", metadata_schema={"custom": {}, "system": []})
+            coll_mgr.create_collection(
+                collection_name,
+                "Test collection for link following",
+                domain="testing",
+                domain_scope="Test collection for web link following and crawling depth",
+                metadata_schema={"custom": {}, "system": []}
+            )
         except ValueError:
             # Collection already exists - delete and recreate for clean state
             coll_mgr.delete_collection(collection_name)
-            coll_mgr.create_collection(collection_name, "Test collection for link following", metadata_schema={"custom": {}, "system": []})
+            coll_mgr.create_collection(
+                collection_name,
+                "Test collection for link following",
+                domain="testing",
+                domain_scope="Test collection for web link following and crawling depth",
+                metadata_schema={"custom": {}, "system": []}
+            )
 
         yield {
             "db": db,

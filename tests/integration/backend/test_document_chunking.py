@@ -53,7 +53,13 @@ def test_collection(coll_mgr):
     after every test. This fixture just creates the collection.
     """
     collection_name = "test_chunking"
-    coll_mgr.create_collection(collection_name, "Test collection for chunking", metadata_schema={"custom": {}, "system": []})
+    coll_mgr.create_collection(
+        collection_name,
+        "Test collection for chunking",
+        domain="testing",
+        domain_scope="Test collection for document chunking functionality",
+        metadata_schema={"custom": {}, "system": []}
+    )
     yield collection_name
 
 

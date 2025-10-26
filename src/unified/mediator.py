@@ -95,6 +95,15 @@ class UnifiedIngestionMediator:
         )
         logger.info(f"✅ RAG ingestion completed - doc_id={source_id}, {len(chunk_ids)} chunks created")
 
+        # Validate document metadata against collection (guidance only, doesn't fail)
+        try:
+            self.rag_store.collection_mgr.validate_document_mandatory_fields(
+                collection_name, metadata or {}
+            )
+        except ValueError:
+            # Log but don't fail - validation is guidance only
+            pass
+
         # Step 2: Ingest into Graph store (new functionality)
         logger.info(f"🕸️  Step 2/2: Ingesting into Knowledge Graph (Neo4j/Graphiti)...")
 

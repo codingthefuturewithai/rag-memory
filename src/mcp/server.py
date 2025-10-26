@@ -326,7 +326,11 @@ def list_collections() -> list[dict]:
 
 @mcp.tool()
 def create_collection(
-    name: str, description: str, metadata_schema: dict = None
+    name: str,
+    description: str,
+    domain: str,
+    domain_scope: str,
+    metadata_schema: dict = None
 ) -> dict:
     """
     Create a new collection with an optional metadata schema.
@@ -417,7 +421,7 @@ def create_collection(
             }
         )
     """
-    return create_collection_impl(coll_mgr, name, description, metadata_schema)
+    return create_collection_impl(coll_mgr, name, description, domain, domain_scope, metadata_schema)
 
 
 @mcp.tool()
@@ -1455,10 +1459,11 @@ async def query_relationships(
 @mcp.tool()
 async def query_temporal(
     query: str,
-    collection_name: str = None,
+    collection_name: str | None = None,
     num_results: int = 10,
-    valid_from: str = None,
-    valid_until: str = None,
+    threshold: float = 0.35,
+    valid_from: str | None = None,
+    valid_until: str | None = None,
 ) -> dict:
     """
     Query how knowledge has evolved over time using temporal reasoning.
@@ -1547,6 +1552,7 @@ async def query_temporal(
         query,
         collection_name,
         num_results,
+        threshold=threshold,
         valid_from=valid_from,
         valid_until=valid_until,
     )

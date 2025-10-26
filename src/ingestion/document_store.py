@@ -68,7 +68,28 @@ class DocumentStore:
         """
         conn = self.db.connect()
 
-        # 1. Store the full source document
+        # 1. Verify collection exists and auto-apply domain/domain_scope
+        collection = self.collection_mgr.get_collection(collection_name)
+        if not collection:
+            raise ValueError(
+                f"Collection '{collection_name}' does not exist. "
+                f"Collections must be created explicitly with a description before ingesting documents."
+            )
+
+        # Auto-apply mandatory metadata from collection
+        if metadata is None:
+            metadata = {}
+
+        mandatory_metadata = collection.get("metadata_schema", {}).get("mandatory", {})
+        domain = mandatory_metadata.get("domain")
+        domain_scope = mandatory_metadata.get("domain_scope")
+
+        if domain:
+            metadata["domain"] = domain
+        if domain_scope:
+            metadata["domain_scope"] = domain_scope
+
+        # 2. Store the full source document
         logger.info(f"Storing source document: {filename}")
         with conn.cursor() as cur:
             cur.execute(
@@ -83,18 +104,10 @@ class DocumentStore:
                     content,
                     file_type,
                     len(content),
-                    Jsonb(metadata or {}),
+                    Jsonb(metadata),
                 ),
             )
             source_id = cur.fetchone()[0]
-
-        # 2. Verify collection exists
-        collection = self.collection_mgr.get_collection(collection_name)
-        if not collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist. "
-                f"Collections must be created explicitly with a description before ingesting documents."
-            )
 
         # 3. Chunk the document
         logger.info(f"Chunking document ({len(content)} chars)...")

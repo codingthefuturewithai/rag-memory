@@ -106,7 +106,9 @@ class TestErrorHandling:
         # Create first time
         result1 = await session.call_tool("create_collection", {
             "name": collection_name,
-            "description": "First"
+            "description": "First",
+            "domain": "testing",
+            "domain_scope": "Test collection for MCP error handling testing"
         })
 
         assert not result1.isError
@@ -114,7 +116,9 @@ class TestErrorHandling:
         # Try to create duplicate
         result2 = await session.call_tool("create_collection", {
             "name": collection_name,
-            "description": "Second"
+            "description": "Second",
+            "domain": "testing",
+            "domain_scope": "Attempt to create duplicate collection"
         })
 
         # Should error or handle gracefully

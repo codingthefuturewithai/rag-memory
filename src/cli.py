@@ -363,14 +363,16 @@ def collection():
 
 @collection.command("create")
 @click.argument("name")
-@click.option("--description", help="Collection description")
-def collection_create(name, description):
+@click.option("--description", required=True, help="Collection description")
+@click.option("--domain", required=True, help="Domain category (immutable)")
+@click.option("--domain-scope", required=True, help="Domain scope description (immutable)")
+def collection_create(name, description, domain, domain_scope):
     """Create a new collection."""
     try:
         db = get_database()
         mgr = get_collection_manager(db)
 
-        collection_id = mgr.create_collection(name, description)
+        collection_id = mgr.create_collection(name, description, domain, domain_scope)
         console.print(
             f"[bold green]✓ Created collection '{name}' (ID: {collection_id})[/bold green]"
         )

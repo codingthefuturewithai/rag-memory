@@ -27,6 +27,10 @@ class TestUpdateCollectionMetadata:
             "name": "test-collection",
             "description": "Test collection",
             "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for unit testing"
+                },
                 "custom": {
                     "existing_field": {"type": "string", "required": False}
                 },
@@ -81,6 +85,10 @@ class TestUpdateCollectionMetadata:
             "id": 1,
             "name": "test-collection",
             "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for field removal testing"
+                },
                 "custom": {
                     "field1": {"type": "string"},
                     "field2": {"type": "number"}
@@ -113,6 +121,10 @@ class TestUpdateCollectionMetadata:
             "id": 1,
             "name": "test-collection",
             "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for type change testing"
+                },
                 "custom": {
                     "field1": {"type": "string"}
                 },
@@ -150,7 +162,14 @@ class TestUpdateCollectionMetadata:
         existing_collection = {
             "id": 1,
             "name": "test-collection",
-            "metadata_schema": {"custom": {}, "system": []},
+            "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for optional fields testing"
+                },
+                "custom": {},
+                "system": []
+            },
             "document_count": 0
         }
 
@@ -219,7 +238,14 @@ class TestUpdateCollectionMetadata:
         existing_collection = {
             "id": 1,
             "name": "test-collection",
-            "metadata_schema": {"custom": {}, "system": []},
+            "metadata_schema": {
+                "mandatory": {
+                    "domain": "testing",
+                    "domain_scope": "Test collection for shorthand syntax testing"
+                },
+                "custom": {},
+                "system": []
+            },
             "document_count": 0
         }
 
