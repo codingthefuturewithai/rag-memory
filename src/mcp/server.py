@@ -37,6 +37,7 @@ from src.mcp.tools import (
     list_documents_impl,
     query_relationships_impl,
     query_temporal_impl,
+    update_collection_metadata_impl,
 )
 
 # Configure cross-platform file logging

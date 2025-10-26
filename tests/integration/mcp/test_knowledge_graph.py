@@ -142,3 +142,49 @@ class TestQueryTemporal:
 
         # Should have status field
         assert "status" in data, "Should indicate graph status"
+
+    async def test_query_temporal_with_custom_threshold(self, mcp_session, setup_test_collection):
+        """Test temporal queries with custom similarity threshold parameter."""
+        session, transport = mcp_session
+        collection = setup_test_collection
+
+        # Ingest content
+        await session.call_tool("ingest_text", {
+            "content": "Version 1.0 was released in January. Version 2.0 was released in March with new features.",
+            "collection_name": collection,
+            "document_title": "Releases"
+        })
+
+        # Query with high threshold (more restrictive, fewer results)
+        result_high = await session.call_tool("query_temporal", {
+            "query": "What versions were released?",
+            "collection_name": collection,
+            "threshold": 0.7  # High threshold
+        })
+
+        # Query with low threshold (less restrictive, more results)
+        result_low = await session.call_tool("query_temporal", {
+            "query": "What versions were released?",
+            "collection_name": collection,
+            "threshold": 0.1  # Low threshold
+        })
+
+        # Both queries should complete without error
+        assert result_high is not None
+        assert result_low is not None
+
+        text_high = extract_text_content(result_high)
+        text_low = extract_text_content(result_low)
+
+        data_high = json.loads(text_high) if text_high else {}
+        data_low = json.loads(text_low) if text_low else {}
+
+        # Both should have status field
+        assert "status" in data_high, "High threshold query should have status"
+        assert "status" in data_low, "Low threshold query should have status"
+
+        # If graph is available and results exist, low threshold should return >= high threshold
+        if data_high.get("status") == "success" and "entities" in data_high and "entities" in data_low:
+            high_count = len(data_high.get("entities", []))
+            low_count = len(data_low.get("entities", []))
+            assert low_count >= high_count, "Lower threshold should return same or more results"

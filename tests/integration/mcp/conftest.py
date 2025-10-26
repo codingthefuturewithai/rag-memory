@@ -171,6 +171,10 @@ async def mcp_session(request) -> AsyncGenerator[Tuple[ClientSession, str], None
         yield session, "stdio"
 
     finally:
+        # Give background tasks (like httpx connection pools) time to complete
+        # This prevents ExceptionGroup errors from httpx background task cleanup
+        await asyncio.sleep(0.1)
+
         # Run all cleanup functions
         for cleanup_func in cleanup_funcs:
             try:
