@@ -7,16 +7,10 @@ from pathlib import Path
 
 import click
 
-# Import command groups
+# Import command groups (NEW modular commands)
 from .commands.service import service_group, start_services, stop_services, restart_services, service_status
 from .commands.config import config_group
-from .commands.logs import logs_group, logs_command
-from .commands.admin import admin_group
-from .commands.collection import collection_group
-from .commands.ingest import ingest_group
-from .commands.search import search_command
-from .commands.document import document_group
-from .commands.graph import graph_group
+from .commands.logs import logs_command
 
 # Import utilities
 from .utils.console import console, print_error
@@ -95,50 +89,33 @@ def cli(ctx):
     """RAG Memory - AI knowledge base management system.
 
     \b
-    Quick Start:
-      rag init              # Initialize database
-      rag start             # Start services
-      rag status            # Check system status
-      rag collection create my-docs "My documentation"  # Create collection
-
-    \b
     Service Management:
       rag start/stop/restart  # Manage services
+      rag status              # Check system status
       rag logs                # View service logs
       rag config show         # View configuration
 
+    \b
+    For all other commands (search, collection, ingest, document, graph),
+    use the main 'rag' command from src/cli.py
+
     Use 'rag COMMAND --help' for more information on a specific command.
     """
-    # Ensure configuration exists for all commands except setup
-    if ctx.invoked_subcommand not in ['setup', 'version']:
-        config = ensure_config_or_exit()
-        ctx.obj = config
+    # Ensure configuration exists for all commands
+    config = ensure_config_or_exit()
+    ctx.obj = config
 
 
-# Register command groups
-cli.add_command(service_group)
-cli.add_command(config_group)
-cli.add_command(logs_group)
-cli.add_command(admin_group)
-cli.add_command(collection_group)
-cli.add_command(ingest_group)
-cli.add_command(document_group)
-cli.add_command(graph_group)
-
-# Register standalone commands
-cli.add_command(search_command)
-cli.add_command(logs_command)
+# Register NEW command groups
+cli.add_command(service_group)  # rag service start/stop/restart/status
+cli.add_command(config_group)   # rag config show/edit/set
+cli.add_command(logs_command)   # rag logs --service --follow
 
 # Register service shortcuts as top-level commands
-cli.add_command(start_services, name='start')
-cli.add_command(stop_services, name='stop')
-cli.add_command(restart_services, name='restart')
-cli.add_command(service_status, name='status')
-
-# Register admin shortcuts
-from .commands.admin import init_database, check_status, migrate_database
-cli.add_command(init_database, name='init')
-cli.add_command(migrate_database, name='migrate')
+cli.add_command(start_services, name='start')      # rag start
+cli.add_command(stop_services, name='stop')        # rag stop
+cli.add_command(restart_services, name='restart')  # rag restart
+cli.add_command(service_status, name='status')     # rag status
 
 
 def main():
