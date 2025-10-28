@@ -429,18 +429,21 @@ class CollectionManager:
         # Return updated collection info
         return self.get_collection(name)
 
-    def delete_collection(self, name: str) -> bool:
+    def delete_collection(self, name: str, graph_store=None) -> bool:
         """
         Delete a collection by name and clean up orphaned documents.
 
         This performs a complete cleanup:
         1. Gets all source documents in this collection
-        2. Deletes the collection (CASCADE removes chunk_collections entries)
-        3. Deletes orphaned chunks (chunks not in any collection)
-        4. Deletes orphaned source documents (documents with no chunks)
+        2. If graph_store provided: Deletes corresponding Neo4j episodes
+        3. Deletes the collection (CASCADE removes chunk_collections entries)
+        4. Deletes orphaned chunks (chunks not in any collection)
+        5. Deletes orphaned source documents (documents with no chunks)
 
         Args:
             name: Collection name.
+            graph_store: Optional GraphStore instance for cleaning up Neo4j episodes.
+                        If provided, will delete graph data for all documents in collection.
 
         Returns:
             True if collection was deleted, False if not found.
@@ -468,6 +471,38 @@ class CollectionManager:
                 (collection_id,)
             )
             source_doc_ids = [row[0] for row in cur.fetchall()]
+
+            # Delete Neo4j episodes if graph_store provided
+            if graph_store:
+                import asyncio
+                deleted_episodes = 0
+                failed_episodes = 0
+
+                logger.info(f"Deleting {len(source_doc_ids)} episodes from Knowledge Graph...")
+
+                async def delete_all_episodes():
+                    nonlocal deleted_episodes, failed_episodes
+                    for doc_id in source_doc_ids:
+                        episode_name = f"doc_{doc_id}"
+                        try:
+                            success = await graph_store.delete_episode_by_name(episode_name)
+                            if success:
+                                deleted_episodes += 1
+                            else:
+                                # Episode not found in graph (may not have been ingested)
+                                logger.debug(f"Episode '{episode_name}' not found in graph (skipped)")
+                        except Exception as e:
+                            logger.warning(f"Failed to delete episode '{episode_name}': {e}")
+                            failed_episodes += 1
+
+                # Run async deletion
+                asyncio.run(delete_all_episodes())
+
+                logger.info(
+                    f"Graph cleanup complete: {deleted_episodes} episodes deleted, "
+                    f"{failed_episodes} failures, "
+                    f"{len(source_doc_ids) - deleted_episodes - failed_episodes} not found"
+                )
 
             # Delete the collection (CASCADE removes chunk_collections)
             cur.execute(

@@ -294,36 +294,61 @@ def collection_schema(name):
 @click.argument("name")
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 def collection_delete(name, yes):
-    """Delete a collection (admin function - requires confirmation)."""
-    try:
-        db = get_database()
-        mgr = get_collection_manager(db)
+    """Delete a collection (admin function - requires confirmation).
 
-        # Get collection info for confirmation
-        collection = mgr.get_collection(name)
-        if not collection:
-            console.print(f"[yellow]Collection '{name}' not found[/yellow]")
+    This command deletes both PostgreSQL data (documents, chunks, collections)
+    and Neo4j graph data (episodes, entities, relationships) associated with
+    the collection.
+    """
+    import asyncio
+
+    async def _delete_with_graph():
+        """Helper to run deletion with graph cleanup."""
+        # Import here to avoid circular dependencies
+        from src.cli_commands.ingest import _get_knowledge_graph_components
+
+        try:
+            db = get_database()
+            mgr = get_collection_manager(db)
+
+            # Get collection info for confirmation
+            collection = mgr.get_collection(name)
+            if not collection:
+                console.print(f"[yellow]Collection '{name}' not found[/yellow]")
+                sys.exit(1)
+
+            # Get document count
+            doc_count = collection.get("document_count", 0)
+
+            # Show warning and prompt for confirmation
+            if not yes:
+                console.print(f"\n[bold red]⚠️  WARNING: This will permanently delete collection '{name}'[/bold red]")
+                console.print(f"  • {doc_count} documents will be removed from PostgreSQL")
+                console.print(f"  • Associated graph episodes will be removed from Neo4j")
+                console.print(f"  • This action cannot be undone\n")
+
+                confirm = click.confirm("Are you sure you want to proceed?", default=False)
+                if not confirm:
+                    console.print("[yellow]Deletion cancelled[/yellow]")
+                    return
+
+            # Initialize graph components (may return None if not configured)
+            graph_store, _ = await _get_knowledge_graph_components()
+
+            if graph_store:
+                console.print("[cyan]Initializing graph cleanup...[/cyan]")
+            else:
+                console.print("[yellow]Knowledge Graph not configured - skipping graph cleanup[/yellow]")
+
+            # Delete collection with graph cleanup if available
+            if mgr.delete_collection(name, graph_store=graph_store):
+                console.print(f"[bold green]✓ Deleted collection '{name}' ({doc_count} documents)[/bold green]")
+            else:
+                console.print(f"[yellow]Failed to delete collection '{name}'[/yellow]")
+
+        except Exception as e:
+            console.print(f"[bold red]Error: {e}[/bold red]")
             sys.exit(1)
 
-        # Get document count
-        doc_count = collection.get("document_count", 0)
-
-        # Show warning and prompt for confirmation
-        if not yes:
-            console.print(f"\n[bold red]⚠️  WARNING: This will permanently delete collection '{name}'[/bold red]")
-            console.print(f"  • {doc_count} documents will be removed")
-            console.print(f"  • This action cannot be undone\n")
-
-            confirm = click.confirm("Are you sure you want to proceed?", default=False)
-            if not confirm:
-                console.print("[yellow]Deletion cancelled[/yellow]")
-                return
-
-        if mgr.delete_collection(name):
-            console.print(f"[bold green]✓ Deleted collection '{name}' ({doc_count} documents)[/bold green]")
-        else:
-            console.print(f"[yellow]Failed to delete collection '{name}'[/yellow]")
-
-    except Exception as e:
-        console.print(f"[bold red]Error: {e}[/bold red]")
-        sys.exit(1)
+    # Run async function
+    asyncio.run(_delete_with_graph())
