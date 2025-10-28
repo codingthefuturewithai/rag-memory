@@ -541,12 +541,8 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
     project_root = Path(__file__).parent.parent
     env_file = config_dir / '.env'
 
-    # Change to project root for docker-compose
-    original_cwd = os.getcwd()
-    os.chdir(project_root)
-
     try:
-        # Run docker-compose from the repo directory
+        # Run docker-compose WITHOUT changing directory so relative paths work correctly
         compose_file = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
         print_info("Building Docker images...")
         code, _, stderr = run_command([
@@ -575,9 +571,9 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
         print_success("Containers started")
         return True
 
-    finally:
-        # Restore original directory
-        os.chdir(original_cwd)
+    except Exception as e:
+        print_error(f"Unexpected error: {e}")
+        return False
 
 
 def wait_for_health_checks(ports: dict, config_dir: Path, timeout_seconds: int = 300, check_interval: int = 30) -> bool:
