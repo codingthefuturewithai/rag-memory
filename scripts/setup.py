@@ -504,13 +504,18 @@ BACKUP_ARCHIVE_DIR={backup_dir}
                 ""
             )
 
-        # Write to both locations
+        # Write to repo location (keep ../init.sql path)
         with open(repo_compose_path, 'w') as f:
             f.write(compose_content)
         print_success(f"Docker Compose configuration created: {repo_compose_path}")
 
+        # For system location, fix the init.sql path to be relative to system directory
+        system_compose_content = compose_content.replace(
+            "- ../init.sql:/docker-entrypoint-initdb.d/01-init.sql",
+            "- ./init.sql:/docker-entrypoint-initdb.d/01-init.sql"
+        )
         with open(system_compose_path, 'w') as f:
-            f.write(compose_content)
+            f.write(system_compose_content)
         print_success(f"Docker Compose copied to system location: {system_compose_path}")
 
         # 4. Copy init.sql to system location
