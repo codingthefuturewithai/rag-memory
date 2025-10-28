@@ -1,6 +1,6 @@
 [project]
 name = "rag-memory"
-version = "0.9.0"
+version = "0.10.0"
 description = "PostgreSQL pgvector-based RAG memory system with MCP server"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -69,7 +69,7 @@ jupyter = [
 
 [project.scripts]
 # CLI tool for document management
-rag = "src.cli:main"
+rag = "src.cli.main:main"
 
 # MCP Server convenience wrappers
 rag-mcp = "src.mcp.server:main"              # General (accepts CLI args)
