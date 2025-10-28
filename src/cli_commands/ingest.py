@@ -50,11 +50,23 @@ async def initialize_graph_components():
             logger.warning("OPENAI_API_KEY not found - Knowledge Graph will not be available")
             return None, None
 
-        # Initialize Graphiti client
-        llm_config = LLMConfig(
-            api_key=openai_api_key,
-            model="gpt-4o-mini",
-        )
+        # Read optional Graphiti LLM model configuration from environment
+        # If not specified, Graphiti will use its own defaults
+        graphiti_model = os.getenv("GRAPHITI_MODEL")
+        graphiti_small_model = os.getenv("GRAPHITI_SMALL_MODEL")
+
+        # Create LLM client with optional model overrides
+        llm_config_kwargs = {
+            'api_key': openai_api_key
+        }
+        if graphiti_model:
+            llm_config_kwargs['model'] = graphiti_model
+            logger.info(f"Using configured Graphiti model: {graphiti_model}")
+        if graphiti_small_model:
+            llm_config_kwargs['small_model'] = graphiti_small_model
+            logger.info(f"Using configured Graphiti small model: {graphiti_small_model}")
+
+        llm_config = LLMConfig(**llm_config_kwargs)
         llm_client = OpenAIClient(llm_config)
 
         graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password, llm_client)
