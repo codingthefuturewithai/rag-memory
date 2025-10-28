@@ -29,9 +29,9 @@ COPY --from=builder /app/.venv /app/.venv
 
 # Copy application code
 COPY src /app/src
-COPY alembic /app/alembic
-COPY alembic.ini /app/alembic.ini
-COPY init.sql /app/init.sql
+COPY deploy/alembic /app/alembic
+COPY deploy/alembic/alembic.ini /app/alembic.ini
+COPY deploy/docker/init.sql /app/init.sql
 COPY pyproject.toml /app/pyproject.toml
 
 # Environment variables

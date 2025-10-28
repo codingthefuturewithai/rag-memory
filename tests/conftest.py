@@ -99,7 +99,7 @@ if is_supabase:
     print("")
     print("   To use test servers:")
     print("   1. Ensure docker-compose.test.yml is running:")
-    print("      docker-compose -f docker-compose.test.yml up -d")
+    print("      docker-compose -f deploy/docker/compose/docker-compose.test.yml up -d")
     print("   2. Load test environment:")
     print("      source .env.test && pytest tests/")
     print("   3. Or just run pytest (conftest.py auto-loads .env.test)")
@@ -117,7 +117,7 @@ if not is_test_postgres:
         print("⚠️  WARNING: Using development database instead of test database")
         print("   This is suboptimal - development data may be affected by tests")
         print("   To use dedicated test servers:")
-        print("   1. docker-compose -f docker-compose.test.yml up -d")
+        print("   1. docker-compose -f deploy/docker/compose/docker-compose.test.yml up -d")
         print("   2. Restart pytest to auto-load .env.test")
 
 print(f"ℹ️  Test Environment: {env_name}")

@@ -9,6 +9,7 @@ import asyncio
 import sys
 import logging
 from pathlib import Path
+import pytest
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -21,6 +22,7 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
 
+@pytest.mark.asyncio
 async def test_postgresql_validation():
     """Test PostgreSQL schema validation."""
     logger.info("=" * 60)
@@ -69,6 +71,7 @@ async def test_postgresql_validation():
         return False
 
 
+@pytest.mark.asyncio
 async def test_neo4j_validation():
     """Test Neo4j schema validation."""
     logger.info("\n" + "=" * 60)

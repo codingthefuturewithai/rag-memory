@@ -38,7 +38,7 @@ services:
       - "${TEST_POSTGRES_PORT:-54323}:5432"
     volumes:
       - pgvector_data_test:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ../init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U raguser -d rag_memory_test"]
       interval: 10s

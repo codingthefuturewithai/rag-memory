@@ -141,14 +141,15 @@ def check_existing_containers() -> bool:
         return True
 
     print_info("Stopping and removing existing containers...")
-    run_command(["docker-compose", "down", "-v"])
+    compose_file = Path(__file__).parent.parent / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
+    run_command(["docker-compose", "-f", str(compose_file), "down", "-v"])
     print_success("Existing containers removed")
     return False
 
 
 def prompt_for_api_key() -> str:
     """Prompt user for OpenAI API key"""
-    print_header("STEP 5: OpenAI API Key")
+    print_header("STEP 4: OpenAI API Key")
 
     print_info("You need an OpenAI API key to generate embeddings")
     print_info("Get one here: https://platform.openai.com/api/keys")
@@ -178,7 +179,7 @@ def is_port_available(port: int) -> bool:
 
 def find_available_ports() -> dict:
     """Find available ports for services"""
-    print_header("STEP 6: Finding Available Ports")
+    print_header("STEP 5: Finding Available Ports")
 
     default_ports = {
         "postgres": 54320,
@@ -220,7 +221,7 @@ def configure_directory_mounts() -> list:
     Returns:
         List of mount configurations with 'path' and 'read_only' keys
     """
-    print_header("STEP 7: Configure Directory Access for File Ingestion")
+    print_header("STEP 6: Configure Directory Access for File Ingestion")
 
     print_info("The MCP server needs read-only access to directories on your system")
     print_info("to ingest files and documents.\n")
@@ -292,7 +293,7 @@ def prompt_for_backup_schedule() -> str:
     Returns:
         Cron schedule string (e.g., "5 2 * * *" for 2:05 AM)
     """
-    print_header("STEP 8: Configure Backup Schedule")
+    print_header("STEP 7: Configure Backup Schedule")
 
     print_info("Backups will run automatically at the time you specify")
     print_info("(Format: HH:MM in 24-hour format, e.g., 02:05 for 2:05 AM)\n")
@@ -334,7 +335,7 @@ def prompt_for_backup_location() -> str:
     Returns:
         Path to backup directory (can be absolute or relative)
     """
-    print_header("STEP 9: Configure Backup Location")
+    print_header("STEP 8: Configure Backup Location")
 
     print_info("Backups will be stored as .tar.gz files in this directory")
     print_info("Use absolute path (e.g., /Users/name/rag-backups) or relative (e.g., ./backups)\n")
@@ -351,7 +352,7 @@ def prompt_for_backup_location() -> str:
 
 def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str, backup_dir: str):
     """Create all configuration files in OS-standard system directory"""
-    print_header("STEP 10: Creating Configuration Files")
+    print_header("STEP 9: Creating Configuration Files")
 
     import platformdirs
     import yaml
@@ -370,28 +371,34 @@ def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str
         with open(template_path, 'r') as f:
             config_content = f.read()
 
-        # Build database URLs with CONTAINER ports (right side of docker-compose mappings)
-        # These are used for container-to-container communication
-        database_url = f"postgresql://raguser:ragpassword@postgres-local:5432/rag_memory"
-        neo4j_uri = f"bolt://neo4j-local:7687"
+        # Build database URLs with HOST ports for both CLI and MCP server
+        database_url = f"postgresql://raguser:ragpassword@localhost:{ports['postgres']}/rag_memory"
+        neo4j_uri = f"bolt://localhost:{ports['neo4j_bolt']}"
 
-        # Substitute all placeholders in config.yaml
+        # Substitute all placeholders and hardcoded values in config.yaml
+        # 1. API Key
         config_content = config_content.replace(
             'PLACEHOLDER_OPENAI_API_KEY_REPLACE_ME',
             api_key
         )
+
+        # 2. Database URLs - replace hardcoded Docker service names with localhost
         config_content = config_content.replace(
-            'PLACEHOLDER_POSTGRES_PORT_REPLACE_ME',
-            str(ports['postgres'])
+            'postgresql://raguser:ragpassword@postgres-local:5432/rag_memory',
+            database_url
         )
         config_content = config_content.replace(
-            'PLACEHOLDER_NEO4J_BOLT_PORT_REPLACE_ME',
-            str(ports['neo4j_bolt'])
+            'bolt://neo4j-local:7687',
+            neo4j_uri
         )
+
+        # 3. Neo4j HTTP port (appears twice in template)
         config_content = config_content.replace(
             'PLACEHOLDER_NEO4J_HTTP_PORT_REPLACE_ME',
             str(ports['neo4j_http'])
         )
+
+        # 4. Backup configuration
         config_content = config_content.replace(
             'PLACEHOLDER_BACKUP_CRON_SCHEDULE_REPLACE_ME',
             backup_cron
@@ -400,6 +407,8 @@ def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str
             'PLACEHOLDER_BACKUP_ARCHIVE_DIR_REPLACE_ME',
             backup_dir
         )
+
+        # 5. MCP SSE port
         config_content = config_content.replace(
             'PLACEHOLDER_MCP_SSE_PORT_REPLACE_ME',
             str(ports['mcp'])
@@ -425,16 +434,29 @@ def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str
 
         print_success(f"Configuration created: {config_path}")
 
-        # 2. Create .env file for docker-compose in the repo root
-        env_path = project_root / '.env'
+        # 2. Create .env file for docker-compose in the same directory as docker-compose.yml
+        env_path = project_root / 'deploy' / 'docker' / 'compose' / '.env'
         env_content = f"""# Docker Compose Environment Variables
 # Generated by setup.py
-# These are HOST ports (left side of docker-compose port mappings)
+
+# Configuration directory
 RAG_CONFIG_DIR={config_dir}
+
+# HOST ports (left side of docker-compose port mappings)
+# Can be changed if there are port conflicts
 PROD_POSTGRES_PORT={ports['postgres']}
 PROD_NEO4J_BOLT_PORT={ports['neo4j_bolt']}
 PROD_NEO4J_HTTP_PORT={ports['neo4j_http']}
 MCP_SSE_PORT={ports['mcp']}
+
+# Database credentials (used by containers)
+# Can be changed for security - update in both .env and config.yaml
+POSTGRES_USER=raguser
+POSTGRES_PASSWORD=ragpassword
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=graphiti-password
+
+# Backup configuration
 BACKUP_CRON_SCHEDULE={backup_cron}
 BACKUP_ARCHIVE_DIR={backup_dir}
 """
@@ -445,8 +467,8 @@ BACKUP_ARCHIVE_DIR={backup_dir}
         print_success(f"Environment file created: {env_path}")
 
         # 3. Generate docker-compose.yml from template with user mounts
-        template_path = project_root / 'docker-compose.template.yml'
-        compose_path = project_root / 'docker-compose.yml'
+        template_path = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.template.yml'
+        compose_path = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
 
         with open(template_path, 'r') as f:
             compose_content = f.read()
@@ -485,7 +507,7 @@ BACKUP_ARCHIVE_DIR={backup_dir}
 
 def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
     """Build and start Docker containers"""
-    print_header("STEP 8: Building and Starting Containers")
+    print_header("STEP 10: Building and Starting Containers")
 
     project_root = Path(__file__).parent.parent
     env_file = config_dir / '.env'
@@ -496,9 +518,11 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
 
     try:
         # Run docker-compose from the repo directory
+        compose_file = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
         print_info("Building Docker images...")
         code, _, stderr = run_command([
             "docker-compose",
+            "-f", str(compose_file),
             "build"
         ], timeout=None)
 
@@ -511,6 +535,7 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
         print_info("Starting containers...")
         code, _, stderr = run_command([
             "docker-compose",
+            "-f", str(compose_file),
             "up", "-d"
         ], timeout=None)
 
@@ -528,7 +553,7 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
 
 def wait_for_health_checks(ports: dict, config_dir: Path, timeout_seconds: int = 300, check_interval: int = 30) -> bool:
     """Wait for all services to be healthy with status updates"""
-    print_header("STEP 9: Waiting for Services to Be Ready")
+    print_header("STEP 11: Waiting for Services to Be Ready")
 
     print_info(f"Checking services every {check_interval} seconds (timeout: {timeout_seconds}s)")
 
@@ -646,7 +671,7 @@ def wait_for_health_checks(ports: dict, config_dir: Path, timeout_seconds: int =
 
 def validate_schemas(ports: dict) -> bool:
     """Validate that database schemas were created correctly"""
-    print_header("STEP 10: Validating Database Schemas")
+    print_header("STEP 12: Validating Database Schemas")
 
     # Check PostgreSQL schema
     print_info("Checking PostgreSQL schema...")
@@ -716,13 +741,13 @@ def print_final_summary(ports: dict, config_dir: Path):
     print(f"  From the repository directory ({project_root}):")
     print()
     print(f"  Stop containers:")
-    print(f"    {Colors.CYAN}docker-compose down{Colors.RESET}")
+    print(f"    {Colors.CYAN}docker-compose -f deploy/docker/compose/docker-compose.yml down{Colors.RESET}")
     print()
     print(f"  Start containers:")
-    print(f"    {Colors.CYAN}docker-compose up -d{Colors.RESET}")
+    print(f"    {Colors.CYAN}docker-compose -f deploy/docker/compose/docker-compose.yml up -d{Colors.RESET}")
     print()
     print(f"  View logs:")
-    print(f"    {Colors.CYAN}docker-compose logs{Colors.RESET}")
+    print(f"    {Colors.CYAN}docker-compose -f deploy/docker/compose/docker-compose.yml logs{Colors.RESET}")
     print()
 
     # CLI commands
@@ -830,7 +855,7 @@ def main():
     # Step 12: Wait for health
     if not wait_for_health_checks(ports, config_dir):
         print_error("Setup completed but services are not responding")
-        print_info("Try: docker-compose logs")
+        print_info("Try: docker-compose -f deploy/docker/compose/docker-compose.yml logs")
         sys.exit(1)
 
     # Step 13: Install CLI tool
@@ -841,7 +866,7 @@ def main():
     if not validate_schemas(ports):
         print_warning("Schema validation had issues, but setup may still work")
 
-    # Step 14: Print final summary
+    # Step 15: Print final summary
     print_final_summary(ports, config_dir)
 
 

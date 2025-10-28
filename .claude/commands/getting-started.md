@@ -188,12 +188,12 @@ When ready, run `/cloud-setup` for step-by-step guidance on Supabase, Neo4j Aura
 ### "Connection refused" / "Can't connect to database"
 Containers might not be running:
 ```bash
-docker-compose -f docker-compose.dev.yml ps
+docker-compose -f deploy/docker/compose/docker-compose.dev.yml ps
 ```
 
 If any show "Exited", restart:
 ```bash
-docker-compose -f docker-compose.dev.yml up -d
+docker-compose -f deploy/docker/compose/docker-compose.dev.yml up -d
 ```
 
 ### "rag: command not found"
@@ -205,7 +205,7 @@ uv tool install .
 ### "MCP server not responding"
 Check if it's running:
 ```bash
-docker-compose -f docker-compose.dev.yml logs mcp-server
+docker-compose -f deploy/docker/compose/docker-compose.dev.yml logs mcp-server
 ```
 
 Look for error messages.

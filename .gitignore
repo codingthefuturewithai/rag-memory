@@ -7,6 +7,7 @@ __pycache__/
 build/
 develop-eggs/
 dist/
+sitecustomize.py
 downloads/
 eggs/
 .eggs/
@@ -47,7 +48,7 @@ uv.lock
 backup.env
 
 # Generated docker-compose file (generated from template)
-docker-compose.yml
+deploy/docker/compose/docker-compose.yml
 
 # Database
 *.db
@@ -60,6 +61,7 @@ docker-compose.override.yml
 # Testing
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
 *.cover
 
@@ -80,7 +82,8 @@ test-results/
 test_mcp_server/
 benchmarking/
 
-# Local backups (keep locally, don't commit)
+# Local backups and data (keep locally, don't commit)
+data/
 backups/
 
 # Owner-specific working documents (keep locally, don't commit)
