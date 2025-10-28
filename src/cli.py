@@ -1,6 +1,11 @@
 """Command-line interface for RAG Memory - Thin Orchestrator."""
 
+import logging
 import click
+
+# Suppress harmless Neo4j server notifications (they query properties before they exist)
+# These are cosmetic warnings, not errors. Real Neo4j errors will still be shown.
+logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 
 # Import all command groups and commands
 from src.cli_commands.service import service_group, start, stop, restart, status
