@@ -66,11 +66,13 @@ async def initialize_graph_components():
         db = get_database()
         embedder = get_embedding_generator()
         coll_mgr = get_collection_manager(db)
-        doc_store = get_document_store(db, embedder, coll_mgr)
 
-        # Initialize unified mediator
+        # Initialize unified mediator (creates rag_store internally)
         unified_mediator = UnifiedIngestionMediator(
-            rag_store=doc_store, graph_store=graph_store
+            db=db,
+            embedder=embedder,
+            collection_mgr=coll_mgr,
+            graph_store=graph_store
         )
 
         logger.info("Knowledge Graph components initialized successfully")
