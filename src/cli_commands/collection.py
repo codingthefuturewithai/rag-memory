@@ -69,8 +69,11 @@ def collection_update_metadata(name, add_fields):
             console.print(f"[bold red]Invalid JSON: {e}[/bold red]")
             sys.exit(1)
 
+        # Wrap in "custom" key for backend (backend expects {"custom": {...}})
+        wrapped_fields = {"custom": new_fields}
+
         # Update the collection
-        result = mgr.update_collection_metadata_schema(name, new_fields)
+        result = mgr.update_collection_metadata_schema(name, wrapped_fields)
 
         console.print(f"[bold green]✓ Updated collection '{name}' metadata schema[/bold green]")
         console.print(f"  Fields added: {len(new_fields) if isinstance(new_fields, dict) else 0}")
