@@ -49,7 +49,11 @@ def main():
 
     Use 'rag COMMAND --help' for more information on a specific command.
     """
-    pass
+    # Load and validate configuration before any commands execute
+    # This respects RAG_CONFIG_PATH/RAG_CONFIG_FILE for dev/test scenarios
+    # and falls back to system-level config for production CLI usage
+    from src.core.first_run import ensure_config_or_exit
+    ensure_config_or_exit()
 
 
 # Register command groups
