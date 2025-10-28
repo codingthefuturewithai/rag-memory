@@ -27,7 +27,7 @@ class TestCollectionCommands:
 
     def test_collection_list_empty(self, cli_runner):
         """Test listing collections when none exist."""
-        with patch("src.cli.get_collection_manager") as mock_coll_mgr:
+        with patch("src.cli_commands.collection.get_collection_manager") as mock_coll_mgr:
             mock_mgr = MagicMock()
             mock_coll_mgr.return_value = mock_mgr
             mock_mgr.list_collections.return_value = []
@@ -39,7 +39,7 @@ class TestCollectionCommands:
 
     def test_collection_info_not_found(self, cli_runner):
         """Test getting info about a non-existent collection."""
-        with patch("src.cli.get_collection_manager") as mock_coll_mgr:
+        with patch("src.cli_commands.collection.get_collection_manager") as mock_coll_mgr:
             mock_mgr = MagicMock()
             mock_coll_mgr.return_value = mock_mgr
             mock_mgr.get_collection.return_value = None
@@ -51,7 +51,7 @@ class TestCollectionCommands:
 
     def test_collection_schema_valid(self, cli_runner):
         """Test displaying metadata schema for a collection."""
-        with patch("src.cli.get_collection_manager") as mock_coll_mgr:
+        with patch("src.cli_commands.collection.get_collection_manager") as mock_coll_mgr:
             mock_mgr = MagicMock()
             mock_coll_mgr.return_value = mock_mgr
             test_schema = {"type": "object", "properties": {"source": {"type": "string"}}}
@@ -69,8 +69,8 @@ class TestCollectionCommands:
 
     def test_collection_delete_confirmation(self, cli_runner):
         """Test deleting a collection with confirmation."""
-        with patch("src.cli.get_collection_manager") as mock_coll_mgr, \
-             patch("src.cli.get_database") as mock_db:
+        with patch("src.cli_commands.collection.get_collection_manager") as mock_coll_mgr, \
+             patch("src.cli_commands.collection.get_database") as mock_db:
             mock_mgr = MagicMock()
             mock_coll_mgr.return_value = mock_mgr
             mock_mgr.get_collection.return_value = {"id": 1, "name": "test-col", "document_count": 5}
@@ -107,9 +107,9 @@ class TestIngestCommands:
 
     def test_ingest_url_crawl_mode(self, cli_runner):
         """Test ingesting a URL with default crawl mode."""
-        with patch("src.cli.crawl_single_page") as mock_crawl, \
-             patch("src.cli.get_document_store") as mock_doc_store_fn, \
-             patch("src.cli.get_database") as mock_db:
+        with patch("src.cli_commands.ingest.crawl_single_page") as mock_crawl, \
+             patch("src.cli_commands.ingest.get_document_store") as mock_doc_store_fn, \
+             patch("src.cli_commands.ingest.get_database") as mock_db:
             mock_doc_store = MagicMock()
             mock_doc_store_fn.return_value = mock_doc_store
             mock_doc_store.ingest_document.return_value = (1, [1, 2])
@@ -131,9 +131,9 @@ class TestIngestCommands:
 
     def test_ingest_url_recrawl_mode(self, cli_runner):
         """Test ingesting a URL with recrawl mode (deletes old documents first)."""
-        with patch("src.cli.crawl_single_page") as mock_crawl, \
-             patch("src.cli.get_document_store") as mock_doc_store_fn, \
-             patch("src.cli.get_database") as mock_db:
+        with patch("src.cli_commands.ingest.crawl_single_page") as mock_crawl, \
+             patch("src.cli_commands.ingest.get_document_store") as mock_doc_store_fn, \
+             patch("src.cli_commands.ingest.get_database") as mock_db:
             mock_db_inst = MagicMock()
             mock_conn = MagicMock()
             mock_db_inst.connect.return_value = mock_conn
@@ -162,9 +162,9 @@ class TestIngestCommands:
 
     def test_ingest_url_follow_links(self, cli_runner):
         """Test ingesting a URL with link following."""
-        with patch("src.cli.WebCrawler") as mock_crawler_class, \
-             patch("src.cli.get_document_store") as mock_doc_store_fn, \
-             patch("src.cli.get_database") as mock_db:
+        with patch("src.cli_commands.ingest.WebCrawler") as mock_crawler_class, \
+             patch("src.cli_commands.ingest.get_document_store") as mock_doc_store_fn, \
+             patch("src.cli_commands.ingest.get_database") as mock_db:
             mock_crawler = MagicMock()
             mock_crawler_class.return_value = mock_crawler
             mock_crawler.crawl_with_depth.return_value = [
@@ -260,8 +260,8 @@ class TestSearchCommands:
 
     def test_search_valid(self, cli_runner):
         """Test searching with valid query and collection."""
-        with patch("src.cli.get_similarity_search") as mock_searcher_fn, \
-             patch("src.cli.get_database") as mock_db:
+        with patch("src.cli_commands.search.get_similarity_search") as mock_searcher_fn, \
+             patch("src.cli_commands.search.get_database") as mock_db:
             mock_searcher = MagicMock()
             mock_searcher_fn.return_value = mock_searcher
             mock_searcher.search.return_value = [
@@ -282,8 +282,8 @@ class TestSearchCommands:
 
     def test_search_with_threshold(self, cli_runner):
         """Test searching with similarity threshold filter."""
-        with patch("src.cli.get_similarity_search") as mock_searcher_fn, \
-             patch("src.cli.get_database") as mock_db:
+        with patch("src.cli_commands.search.get_similarity_search") as mock_searcher_fn, \
+             patch("src.cli_commands.search.get_database") as mock_db:
             mock_searcher = MagicMock()
             mock_searcher_fn.return_value = mock_searcher
             mock_searcher.search.return_value = [

@@ -4,7 +4,7 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
-from src.cli import collection_update_metadata
+from src.cli_commands.collection import collection_update_metadata
 
 
 class TestCLIUpdateMetadata:
@@ -14,8 +14,8 @@ class TestCLIUpdateMetadata:
         """Test successful metadata update via CLI."""
         runner = CliRunner()
 
-        with patch('src.cli.get_database') as mock_db, \
-             patch('src.cli.get_collection_manager') as mock_get_mgr:
+        with patch('src.cli_commands.collection.get_database') as mock_db, \
+             patch('src.cli_commands.collection.get_collection_manager') as mock_get_mgr:
 
             # Setup mocks
             db = MagicMock()
@@ -52,8 +52,8 @@ class TestCLIUpdateMetadata:
         """Test error handling for invalid JSON input."""
         runner = CliRunner()
 
-        with patch('src.cli.get_database') as mock_db, \
-             patch('src.cli.get_collection_manager') as mock_get_mgr:
+        with patch('src.cli_commands.collection.get_database') as mock_db, \
+             patch('src.cli_commands.collection.get_collection_manager') as mock_get_mgr:
 
             db = MagicMock()
             mock_db.return_value = db
@@ -74,8 +74,8 @@ class TestCLIUpdateMetadata:
         """Test that validation errors are displayed properly."""
         runner = CliRunner()
 
-        with patch('src.cli.get_database') as mock_db, \
-             patch('src.cli.get_collection_manager') as mock_get_mgr:
+        with patch('src.cli_commands.collection.get_database') as mock_db, \
+             patch('src.cli_commands.collection.get_collection_manager') as mock_get_mgr:
 
             db = MagicMock()
             mock_db.return_value = db
@@ -103,8 +103,8 @@ class TestCLIUpdateMetadata:
         """Test error when collection doesn't exist."""
         runner = CliRunner()
 
-        with patch('src.cli.get_database') as mock_db, \
-             patch('src.cli.get_collection_manager') as mock_get_mgr:
+        with patch('src.cli_commands.collection.get_database') as mock_db, \
+             patch('src.cli_commands.collection.get_collection_manager') as mock_get_mgr:
 
             db = MagicMock()
             mock_db.return_value = db
@@ -131,8 +131,8 @@ class TestCLIUpdateMetadata:
         """Test that shorthand JSON syntax works."""
         runner = CliRunner()
 
-        with patch('src.cli.get_database') as mock_db, \
-             patch('src.cli.get_collection_manager') as mock_get_mgr:
+        with patch('src.cli_commands.collection.get_database') as mock_db, \
+             patch('src.cli_commands.collection.get_collection_manager') as mock_get_mgr:
 
             db = MagicMock()
             mock_db.return_value = db
