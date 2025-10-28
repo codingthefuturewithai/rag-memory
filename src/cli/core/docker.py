@@ -46,15 +46,17 @@ class DockerManager:
         cmd.extend(command)
 
         if capture_output:
-            return subprocess.run(cmd, capture_output=True, text=True)
+            # Redirect stderr to devnull to suppress docker-compose warnings
+            return subprocess.run(cmd, capture_output=True, text=True, stderr=subprocess.DEVNULL)
         else:
-            return subprocess.run(cmd)
+            return subprocess.run(cmd, stderr=subprocess.DEVNULL)
 
     @staticmethod
     def start() -> Optional[subprocess.CompletedProcess]:
         """Start all RAG Memory services."""
         print("Starting RAG Memory services...")
-        result = DockerManager.run_compose(['up', '-d'])
+        # Use --force-recreate to handle any stuck/conflicting containers
+        result = DockerManager.run_compose(['up', '-d', '--force-recreate', '--remove-orphans'])
         if result and result.returncode == 0:
             print("✅ Services started successfully")
             print("   MCP Server: http://localhost:8001/sse")
@@ -67,7 +69,8 @@ class DockerManager:
     def stop() -> Optional[subprocess.CompletedProcess]:
         """Stop all RAG Memory services."""
         print("Stopping RAG Memory services...")
-        result = DockerManager.run_compose(['down'])
+        # Use down with --remove-orphans and --volumes to clean up everything
+        result = DockerManager.run_compose(['down', '--remove-orphans'])
         if result and result.returncode == 0:
             print("✅ Services stopped")
         return result
@@ -86,8 +89,16 @@ class DockerManager:
         Returns:
             Status output or None if not initialized
         """
-        result = DockerManager.run_compose(['ps'], capture_output=True)
-        if result:
+        # Use docker ps directly to filter only -local containers
+        # docker-compose ps doesn't support name filtering
+        cmd = [
+            'docker', 'ps', '-a',
+            '--filter', 'label=com.docker.compose.project=rag-memory',
+            '--filter', 'name=-local',
+            '--format', 'table {{.Names}}\t{{.Image}}\t{{.Command}}\t{{.Status}}\t{{.Ports}}'
+        ]
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+        if result.returncode == 0:
             return result.stdout
         return None
 

@@ -53,13 +53,11 @@ def service_status():
     status = DockerManager.status()
 
     if status:
-        console.print("\n" + status)
-
-        # Parse the status output to show a nicer table
+        # Parse the status output to show a nicer table (status is already filtered)
         lines = status.strip().split('\n')
         if len(lines) > 1:
-            # Skip header and create table
-            table = Table(title="RAG Memory Services", show_header=True, header_style="bold cyan")
+            # Create table
+            table = Table(title="RAG Memory Local Services", show_header=True, header_style="bold cyan")
 
             # Parse header to get column names
             headers = lines[0].split()
@@ -75,6 +73,8 @@ def service_status():
                         table.add_row(*parts[:len(headers)])
 
             console.print(table)
+        else:
+            print_info("No local services running")
     else:
         print_error("Could not get service status.")
 
