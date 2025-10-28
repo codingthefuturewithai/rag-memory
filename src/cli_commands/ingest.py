@@ -71,6 +71,10 @@ async def initialize_graph_components():
 
         graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password, llm_client)
 
+        # Build Neo4j indices and constraints (idempotent - safe to call multiple times)
+        # This ensures the schema exists before any Knowledge Graph operations
+        await graphiti.build_indices_and_constraints()
+
         # Initialize GraphStore wrapper
         graph_store = GraphStore(graphiti)
 
