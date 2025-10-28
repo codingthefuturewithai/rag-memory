@@ -11,6 +11,11 @@ logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 # These clutter console output during graph queries. Errors still visible.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# Suppress python-dotenv parsing warnings from third-party libraries
+# Libraries like crawl4ai and graphiti-core auto-load .env files during import.
+# These warnings are cosmetic - the variables still load correctly.
+logging.getLogger("dotenv.main").setLevel(logging.ERROR)
+
 # Import all command groups and commands
 from src.cli_commands.service import service_group, start, stop, restart, status
 from src.cli_commands.collection import collection
