@@ -63,6 +63,8 @@ services:
       - docker-volume-backup.stop-during-backup=true
 
   rag-mcp-local:
+    # Use pre-built image if available, otherwise build
+    image: rag-memory-rag-mcp-local:latest
     build:
       context: ../../../
       dockerfile: deploy/docker/Dockerfile

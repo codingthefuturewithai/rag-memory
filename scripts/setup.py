@@ -544,20 +544,10 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
     try:
         # Run docker-compose WITHOUT changing directory so relative paths work correctly
         compose_file = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
-        print_info("Building Docker images...")
-        code, _, stderr = run_command([
-            "docker-compose",
-            "-f", str(compose_file),
-            "build"
-        ], timeout=None)
 
-        if code != 0:
-            print_error(f"Build failed: {stderr}")
-            return False
-
-        print_success("Build completed")
-
-        print_info("Starting containers...")
+        # Skip the build step - Docker will build automatically if needed when starting
+        # This avoids the hanging build issue with complex build contexts
+        print_info("Starting containers (will build if needed)...")
         code, _, stderr = run_command([
             "docker-compose",
             "-f", str(compose_file),
