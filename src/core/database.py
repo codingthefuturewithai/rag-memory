@@ -27,8 +27,9 @@ class Database:
         self.connection_string = connection_string or os.getenv("DATABASE_URL")
         if not self.connection_string:
             raise ValueError(
-                "DATABASE_URL not found. Set it in environment variables, ~/.rag-memory-env, "
-                "or pass connection_string parameter."
+                "DATABASE_URL not found. Run setup script or check config.yaml "
+                "(macOS: ~/Library/Application Support/rag-memory/, "
+                "Linux: ~/.config/rag-memory/, Windows: %LOCALAPPDATA%\\rag-memory\\)"
             )
         self._connection: Optional[psycopg.Connection] = None
         logger.info("Database initialized with connection string")

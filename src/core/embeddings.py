@@ -27,8 +27,9 @@ class EmbeddingGenerator:
         self.api_key = api_key or os.getenv("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError(
-                "OPENAI_API_KEY not found. Set it in environment variables, ~/.rag-memory-env, "
-                "or pass api_key parameter."
+                "OPENAI_API_KEY not found. Run setup script or check config.yaml "
+                "(macOS: ~/Library/Application Support/rag-memory/, "
+                "Linux: ~/.config/rag-memory/, Windows: %LOCALAPPDATA%\\rag-memory\\)"
             )
 
         self.client = OpenAI(api_key=self.api_key)
