@@ -7,6 +7,10 @@ import click
 # These are cosmetic warnings, not errors. Real Neo4j errors will still be shown.
 logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 
+# Suppress verbose httpx HTTP request logs (OpenAI API calls)
+# These clutter console output during graph queries. Errors still visible.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 # Import all command groups and commands
 from src.cli_commands.service import service_group, start, stop, restart, status
 from src.cli_commands.collection import collection
