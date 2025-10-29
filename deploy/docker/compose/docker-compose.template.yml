@@ -10,7 +10,7 @@ version: '3.9'
 # Usage:
 #   This is a template file. Run setup.py to generate docker-compose.yml
 #   After setup: docker-compose up -d
-# Environment variables (set by setup.py):
+# Environment variables (set by setup.py in .env file):
 #   - PROD_POSTGRES_PORT (default: 54320)
 #   - PROD_NEO4J_BOLT_PORT (default: 7687)
 #   - PROD_NEO4J_HTTP_PORT (default: 7474)
@@ -36,7 +36,7 @@ services:
       timeout: 5s
       retries: 5
     ports:
-      - "${PROD_POSTGRES_PORT:-54350}:5432"
+      - "${PROD_POSTGRES_PORT:-54320}:5432"
     labels:
       - docker-volume-backup.stop-during-backup=true
 
@@ -57,8 +57,8 @@ services:
       timeout: 5s
       retries: 5
     ports:
-      - "${PROD_NEO4J_BOLT_PORT:-7700}:7687"  # Bolt - Database protocol
-      - "${PROD_NEO4J_HTTP_PORT:-7500}:7474"  # HTTP - Neo4j Browser UI
+      - "${PROD_NEO4J_BOLT_PORT:-7687}:7687"  # Bolt - Database protocol
+      - "${PROD_NEO4J_HTTP_PORT:-7474}:7474"  # HTTP - Neo4j Browser UI
     labels:
       - docker-volume-backup.stop-during-backup=true
 
