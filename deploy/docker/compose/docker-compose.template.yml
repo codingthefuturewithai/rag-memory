@@ -15,8 +15,8 @@ version: '3.9'
 #   - PROD_NEO4J_BOLT_PORT (default: 7687)
 #   - PROD_NEO4J_HTTP_PORT (default: 7474)
 #   - PROD_MCP_PORT (default: 8000)
-#   - BACKUP_CRON_SCHEDULE (default: 5 2 * * *)
-#   - BACKUP_ARCHIVE_DIR (default: ./backups)
+#   - BACKUP_CRON_EXPRESSION (default: 5 2 * * *)
+#   - BACKUP_ARCHIVE_PATH (path to backup directory on host)
 # ================================================================================
 
 services:
@@ -100,14 +100,18 @@ services:
       - neo4j_data_local:/backup/neo4j:ro
       - neo4j_logs_local:/backup/neo4j_logs:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      # BACKUP_MOUNT_PLACEHOLDER - Setup script will insert backup destination mount here
     depends_on:
       - postgres-local
       - neo4j-local
     environment:
       BACKUP_SOURCES: /backup
       BACKUP_FILENAME_EXPAND: "true"
-      BACKUP_CRON_SCHEDULE: "${BACKUP_CRON_SCHEDULE:-5 2 * * *}"
-      BACKUP_ARCHIVE_DIR: "${BACKUP_ARCHIVE_DIR:-../../../data/backups}"
+      BACKUP_CRON_EXPRESSION: "${BACKUP_CRON_EXPRESSION:-5 2 * * *}"
+      BACKUP_ARCHIVE: "/archive"
+      BACKUP_LATEST_SYMLINK: "backup-latest.tar.gz"
+      BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-14}"
+      BACKUP_PRUNING_PREFIX: "backup-"
     labels:
       description: "RAG Memory - Automated Daily Backups"
       backup_location: "Configured in system config"

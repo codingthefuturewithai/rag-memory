@@ -288,18 +288,31 @@ def configure_directory_mounts() -> list:
 
 def prompt_for_backup_schedule() -> str:
     """
-    Prompt user for backup schedule in user-friendly format and convert to cron.
+    Prompt user for backup schedule in LOCAL time and convert to UTC for container.
+    
+    The backup container runs in UTC timezone, so we automatically convert
+    the user's local time to UTC to ensure backups run at the expected time.
 
     Returns:
-        Cron schedule string (e.g., "5 2 * * *" for 2:05 AM)
+        Cron schedule string in UTC (e.g., "5 14 * * *" for 10:05 AM EDT = 14:05 UTC)
     """
+    from datetime import datetime, timedelta
+    
     print_header("STEP 7: Configure Backup Schedule")
 
-    print_info("Backups will run automatically at the time you specify")
-    print_info("(Format: HH:MM in 24-hour format, e.g., 02:05 for 2:05 AM)\n")
+    # Detect system timezone
+    try:
+        local_tz = time.tzname[time.daylight]
+        print_info(f"Detected timezone: {local_tz}")
+    except:
+        local_tz = "Local Time"
+    
+    print_info("Backups will run automatically at the time you specify in YOUR LOCAL TIME")
+    print_info("(Format: HH:MM in 24-hour format, e.g., 02:05 for 2:05 AM)")
+    print_info("The system will automatically convert to UTC for the backup container\n")
 
     while True:
-        backup_time = input(f"{Colors.CYAN}Enter backup time (HH:MM, default: 02:05): {Colors.RESET}").strip()
+        backup_time = input(f"{Colors.CYAN}Enter backup time in {local_tz} (HH:MM, default: 02:05): {Colors.RESET}").strip()
 
         # Use default if empty
         if not backup_time:
@@ -319,9 +332,26 @@ def prompt_for_backup_schedule() -> str:
                 print_error("Invalid time. Hour must be 0-23, minute must be 0-59")
                 continue
 
+            # Create datetime for today at the specified time
+            now_local = datetime.now()
+            backup_datetime_local = now_local.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            
+            # Convert to UTC
+            # Get UTC offset in seconds
+            utc_offset_seconds = time.timezone if not time.daylight else time.altzone
+            utc_offset_hours = utc_offset_seconds / 3600
+            
+            backup_datetime_utc = backup_datetime_local + timedelta(hours=utc_offset_hours)
+            
+            # Extract UTC hour and minute
+            utc_hour = backup_datetime_utc.hour
+            utc_minute = backup_datetime_utc.minute
+
             # Convert to cron format (minute hour * * *)
-            cron_schedule = f"{minute} {hour} * * *"
-            print_success(f"Backup schedule: Daily at {backup_time} → cron: {cron_schedule}")
+            cron_schedule = f"{utc_minute} {utc_hour} * * *"
+            
+            print_success(f"Backup schedule: Daily at {backup_time} {local_tz}")
+            print_info(f"Container will use: {utc_hour:02d}:{utc_minute:02d} UTC → cron: {cron_schedule}")
             return cron_schedule
 
         except ValueError:
@@ -349,8 +379,48 @@ def prompt_for_backup_location() -> str:
     print_success(f"Backup location: {backup_location}")
     return backup_location
 
+def prompt_for_backup_retention() -> int:
+    """
+    Prompt user for backup retention period in days.
+    
+    Returns:
+        Number of days to keep backups (positive integer)
+    """
+    print_header("STEP 9: Configure Backup Retention")
+    
+    print_info("Old backups will be automatically deleted after the retention period")
+    print_info("This prevents your disk from filling up with unlimited backups")
+    print_info("Recommended: 7-30 days depending on your needs\n")
+    
+    while True:
+        retention_input = input(f"{Colors.CYAN}Keep backups for how many days? (default: 14): {Colors.RESET}").strip()
+        
+        # Use default if empty
+        if not retention_input:
+            retention_days = 14
+            break
+        
+        # Validate input
+        try:
+            retention_days = int(retention_input)
+            if retention_days < 1:
+                print_error("Retention must be at least 1 day")
+                continue
+            if retention_days > 365:
+                print_warning("Retention period over 1 year - this may use significant disk space")
+                confirm = input(f"{Colors.YELLOW}Continue with {retention_days} days? (yes/no): {Colors.RESET}").strip().lower()
+                if confirm != "yes":
+                    continue
+            break
+        except ValueError:
+            print_error("Please enter a valid number")
+    
+    print_success(f"Backup retention: {retention_days} days")
+    print_info(f"Backups older than {retention_days} days will be automatically deleted")
+    return retention_days
 
-def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str, backup_dir: str):
+
+def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str, backup_dir: str, backup_retention: int):
     """Create all configuration files in OS-standard system directory"""
     print_header("STEP 9: Creating Configuration Files")
 
@@ -400,11 +470,11 @@ def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str
 
         # 4. Backup configuration
         config_content = config_content.replace(
-            'PLACEHOLDER_BACKUP_CRON_SCHEDULE_REPLACE_ME',
+            'PLACEHOLDER_BACKUP_CRON_EXPRESSION_REPLACE_ME',
             backup_cron
         )
         config_content = config_content.replace(
-            'PLACEHOLDER_BACKUP_ARCHIVE_DIR_REPLACE_ME',
+            'PLACEHOLDER_BACKUP_ARCHIVE_PATH_REPLACE_ME',
             backup_dir
         )
 
@@ -459,8 +529,9 @@ NEO4J_USER=neo4j
 NEO4J_PASSWORD=graphiti-password
 
 # Backup configuration
-BACKUP_CRON_SCHEDULE={backup_cron}
-BACKUP_ARCHIVE_DIR={backup_dir}
+BACKUP_CRON_EXPRESSION={backup_cron}
+BACKUP_ARCHIVE_PATH={backup_dir}
+BACKUP_RETENTION_DAYS={backup_retention}
 """
         # Write to both locations
         with open(repo_env_path, 'w') as f:
@@ -503,6 +574,13 @@ BACKUP_ARCHIVE_DIR={backup_dir}
                 "      # USER_MOUNTS_PLACEHOLDER - Setup script will insert user directory mounts here\n",
                 ""
             )
+
+        # Inject backup destination mount
+        backup_mount_line = f"      - {backup_dir}:/archive\n"
+        compose_content = compose_content.replace(
+            "      # BACKUP_MOUNT_PLACEHOLDER - Setup script will insert backup destination mount here\n",
+            backup_mount_line
+        )
 
         # Write to repo location (keep ../init.sql path)
         with open(repo_compose_path, 'w') as f:
@@ -858,8 +936,11 @@ def main():
     # Step 9: Configure backup location
     backup_dir = prompt_for_backup_location()
 
-    # Step 10: Create YAML configuration from template
-    success, config_dir = create_config_yaml(api_key, ports, mounts, backup_cron, backup_dir)
+    # Step 10: Configure backup retention
+    backup_retention = prompt_for_backup_retention()
+
+    # Step 11: Create YAML configuration from template
+    success, config_dir = create_config_yaml(api_key, ports, mounts, backup_cron, backup_dir, backup_retention)
     if not success:
         sys.exit(1)
 

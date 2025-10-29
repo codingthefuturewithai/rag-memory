@@ -29,15 +29,17 @@ server:
   neo4j_password: "graphiti-password"
 
   # Backup Configuration
-  # Format: cron schedule (minute hour * * *)
+  # Format: cron expression (minute hour day month weekday)
   # Default: 2:05 AM daily = "5 2 * * *"
   # This placeholder will be replaced by setup.py with user's chosen time
-  backup_cron_schedule: "PLACEHOLDER_BACKUP_CRON_SCHEDULE_REPLACE_ME"
+  # NOTE: Uses BACKUP_CRON_EXPRESSION (not BACKUP_CRON_SCHEDULE)
+  backup_cron_expression: "PLACEHOLDER_BACKUP_CRON_EXPRESSION_REPLACE_ME"
 
-  # Backup archive directory (where .tar.gz files are stored)
-  # Can be absolute path or relative to current directory
+  # Backup archive directory (where .tar.gz files are stored on HOST)
+  # Can be absolute path or relative to docker-compose.yml location
+  # This path will be mounted to /archive inside the backup container
   # This placeholder will be replaced by setup.py with user's chosen location
-  backup_archive_dir: "PLACEHOLDER_BACKUP_ARCHIVE_DIR_REPLACE_ME"
+  backup_archive_path: "PLACEHOLDER_BACKUP_ARCHIVE_PATH_REPLACE_ME"
 
   # Neo4j HTTP Port (for browser access)
   # This placeholder will be replaced by setup.py with detected port
