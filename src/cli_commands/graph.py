@@ -25,14 +25,16 @@ def graph():
 @click.argument("query")
 @click.option("--limit", default=5, help="Maximum number of relationships to return")
 @click.option("--threshold", type=float, default=0.35, help="Relationship confidence threshold (0.0-1.0, default 0.35)")
+@click.option("--collection", default=None, help="Scope search to specific collection")
 @click.option("--verbose", is_flag=True, help="Show detailed metadata (id, source/target nodes, established date)")
-def graph_query_relationships(query, limit, threshold, verbose):
+def graph_query_relationships(query, limit, threshold, collection, verbose):
     """
     Search for entity relationships using natural language.
 
     Example:
         rag graph query-relationships "How does quantum computing relate to cryptography?" --limit 5
         rag graph query-relationships "How does quantum computing relate to cryptography?" --threshold 0.5
+        rag graph query-relationships "How does quantum computing relate to cryptography?" --collection my-docs
         rag graph query-relationships "How does quantum computing relate to cryptography?" --verbose
     """
     try:
@@ -63,6 +65,7 @@ def graph_query_relationships(query, limit, threshold, verbose):
         result = asyncio.run(query_relationships_impl(
             graph_store,
             query,
+            collection_name=collection,
             num_results=limit,
             threshold=threshold
         ))
@@ -104,9 +107,11 @@ def graph_query_relationships(query, limit, threshold, verbose):
 @graph.command("query-temporal")
 @click.argument("query")
 @click.option("--limit", default=10, help="Maximum number of timeline items to return")
+@click.option("--threshold", type=float, default=0.35, help="Confidence threshold (0.0-1.0, default 0.35)")
+@click.option("--collection", default=None, help="Scope search to specific collection")
 @click.option("--valid-from", default=None, help="ISO 8601 date - only facts valid after this date (e.g., 2025-12-01T00:00:00)")
 @click.option("--valid-until", default=None, help="ISO 8601 date - only facts valid before this date (e.g., 2025-12-31T23:59:59)")
-def graph_query_temporal(query, limit, valid_from, valid_until):
+def graph_query_temporal(query, limit, threshold, collection, valid_from, valid_until):
     """
     Query how knowledge evolved over time using temporal reasoning.
 
@@ -114,6 +119,8 @@ def graph_query_temporal(query, limit, valid_from, valid_until):
 
     Examples:
         rag graph query-temporal "How has quantum computing understanding evolved?" --limit 10
+        rag graph query-temporal "How has my focus evolved?" --threshold 0.5
+        rag graph query-temporal "What changed in my strategy?" --collection business-docs
 
         rag graph query-temporal "What decisions did I make?" \\
           --valid-from "2025-12-01T00:00:00" \\
@@ -148,7 +155,9 @@ def graph_query_temporal(query, limit, valid_from, valid_until):
         result = asyncio.run(query_temporal_impl(
             graph_store,
             query,
+            collection_name=collection,
             num_results=limit,
+            threshold=threshold,
             valid_from=valid_from,
             valid_until=valid_until
         ))
