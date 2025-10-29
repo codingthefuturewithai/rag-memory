@@ -178,8 +178,12 @@ async def lifespan(app: FastMCP):
         db.close()
 
 
+# Load server instructions from file
+_instructions_path = Path(__file__).parent / "server_instructions.txt"
+_server_instructions = _instructions_path.read_text() if _instructions_path.exists() else None
+
 # Initialize FastMCP server (no authentication)
-mcp = FastMCP("rag-memory", lifespan=lifespan)
+mcp = FastMCP("rag-memory", instructions=_server_instructions, lifespan=lifespan)
 
 
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)
@@ -334,93 +338,30 @@ def create_collection(
     metadata_schema: dict = None
 ) -> dict:
     """
-    Create a new collection with an optional metadata schema.
+    Create a new collection for organizing documents by domain.
 
-    Collections are required before ingesting documents. Each collection must
-    have a meaningful description to help users understand its purpose.
-
-    **Collection-Based Domain Partitioning:**
-    Collections provide domain isolation for both similarity search and
-    relationship queries. Documents in one collection are typically kept
-    separate from others, ensuring focused search results. This isolation
-    applies to both:
-    - Similarity searches (find similar text)
-    - Relationship queries (find how concepts connect)
-
-    **BEST PRACTICE - Domain-Specific Collections:**
-    Create separate collections for different knowledge domains rather than
-    mixing unrelated content. This ensures:
-    - Better search relevance (domain-specific context)
-    - Appropriate metadata schemas per domain
-    - Isolated knowledge graphs per domain
-    - Cleaner organization of knowledge
-
-    Examples:
-    - "api-docs" for API documentation
-    - "meeting-notes" for meeting transcripts
-    - "engineering" for software engineering knowledge
-    - "finance" for financial planning and records
-
-    Once created, collections are immutable - you cannot change the name or core schema.
-    Metadata schemas support additive updates only (can add new optional fields).
+    **CRITICAL - Collection Discipline:**
+    Collections partition BOTH vector search and knowledge graph. Create separate collections
+    for different domains (e.g., "api-docs", "meeting-notes", "project-x") rather than mixing
+    unrelated content. This ensures better search relevance and isolated knowledge graphs.
 
     Args:
-        name: (REQUIRED) Collection identifier (unique, lowercase recommended)
-        description: (REQUIRED) Human-readable description of the collection's purpose.
-                    Collections without descriptions are not allowed.
-        metadata_schema: (OPTIONAL) Schema for custom metadata fields.
-
-                        **RECOMMENDED FIELDS** for better domain organization:
-                        - domain: High-level category (e.g., "ai_engineering", "finance")
-                        - context_type: Type of content ("development", "planning", "research", "conversation")
-                        - preferred_chunk_size: Domain-optimized chunk size (default: 1000)
-
-                        Format: {
-                            "custom": {
-                                "domain": {
-                                    "type": "string",
-                                    "required": false,
-                                    "description": "Knowledge domain category"
-                                },
-                                "context_type": {
-                                    "type": "string",
-                                    "required": false,
-                                    "enum": ["development", "planning", "research", "conversation", "documentation"]
-                                },
-                                "field_name": {
-                                    "type": "string|number|boolean|array|object",
-                                    "required": false,
-                                    "enum": ["value1", "value2"]
-                                }
-                            }
-                        }
-                        Note: System automatically adds metadata (domain, crawl_depth, etc.)
-                        when ingesting from URLs/files. All metadata is searchable.
-                        Defaults to empty schema if not provided.
+        name: Collection identifier (unique, lowercase recommended)
+        description: Human-readable purpose (REQUIRED, cannot be empty)
+        domain: High-level category (e.g., "engineering", "finance")
+        domain_scope: Scope description (e.g., "Internal API documentation")
+        metadata_schema: Optional schema for custom fields. Format: {"custom": {"field": {"type": "string"}}}
 
     Returns:
-        {
-            "collection_id": int,
-            "name": str,
-            "description": str,
-            "metadata_schema": dict,
-            "created": bool  # Always True on success
-        }
+        {"collection_id": int, "name": str, "description": str, "metadata_schema": dict, "created": bool}
 
-    Raises:
-        ValueError: If collection with this name already exists or schema is invalid
+    Best Practices (see server instructions: Collection Discipline):
+    - One collection per domain/topic (don't mix unrelated content)
+    - Use descriptive names and clear descriptions
+    - Define metadata schema upfront (can only add fields later, not remove)
+    - Check existing collections with list_collections() first
 
-    Example:
-        result = create_collection(
-            name="python-docs",
-            description="Official Python documentation and tutorials",
-            metadata_schema={
-                "custom": {
-                    "version": {"type": "string"},
-                    "status": {"type": "string", "enum": ["draft", "published"]}
-                }
-            }
-        )
+    Note: Free operation (no API calls).
     """
     return create_collection_impl(coll_mgr, name, description, domain, domain_scope, metadata_schema)
 
@@ -428,36 +369,20 @@ def create_collection(
 @mcp.tool()
 def get_collection_metadata_schema(collection_name: str) -> dict:
     """
-    Get the metadata schema for a collection.
-
-    Allows clients to discover what metadata fields are available and required
-    for ingesting documents into a collection before attempting ingest.
+    Get metadata schema for a collection to discover required/optional fields before ingestion.
 
     Args:
-        collection_name: (REQUIRED) Name of the collection
+        collection_name: Collection name
 
     Returns:
-        {
-            "collection_name": str,
-            "description": str,
-            "metadata_schema": {
-                "custom": {...},
-                "system": [...]
-            },
-            "custom_fields": {
-                "field_name": "type",
-                ...
-            },
-            "system_fields": [...],
-            "document_count": int
-        }
+        {"collection_name": str, "description": str, "metadata_schema": dict,
+         "custom_fields": dict, "system_fields": list, "document_count": int}
 
-    Raises:
-        ValueError: If collection doesn't exist
+    Best Practices:
+    - Use before ingesting to check required metadata fields
+    - Helps avoid schema validation errors during ingest
 
-    Example:
-        result = get_collection_metadata_schema("python-docs")
-        # Use result["custom_fields"] to discover available metadata fields
+    Note: Free operation (no API calls).
     """
     return get_collection_metadata_schema_impl(coll_mgr, collection_name)
 
@@ -465,53 +390,28 @@ def get_collection_metadata_schema(collection_name: str) -> dict:
 @mcp.tool()
 async def delete_collection(name: str, confirm: bool = False) -> dict:
     """
-    ⚠️ DESTRUCTIVE: Permanently delete a collection and all its documents.
+    Permanently delete a collection and all its documents.
 
-    This operation CANNOT be undone. Deletes the collection, all associated documents,
-    and all their indexed content.
+    **⚠️ DESTRUCTIVE - Cannot be undone. Two-step confirmation required.**
 
-    **REQUIRED: Two-Step Confirmation**
-    1. Call with `confirm=False` (default) → Returns error requiring explicit confirmation
-    2. Call with `confirm=True` → Actually deletes (prevents accidental deletion)
-
-    **What gets deleted:**
-    - The collection itself
-    - All documents in this collection
-    - All indexed content from those documents
-    - All associated metadata
-
-    **What stays:**
-    - Other collections (unaffected)
-    - Documents also in other collections (collection link removed, documents preserved)
-
-    **Important Notes:**
-    - If a document only belongs to this collection, it is completely removed
-    - If a document is in multiple collections, only this collection link is removed
-    - The two-step confirmation process exists specifically to prevent accidents
+    Workflow:
+    1. Call with confirm=False (default) → Returns error requiring confirmation
+    2. Review what will be deleted
+    3. Call with confirm=True → Permanently deletes
 
     Args:
-        name: Collection name to delete (must exist)
-        confirm: Must be exactly True to proceed. Default False.
-                 False → Returns error. True → Performs deletion.
+        name: Collection to delete (must exist)
+        confirm: Must be True to proceed (default: False)
 
     Returns:
-        On success:
-        {
-            "name": str,      # Collection that was deleted
-            "deleted": bool,  # True
-            "message": str    # Confirmation message with operation details
-        }
+        {"name": str, "deleted": bool, "message": str}
 
-    Raises:
-        ValueError: If confirm != True or collection doesn't exist
+    Best Practices (see server instructions: Collection Discipline):
+    - Verify collection contents with get_collection_info() first
+    - Ensure no other collections reference this data
+    - Two-step confirmation prevents accidents
 
-    Example:
-        # Step 1: Get confirmation requirement
-        result = delete_collection(name="old-docs")  # Returns error, requires confirm=True
-
-        # Step 2: Explicit deletion
-        result = delete_collection(name="old-docs", confirm=True)  # Permanently deletes
-        print(result["message"])  # Confirmation with details
+    Note: Free operation (deletes data, no API calls).
     """
     return await delete_collection_impl(coll_mgr, name, confirm, graph_store, db)
 
@@ -522,59 +422,24 @@ def update_collection_metadata(
     new_fields: dict
 ) -> dict:
     """
-    Update a collection's metadata schema (additive only).
+    Add new optional metadata fields to existing collection (additive only).
 
-    Allows adding new optional metadata fields to an existing collection.
-    Existing fields cannot be removed or have their types changed to maintain
-    data integrity for documents already in the collection.
-
-    **IMPORTANT - Additive Only:**
-    - Can ADD new optional fields
-    - Cannot REMOVE existing fields
-    - Cannot CHANGE field types
-    - All new fields automatically become optional
-
-    This ensures existing documents remain valid while allowing schema evolution.
+    **IMPORTANT:** Can only ADD fields, cannot remove or change types.
 
     Args:
-        collection_name: (REQUIRED) Name of collection to update
-        new_fields: (REQUIRED) New metadata fields to add. Format:
-                   {
-                       "field_name": {
-                           "type": "string|number|boolean|array|object",
-                           "description": "optional field description",
-                           "enum": ["value1", "value2"]  # optional for strings
-                       }
-                   }
-                   Or shorthand: {"field_name": "type"}
+        collection_name: Collection to update
+        new_fields: New fields to add. Format: {"field": {"type": "string"}} or {"field": "string"}
 
     Returns:
-        {
-            "name": str,
-            "description": str,
-            "metadata_schema": dict,  # Updated schema
-            "fields_added": int,       # Number of new fields
-            "total_fields": int        # Total custom fields after update
-        }
+        {"name": str, "description": str, "metadata_schema": dict,
+         "fields_added": int, "total_fields": int}
 
-    Raises:
-        ValueError: If collection not found, removing fields, or changing types
+    Best Practices:
+    - All new fields automatically become optional
+    - Existing documents won't have new fields until re-ingestion
+    - Plan schema upfront to minimize updates
 
-    Example:
-        # Add new optional fields to existing collection
-        result = update_collection_metadata(
-            collection_name="project-docs",
-            new_fields={
-                "priority": {
-                    "type": "string",
-                    "enum": ["high", "medium", "low"]
-                },
-                "reviewed": {"type": "boolean"}
-            }
-        )
-
-    Note: Existing documents will not have the new fields. Only documents
-          ingested after this update will be able to use the new metadata fields.
+    Note: Free operation (no API calls).
     """
     return update_collection_metadata_impl(coll_mgr, collection_name, new_fields)
 
@@ -588,71 +453,32 @@ async def ingest_text(
     include_chunk_ids: bool = False,
 ) -> dict:
     """
-    Ingest text content into a collection with automatic chunking.
+    Ingest text content into both vector store and knowledge graph with automatic chunking.
 
-    This is the primary way for agents to add knowledge to the RAG system.
-    Content is stored in dual architecture:
-    1. Vector store (pgvector) - for semantic similarity search
-    2. Knowledge Graph (Neo4j) - for relationship queries
+    **IMPORTANT:** Collection must exist. Use create_collection() first.
 
-    The collection_name serves dual purpose:
-    - Collection identifier in vector store
-    - Domain partition for knowledge graph (isolates entities/relationships)
-
-    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
-
-    IMPORTANT - PROCESSING TIME:
-    Processing time depends on content size:
-    - Small content (<10KB): Typically completes in seconds
-    - Large content (>50KB): Can take a minute or longer
-
-    The MCP server will continue processing even if your client times out. You may need
-    to configure longer timeout values when ingesting large amounts of content.
-
-    By default, returns minimal response (source_document_id and num_chunks).
-    Use include_chunk_ids=True to get the list of chunk IDs (may be large).
+    **Workflow (see server instructions: Ingestion Workflows):**
+    1. list_documents() - Check for duplicates
+    2. If exists: update_document() instead
+    3. If new: ingest_text()
 
     Args:
-        content: (REQUIRED) Text content to ingest (any length, will be automatically chunked)
-        collection_name: (REQUIRED) Collection to add content to (must already exist)
-        document_title: Optional human-readable title for this document.
-                       If not provided, auto-generates from timestamp.
-                       Appears in search results as "Source: {document_title}"
-        metadata: Optional metadata dict (e.g., {"topic": "python", "author": "agent"})
-        include_chunk_ids: If True, includes list of chunk IDs. Default: False (minimal response).
+        content: Text to ingest (any length, auto-chunked)
+        collection_name: Target collection (must exist)
+        document_title: Optional title (auto-generated if None)
+        metadata: Optional metadata dict
+        include_chunk_ids: If True, returns chunk IDs (default: False for minimal response)
 
     Returns:
-        Minimal response (default):
-        {
-            "source_document_id": int,  # ID for retrieving full document later
-            "num_chunks": int,
-            "collection_name": str
-        }
+        {"source_document_id": int, "num_chunks": int, "collection_name": str,
+         "chunk_ids": list (only if include_chunk_ids=True)}
 
-        Extended response (include_chunk_ids=True):
-        {
-            "source_document_id": int,
-            "num_chunks": int,
-            "collection_name": str,
-            "chunk_ids": list[int]  # IDs of generated chunks
-        }
+    Best Practices (see server instructions: Ingestion Workflows):
+    - Check for duplicates before ingesting
+    - Use meaningful document titles for search results
+    - Add metadata to enable filtered searches
 
-    Raises:
-        ValueError: If collection doesn't exist
-
-    Example:
-        # First, create collection
-        create_collection("programming-tutorials", "Python programming examples")
-
-        # Then ingest content
-        result = ingest_text(
-            content="Python is a high-level programming language...",
-            collection_name="programming-tutorials",
-            document_title="Python Basics",
-            metadata={"language": "python", "level": "beginner"}
-        )
-
-    Note: This triggers OpenAI API calls for embeddings (~$0.00003 per document).
+    Note: Uses AI models, has cost (embeddings + graph extraction).
     """
     return await ingest_text_impl(
         db,
@@ -670,43 +496,22 @@ async def ingest_text(
 @mcp.tool()
 def get_document_by_id(document_id: int, include_chunks: bool = False) -> dict:
     """
-    Get a specific source document by ID.
-
-    Useful when search returns a chunk and agent needs full document context.
-    Document IDs come from search_documents() results (source_document_id field).
+    Retrieve full document by ID (from search results).
 
     Args:
-        document_id: (REQUIRED) Source document ID (from search results)
-        include_chunks: If True, includes list of all chunks with details
+        document_id: Source document ID (from search_documents results)
+        include_chunks: If True, includes chunk details (default: False)
 
     Returns:
-        {
-            "id": int,
-            "filename": str,  # Document title/identifier
-            "content": str,  # Full document content
-            "file_type": str,  # text, markdown, web_page, etc.
-            "file_size": int,  # Bytes
-            "metadata": dict,  # Custom metadata
-            "created_at": str,  # ISO 8601
-            "updated_at": str,  # ISO 8601
-            "chunks": [  # Only if include_chunks=True
-                {
-                    "chunk_id": int,
-                    "chunk_index": int,
-                    "content": str,
-                    "char_start": int,
-                    "char_end": int
-                }
-            ]
-        }
+        {"id": int, "filename": str, "content": str, "file_type": str, "file_size": int,
+         "metadata": dict, "created_at": str, "updated_at": str,
+         "chunks": list (only if include_chunks=True)}
 
-    Raises:
-        ValueError: If document_id doesn't exist
+    Best Practices:
+    - Use when search chunk needs full document context
+    - Document IDs come from search results (source_document_id field)
 
-    Example:
-        # After search returns chunk with source_document_id=42
-        doc = get_document_by_id(42)
-        print(f"Full document: {doc['content']}")
+    Note: Free operation (no API calls).
     """
     return get_document_by_id_impl(doc_store, document_id, include_chunks)
 
@@ -714,42 +519,23 @@ def get_document_by_id(document_id: int, include_chunks: bool = False) -> dict:
 @mcp.tool()
 def get_collection_info(collection_name: str) -> dict:
     """
-    Get detailed information about a specific collection.
+    Get detailed collection stats including crawled URLs history.
 
-    Helps agents understand collection scope before searching or adding content.
-    Includes crawl history to help avoid duplicate crawls.
+    **Use before ingesting** to check existing content and avoid duplicates.
 
     Args:
-        collection_name: (REQUIRED) Name of the collection
+        collection_name: Collection name
 
     Returns:
-        {
-            "name": str,
-            "description": str,
-            "document_count": int,  # Number of source documents
-            "chunk_count": int,  # Total searchable chunks
-            "created_at": str,  # ISO 8601
-            "sample_documents": [str],  # First 5 document filenames
-            "crawled_urls": [  # Web pages that have been crawled into this collection
-                {
-                    "url": str,  # crawl_root_url
-                    "timestamp": str,  # When crawled
-                    "page_count": int,  # Number of pages from this URL
-                    "chunk_count": int  # Number of chunks from this URL
-                }
-            ]
-        }
+        {"name": str, "description": str, "document_count": int, "chunk_count": int,
+         "created_at": str, "sample_documents": list, "crawled_urls": list}
 
-    Raises:
-        ValueError: If collection doesn't exist
+    Best Practices (see server instructions: Ingestion Workflows):
+    - Check before ingesting to avoid duplicates
+    - Review crawled_urls to see if website already ingested
+    - Use sample_documents to verify collection content
 
-    Example:
-        info = get_collection_info("python-docs")
-        print(f"Collection has {info['chunk_count']} searchable chunks")
-
-        # Check if URL already crawled
-        for crawl in info['crawled_urls']:
-            print(f"Previously crawled: {crawl['url']} ({crawl['page_count']} pages)")
+    Note: Free operation (no API calls).
     """
     return get_collection_info_impl(db, coll_mgr, collection_name)
 
@@ -762,85 +548,34 @@ def analyze_website(
     max_urls_per_pattern: int = 10
 ) -> dict:
     """
-    Analyze website structure to help plan comprehensive crawling.
+    Analyze website structure before crawling (fetches sitemap, identifies URL patterns).
 
-    Fetches sitemap.xml and extracts URL patterns to help agents understand
-    website organization BEFORE crawling. This prevents incomplete crawls
-    by revealing all sections of a site (e.g., /api/*, /docs/*, /guides/*).
+    **CRITICAL - Always use before large crawls** (see server instructions: Analyze Before Large Crawls)
 
-    Returns RAW DATA only - NO recommendations or heuristics. The AI agent
-    uses its LLM to interpret the URL patterns and decide what to crawl.
-
-    IMPORTANT: Must provide the website ROOT URL, not a specific page.
-    - ✓ CORRECT: "https://docs.example.com" or "https://docs.example.com/"
-    - ✗ WRONG: "https://docs.example.com/en/api/overview"
-
-    The tool looks for sitemap.xml at the root (e.g., /sitemap.xml). Providing
-    a specific page URL will fail to find the sitemap.
-
-    VOLUME CONTROL: By default, returns only pattern_stats summary (lightweight,
-    optimized for context window). For large sites with 1000s of URLs, this
-    prevents overwhelming the agent. Set include_url_lists=True only if you
-    need specific URLs from patterns.
+    **Workflow:**
+    1. analyze_website(url) - Get sitemap data
+    2. Review total_urls and pattern_stats
+    3. If large (dozens/hundreds): Present "at least N pages" to user, get confirmation
+    4. Decide: single crawl vs multiple targeted crawls
+    5. ingest_url(follow_links=True)
 
     Args:
-        base_url: (REQUIRED) Website ROOT URL (e.g., "https://docs.example.com")
-                 Must be the domain root, not a specific page path.
-        timeout: Request timeout in seconds (default: 10)
-        include_url_lists: If True, includes full URL lists per pattern (default: False).
-                          Only use for sites with <1000 URLs or when you need specific URLs.
-        max_urls_per_pattern: Max URLs per pattern when include_url_lists=True (default: 10).
-                             Returns shortest URLs first (often index/overview pages).
+        base_url: Website ROOT (e.g., "https://docs.example.com", NOT specific page)
+        timeout: Request timeout seconds (default: 10)
+        include_url_lists: If True, includes full URL lists (default: False, pattern stats only)
+        max_urls_per_pattern: Max URLs per pattern when include_url_lists=True (default: 10)
 
     Returns:
-        Minimal response (default, include_url_lists=False):
-        {
-            "base_url": str,
-            "analysis_method": str,  # "sitemap" or "not_found"
-            "total_urls": int,  # Total URLs found in sitemap
-            "pattern_stats": {  # Lightweight summary - ALWAYS included
-                "/pattern": {
-                    "count": int,  # Number of URLs in this pattern
-                    "avg_depth": float,  # Average path depth (2.3 = ~2-3 segments deep)
-                    "example_urls": [str]  # Up to 3 shortest URLs (often entry points)
-                }
-            },
-            "notes": str  # Context about data quality and completeness
-        }
+        {"base_url": str, "analysis_method": str, "total_urls": int (minimum from sitemap),
+         "pattern_stats": dict, "notes": str, "url_groups": dict (only if include_url_lists=True)}
 
-        Extended response (include_url_lists=True):
-        {
-            ...same as above...
-            "url_groups": {  # Full URL lists per pattern (limited by max_urls_per_pattern)
-                "/pattern": ["url1", "url2", ...]
-            }
-        }
+    Best Practices (see server instructions: Analyze Before Large Crawls):
+    - MUST use for large sites before crawling
+    - Present scope to user: "at least N pages"
+    - Note: actual crawl may discover MORE pages with follow_links
+    - Get user confirmation for large operations
 
-    Example workflow:
-        # 1. Analyze website structure
-        analysis = analyze_website("https://docs.claude.com")
-
-        # 2. Agent interprets the patterns:
-        # - /api: 45 URLs, avg depth 2.3 → API documentation section
-        # - /docs: 120 URLs, avg depth 3.1 → User guide section
-        # - /guides: 30 URLs, avg depth 2.5 → Tutorial section
-
-        # 3. Agent decides to crawl each section separately:
-        ingest_url("https://docs.claude.com/en/api/overview",
-                   collection="claude-docs", mode="crawl",
-                   follow_links=True, max_depth=2)
-
-        ingest_url("https://docs.claude.com/en/docs/intro",
-                   collection="claude-docs", mode="crawl",
-                   follow_links=True, max_depth=2)
-
-    Notes:
-        - Requires sitemap.xml (tries /sitemap.xml, /sitemap_index.xml)
-        - If no sitemap found, returns analysis_method="not_found"
-        - URL grouping is simple path-based (no AI inference)
-        - Agent should use its LLM to identify which patterns to crawl
-        - Common patterns: /api, /docs, /guides, /blog, /reference
-        - For large sites (3000+ URLs), use default settings (pattern_stats only)
+    Note: Free operation (no API calls, just HTTP request for sitemap).
     """
     return analyze_website_impl(base_url, timeout, include_url_lists, max_urls_per_pattern)
 
@@ -982,82 +717,26 @@ async def ingest_file(
     include_chunk_ids: bool = False,
 ) -> dict:
     """
-    Ingest a text-based file from the file system.
+    Ingest text-based file from file system (text/code/config only, not binary).
 
-    **FILE SYSTEM ACCESS REQUIREMENT:**
-    This tool requires the MCP server to have access to the file path you provide.
-
-    Depending on how this MCP server is hosted, it may or may not have access to files
-    or directories. If file access fails, you will receive:
-
-    FileNotFoundError: "File not found: {file_path}"
-
-    When you see this error, read the file content through other means and use
-    ingest_text() instead.
-
-    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
-
-    IMPORTANT - PROCESSING TIME:
-    Processing time depends on file size:
-    - Small files (<100KB): Typically completes in seconds
-    - Large files (>1MB): Can take a minute or longer
-
-    The MCP server will continue processing even if your client times out. You may need
-    to configure longer timeout values when ingesting large files.
-
-    Supported file types (text-based only):
-        ✓ Plain text (.txt, .md, .rst)
-        ✓ Source code (.py, .js, .java, .go, .rs, .cpp, etc.)
-        ✓ Config files (.json, .yaml, .xml, .toml, .ini, .env)
-        ✓ Web files (.html, .css, .svg)
-        ✓ Any UTF-8 or latin-1 encoded text file
-
-    NOT supported (binary formats):
-        ✗ PDF files (.pdf)
-        ✗ Microsoft Office (.docx, .xlsx, .pptx)
-        ✗ Images, videos, archives
-
-    By default, returns minimal response without chunk_ids array (may be large for big files).
-    Use include_chunk_ids=True to get the list of chunk IDs.
+    **IMPORTANT - File system access:** MCP server must access file path. If fails, use ingest_text() instead.
 
     Args:
-        file_path: (REQUIRED) Absolute path to the file (e.g., "/path/to/document.txt")
-        collection_name: (REQUIRED) Collection to add to (must already exist)
+        file_path: Absolute path (e.g., "/path/to/document.txt")
+        collection_name: Target collection (must exist)
         metadata: Optional metadata dict
-        include_chunk_ids: If True, includes list of chunk IDs. Default: False (minimal response).
+        include_chunk_ids: If True, returns chunk IDs (default: False)
 
     Returns:
-        Minimal response (default):
-        {
-            "source_document_id": int,
-            "num_chunks": int,
-            "filename": str,  # Extracted from path
-            "file_type": str,  # Extracted from extension
-            "file_size": int,  # Bytes
-            "collection_name": str
-        }
+        {"source_document_id": int, "num_chunks": int, "filename": str, "file_type": str,
+         "file_size": int, "collection_name": str, "chunk_ids": list (only if include_chunk_ids=True)}
 
-        Extended response (include_chunk_ids=True):
-        {
-            ...same as above...
-            "chunk_ids": list[int]  # IDs of generated chunks
-        }
+    Best Practices (see server instructions: Ingestion Workflows):
+    - Supports: .txt, .md, code files, .json, .yaml, .html, etc. (UTF-8 text)
+    - NOT supported: PDF, Office docs, images, archives
+    - Large files (>1MB) may take minutes to process
 
-    Raises:
-        FileNotFoundError: If file doesn't exist - "File not found: {file_path}"
-        UnicodeDecodeError: If file is binary/not text
-        ValueError: If collection doesn't exist - "Collection '{collection_name}' does not exist. Create it first using create_collection('{collection_name}', 'description')."
-
-    Example:
-        # First, create collection
-        create_collection("reports", "Engineering reports and documentation")
-
-        # Then ingest file
-        result = ingest_file(
-            file_path="/Users/agent/documents/report.txt",
-            collection_name="reports",
-            metadata={"year": 2025, "department": "engineering"}
-        )
+    Note: Uses AI models, has cost (embeddings + graph extraction).
     """
     return await ingest_file_impl(
         db, doc_store, unified_mediator, graph_store, file_path, collection_name, metadata, include_chunk_ids
@@ -1074,100 +753,30 @@ async def ingest_directory(
     include_document_ids: bool = False,
 ) -> dict:
     """
-    Ingest multiple text-based files from a directory.
+    Batch ingest multiple text files from directory (text-based only, skips binary).
 
-    **DOMAIN GUIDANCE:**
-    Before ingesting a directory, assess whether all files share the same domain/purpose.
-    If the directory contains mixed content (e.g., code + docs + configs), consider:
-    1. Creating separate collections for each domain
-    2. Using file_extensions to filter specific types per collection
-    3. Applying appropriate metadata schemas per domain
+    **DOMAIN GUIDANCE:** If directory has mixed content (code + docs + configs), create separate collections per domain or use file_extensions to filter.
 
-    **FILE SYSTEM ACCESS REQUIREMENT:**
-    This tool requires the MCP server to have access to the directory path you provide.
-
-    Depending on how this MCP server is hosted, it may or may not have access to files
-    or directories. If directory access fails, you will receive:
-
-    ValueError: "Directory not found: {directory_path}"
-
-    When you see this error, read the file contents through other means and use
-    ingest_text() for each document.
-
-    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
-
-    IMPORTANT - PROCESSING TIME:
-    Processing time depends on directory size and recursive settings:
-    - Small directories (few files, <1MB total): Typically completes in seconds
-    - Large directories (many files, >10MB total): Can take several minutes
-    - Recursive mode with deep hierarchies: Can take significantly longer
-
-    Factors affecting duration:
-    - Number of files to process
-    - Total size of all files
-    - Directory depth (when recursive=True)
-    - Number of subdirectories scanned
-
-    The MCP server will continue processing even if your client times out. You may need
-    to configure longer timeout values when ingesting large directories or using recursive mode.
-
-    Only processes text-based files (see ingest_file for supported types).
-    Binary files and files without matching extensions are skipped.
-
-    By default, returns minimal response without document_ids array (may be large for many files).
-    Use include_document_ids=True to get the list of document IDs.
+    **IMPORTANT - File system access:** MCP server must access directory path. If fails, use ingest_text() for each file.
 
     Args:
-        directory_path: (REQUIRED) Absolute path to directory (e.g., "/path/to/docs")
-        collection_name: (REQUIRED) Collection to add all files to (must already exist)
-        file_extensions: List of extensions to process (e.g., [".txt", ".md"]).
-                        If None, defaults to [".txt", ".md"]
+        directory_path: Absolute path (e.g., "/path/to/docs")
+        collection_name: Target collection (must exist)
+        file_extensions: Extensions to process (default: [".txt", ".md"])
         recursive: If True, searches subdirectories (default: False)
-        metadata: Custom metadata to apply to ALL files in directory (merged with file metadata).
-                  Must match collection's metadata_schema if defined.
-        include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
+        metadata: Metadata applied to ALL files (merged with file metadata)
+        include_document_ids: If True, returns document IDs (default: False)
 
     Returns:
-        Minimal response (default):
-        {
-            "files_found": int,
-            "files_ingested": int,
-            "files_failed": int,
-            "total_chunks": int,
-            "collection_name": str,
-            "failed_files": [  # Only if files_failed > 0
-                {
-                    "filename": str,
-                    "error": str
-                }
-            ]
-        }
+        {"files_found": int, "files_ingested": int, "files_failed": int, "total_chunks": int,
+         "collection_name": str, "failed_files": list, "document_ids": list (only if include_document_ids=True)}
 
-        Extended response (include_document_ids=True):
-        {
-            ...same as above...
-            "document_ids": list[int]  # IDs of ingested documents
-        }
+    Best Practices (see server instructions: Collection Discipline):
+    - Assess domain consistency before batch ingesting
+    - Large directories (>10MB) may take several minutes
+    - Recursive mode with deep hierarchies takes significantly longer
 
-    Raises:
-        ValueError: If directory doesn't exist - "Directory not found: {directory_path}"
-        ValueError: If collection doesn't exist - "Collection '{collection_name}' does not exist. Create it first using create_collection('{collection_name}', 'description')."
-
-    Example:
-        # First, create collection with metadata schema
-        create_collection("kb", "Knowledge base articles and documentation",
-                         metadata_schema={"category": "str", "version": "str"})
-
-        # Ingest all markdown files in directory with shared metadata
-        result = ingest_directory(
-            directory_path="/Users/agent/knowledge-base",
-            collection_name="kb",
-            file_extensions=[".md", ".txt"],
-            recursive=True,
-            metadata={"category": "documentation", "version": "v2.0"}
-        )
-
-        print(f"Ingested {result['files_ingested']} files with {result['total_chunks']} chunks")
+    Note: Uses AI models, has cost (embeddings + graph extraction per file).
     """
     return await ingest_directory_impl(
         db,
@@ -1191,51 +800,26 @@ async def update_document(
     metadata: dict | None = None,
 ) -> dict:
     """
-    Update an existing document's content, title, or metadata.
+    Update existing document's content, title, or metadata (prevents duplicates).
 
-    This is essential for agent memory management. When information changes
-    (e.g., company vision updates, personal info corrections), agents can
-    update existing knowledge rather than creating duplicates.
-
-    If content is provided, the document is automatically re-chunked and
-    re-embedded with new vectors. Old chunks are deleted and replaced.
-    Collection membership is preserved across updates.
+    **IMPORTANT:** At least one field (content, title, or metadata) must be provided.
 
     Args:
-        document_id: (REQUIRED) ID of document to update (from search results or list_documents)
-        content: New content (optional). Triggers full re-chunking and re-embedding.
-        title: New title/filename (optional)
-        metadata: New metadata (optional). Merged with existing metadata, not replaced.
-
-        **IMPORTANT: At least one of content, title, or metadata MUST be provided.**
+        document_id: Document ID (from search results or list_documents)
+        content: New content (triggers re-chunking and re-embedding)
+        title: New title/filename
+        metadata: New metadata (merged with existing, not replaced)
 
     Returns:
-        {
-            "document_id": int,
-            "updated_fields": list[str],  # e.g., ["content", "metadata"]
-            "old_chunk_count": int,  # Only if content updated
-            "new_chunk_count": int   # Only if content updated
-        }
+        {"document_id": int, "updated_fields": list, "old_chunk_count": int (if content updated),
+         "new_chunk_count": int (if content updated)}
 
-    Example:
-        # Update company vision
-        result = update_document(
-            document_id=42,
-            content="New company vision: We focus on AI agent development...",
-            metadata={"status": "approved", "version": "2.0"}
-        )
+    Best Practices (see server instructions: Ingestion Workflows):
+    - Essential for memory management (avoid duplicates)
+    - Content updates trigger full re-chunking/re-embedding
+    - Metadata is merged (to remove key, delete and re-ingest)
 
-        # Just update metadata
-        result = update_document(
-            document_id=42,
-            metadata={"last_reviewed": "2025-10-12"}
-        )
-
-    Raises:
-        ValueError: If document_id doesn't exist or no fields provided
-
-    Note: Metadata is merged with existing values. To remove a key,
-    use delete_document and re-ingest instead.
+    Note: Content updates use AI models, has cost (embeddings + graph extraction).
     """
     return await update_document_impl(db, doc_store, document_id, content, title, metadata, graph_store)
 
@@ -1243,38 +827,23 @@ async def update_document(
 @mcp.tool()
 async def delete_document(document_id: int) -> dict:
     """
-    Delete a source document and all its chunks permanently.
+    Permanently delete document and all chunks (cannot be undone).
 
-    Essential for agent memory management. When information becomes outdated,
-    incorrect, or no longer relevant, agents can remove it to prevent
-    retrieval of stale knowledge.
-
-    This is a permanent operation and cannot be undone. All chunks derived
-    from the document are also deleted (cascade). However, other documents
-    in the same collections are unaffected.
+    **⚠️ PERMANENT - Essential for memory management** to remove outdated/incorrect knowledge.
 
     Args:
-        document_id: (REQUIRED) ID of document to delete (from search results or list_documents)
+        document_id: Document ID (from search results or list_documents)
 
     Returns:
-        {
-            "document_id": int,
-            "document_title": str,
-            "chunks_deleted": int,
-            "collections_affected": list[str]  # Collections that had this document
-        }
+        {"document_id": int, "document_title": str, "chunks_deleted": int,
+         "collections_affected": list (collections that had this document)}
 
-    Example:
-        # Delete outdated documentation
-        result = delete_document(42)
-        print(f"Deleted '{result['document_title']}' with {result['chunks_deleted']} chunks")
-        print(f"Affected collections: {result['collections_affected']}")
+    Best Practices:
+    - Does NOT delete collections (only removes document from them)
+    - Other documents in collections are unaffected
+    - Use with caution - deletion is permanent
 
-    Raises:
-        ValueError: If document_id doesn't exist
-
-    Note: This does NOT delete collections, only removes the document from them.
-    Use with caution - deletion is permanent.
+    Note: Free operation (no API calls, only database deletion).
     """
     return await delete_document_impl(db, doc_store, document_id, graph_store)
 
@@ -1287,76 +856,24 @@ def list_documents(
     include_details: bool = False,
 ) -> dict:
     """
-    List source documents in the knowledge base.
-
-    Useful for agents to discover what documents exist before updating or
-    deleting them. Can be scoped to a specific collection or list all documents.
-
-    By default, returns minimal response (id, filename, chunk_count).
-    Use include_details=True to get file_type, file_size, timestamps, collections, and metadata.
+    Browse documents in knowledge base (supports pagination).
 
     Args:
-        collection_name: Optional collection to filter by. If None, lists all documents.
-        limit: Maximum number of documents to return (default: 50, max: 200)
-        offset: Number of documents to skip for pagination (default: 0)
-        include_details: If True, includes file_type, file_size, timestamps, collections, metadata.
-                        Default: False (minimal response).
+        collection_name: Filter by collection (if None, lists all)
+        limit: Max documents to return (default: 50, max: 200)
+        offset: Documents to skip for pagination (default: 0)
+        include_details: If True, includes file_type, file_size, timestamps, collections, metadata (default: False)
 
     Returns:
-        Minimal response (default):
-        {
-            "documents": [
-                {
-                    "id": int,
-                    "filename": str,
-                    "chunk_count": int
-                }
-            ],
-            "total_count": int,  # Total documents matching filter
-            "returned_count": int,  # Documents in this response
-            "has_more": bool  # Whether more pages available
-        }
+        {"documents": list, "total_count": int, "returned_count": int, "has_more": bool}
+        Each document: {"id": int, "filename": str, "chunk_count": int, ... (more if include_details=True)}
 
-        Extended response (include_details=True):
-        {
-            "documents": [
-                {
-                    "id": int,
-                    "filename": str,
-                    "chunk_count": int,
-                    "file_type": str,
-                    "file_size": int,
-                    "created_at": str,  # ISO 8601
-                    "updated_at": str,  # ISO 8601
-                    "collections": list[str],  # Collections this document belongs to
-                    "metadata": dict  # Custom metadata
-                }
-            ],
-            "total_count": int,
-            "returned_count": int,
-            "has_more": bool
-        }
+    Best Practices:
+    - Discover documents before updating/deleting
+    - Use pagination (has_more) for large collections
+    - Default minimal response recommended for browsing
 
-    Example:
-        # Minimal listing (recommended for browsing)
-        result = list_documents(collection_name="company-knowledge")
-        for doc in result['documents']:
-            print(f"{doc['id']}: {doc['filename']} ({doc['chunk_count']} chunks)")
-
-        # Detailed listing with full metadata
-        result = list_documents(collection_name="company-knowledge", include_details=True)
-        for doc in result['documents']:
-            print(f"{doc['id']}: {doc['filename']}")
-            print(f"  Collections: {doc['collections']}")
-            print(f"  Metadata: {doc['metadata']}")
-
-        # Paginate through all documents
-        offset = 0
-        result = list_documents(limit=50, offset=offset)
-        while result['has_more']:
-            # Process documents
-            offset += result['returned_count']
-            result = list_documents(limit=50, offset=offset)
+    Note: Free operation (no API calls).
     """
     return list_documents_impl(doc_store, collection_name, limit, offset, include_details)
 
@@ -1374,79 +891,27 @@ async def query_relationships(
     threshold: float = 0.35,
 ) -> dict:
     """
-    Search the knowledge graph for entity relationships using natural language.
+    Query knowledge graph for entity relationships using natural language.
 
-    This tool searches for connections and relationships between entities in your
-    knowledge graph. Use it to understand how concepts, people, projects, and ideas
-    relate to each other.
-
-    **Collection Scoping:**
-    - Specify collection_name to search within a single domain
-    - Omit collection_name to search across all domains
-    - Uses the same collection names as similarity search (search_documents)
-
-    Collections are designed to isolate domains, though some overlap may occur
-    if content has been miscategorized. Searching a specific collection typically
-    returns only that domain's relationships.
-
-    **What it does:**
-    - Finds relationships between entities (e.g., "How does X relate to Y?")
-    - Discovers connections across your knowledge base
-    - Maps entity relationships automatically extracted from your content
-
-    **Best for:**
-    - "How" questions - "How does my YouTube channel relate to my business?"
-    - Connection queries - "What connects project A to project B?"
-    - Relationship discovery - "Show me relationships involving RAG systems"
-
-    **Note:** Knowledge Graph must be enabled and available. If unavailable,
-    returns status="unavailable" with an empty relationships list.
-
-    **About the threshold parameter:**
-    The threshold controls result relevance filtering (0.0 = permissive, 1.0 = strict):
-    - **Lower values (0.0-0.3):** More results, including less certain matches
-    - **Default (0.35):** Balanced - filters obvious mismatches while keeping good results
-    - **Higher values (0.5-0.7):** Fewer results, only high-confidence matches
-    Useful for tuning result quality vs quantity when defaults don't fit your needs.
+    **Best for:** "How" questions about connections (e.g., "How does X relate to Y?")
 
     Args:
-        query: (REQUIRED) Natural language query about relationships
-               (e.g., "How does my content strategy support my business?")
-        collection_name: Optional collection to scope search. If None, searches all collections.
-        num_results: Maximum number of relationships to return (default: 5, max: 20)
-        threshold: Relationship confidence threshold (default: 0.35, range: 0.0-1.0)
-                  Controls relevance filtering - higher values = stricter filtering
+        query: Natural language query (e.g., "How does my content strategy support my business?")
+        collection_name: Scope to collection (if None, searches all)
+        num_results: Max relationships to return (default: 5, max: 20)
+        threshold: Relevance filter 0.0-1.0 (default: 0.35, higher = stricter)
 
     Returns:
-        {
-            "status": str,  # "success", "unavailable", or "error"
-            "query": str,  # Echo of your query
-            "num_results": int,  # Number of relationships found
-            "relationships": [
-                {
-                    "id": str,  # Relationship ID
-                    "relationship_type": str,  # Type of relationship (e.g., "RELATES_TO")
-                    "fact": str,  # Human-readable description
-                    "source_node_id": str,  # ID of source entity
-                    "target_node_id": str,  # ID of target entity
-                    "valid_from": str,  # ISO 8601 timestamp (when fact became valid)
-                    "valid_until": str  # ISO 8601 timestamp (when fact expired, if applicable)
-                }
-            ]
-        }
+        {"status": str, "query": str, "num_results": int, "relationships": list}
+        Each relationship: {"id": str, "relationship_type": str, "fact": str, "source_node_id": str,
+                           "target_node_id": str, "valid_from": str, "valid_until": str}
 
-    Example:
-        # Discover business relationships
-        result = query_relationships(
-            query="How does my YouTube channel relate to my product strategy?",
-            num_results=5,
-            threshold=0.35
-        )
+    Best Practices (see server instructions: Knowledge Graph):
+    - Collection scoping isolates domains (same as search_documents)
+    - Returns status="unavailable" if graph not enabled
+    - Performance: ~500-800ms (includes LLM entity matching)
 
-        for rel in result['relationships']:
-            print(f"{rel['relationship_type']}: {rel['fact']}")
-
-    Performance: ~500-800ms per query (includes LLM-based entity matching)
+    Note: Uses AI models, has cost (LLM for entity matching).
     """
     return await query_relationships_impl(
         graph_store,
@@ -1467,86 +932,30 @@ async def query_temporal(
     valid_until: str | None = None,
 ) -> dict:
     """
-    Query how knowledge has evolved over time using temporal reasoning.
+    Query how knowledge evolved over time (temporal reasoning on facts).
 
-    This tool reveals how your knowledge and understanding have changed over time.
-    It shows facts with their validity periods, helping you understand what was
-    true when, and how information has evolved.
-
-    **Collection Scoping:**
-    - Specify collection_name to search within a single domain's timeline
-    - Omit collection_name to search across all domains
-    - Uses the same collection names as similarity search (search_documents)
-
-    **What it does:**
-    - Tracks how facts changed over time
-    - Shows current vs superseded knowledge
-    - Reveals evolution of your understanding
-    - Identifies outdated vs current information
-
-    **Temporal Filtering:**
-    - **valid_from**: Filter to facts valid AFTER this ISO 8601 date
-    - **valid_until**: Filter to facts valid BEFORE this ISO 8601 date
-    - Both filters can be used together to find facts valid in a specific time window
-
-    **Best for:**
-    - Evolution queries - "How has my business strategy changed?"
-    - Temporal tracking - "What was my focus in January vs March?"
-    - Trend analysis - "Show me how my product priorities evolved"
-    - Consistency checking - "What beliefs changed about X?"
-    - Decision tracking - "What decisions did I make around December 2025?"
-
-    **Note:** Knowledge Graph must be enabled and available. If unavailable,
-    returns status="unavailable" with an empty timeline list.
+    **Best for:** Evolution queries (e.g., "How has my business strategy changed?")
 
     Args:
-        query: (REQUIRED) Natural language query about temporal changes
-               (e.g., "How has my business vision evolved?")
-        collection_name: Optional collection to scope search. If None, searches all collections.
-        num_results: Maximum number of timeline items to return (default: 10, max: 50)
-        valid_from: (OPTIONAL) ISO 8601 date (e.g., "2025-12-01T00:00:00")
-                   Only return facts valid after this date
-        valid_until: (OPTIONAL) ISO 8601 date (e.g., "2025-12-31T23:59:59")
-                    Only return facts valid before this date
+        query: Natural language query (e.g., "How has my business vision evolved?")
+        collection_name: Scope to collection (if None, searches all)
+        num_results: Max timeline items to return (default: 10, max: 50)
+        threshold: Relevance filter 0.0-1.0 (default: 0.35, higher = stricter)
+        valid_from: ISO 8601 date (return facts valid AFTER this date)
+        valid_until: ISO 8601 date (return facts valid BEFORE this date)
 
     Returns:
-        {
-            "status": str,  # "success", "unavailable", or "error"
-            "query": str,  # Echo of your query
-            "num_results": int,  # Number of timeline items found
-            "timeline": [  # Sorted by valid_from (most recent first)
-                {
-                    "fact": str,  # Human-readable description
-                    "relationship_type": str,  # Type of relationship
-                    "valid_from": str,  # ISO 8601 (when this became true)
-                    "valid_until": str,  # ISO 8601 (when this no longer applied, null if current)
-                    "status": str,  # "current" (still valid) or "superseded" (no longer the active version)
-                    "created_at": str,  # ISO 8601 (when fact was added to graph)
-                    "expired_at": str  # ISO 8601 (when fact was marked superseded)
-                }
-            ]
-        }
+        {"status": str, "query": str, "num_results": int, "timeline": list (sorted by valid_from, recent first)}
+        Each item: {"fact": str, "relationship_type": str, "valid_from": str, "valid_until": str,
+                   "status": str ("current" or "superseded"), "created_at": str, "expired_at": str}
 
-    Examples:
-        # Track business evolution
-        result = query_temporal(
-            query="How has my business strategy evolved?",
-            num_results=10
-        )
+    Best Practices (see server instructions: Knowledge Graph):
+    - Tracks current vs superseded knowledge
+    - Temporal filters can be combined for time windows
+    - Returns status="unavailable" if graph not enabled
+    - Performance: ~500-800ms (includes LLM temporal matching)
 
-        for item in result['timeline']:
-            status = "✅ Current" if item['status'] == "current" else "⏰ Expired"
-            print(f"{status}: {item['fact']}")
-            print(f"  Valid: {item['valid_from']} → {item['valid_until'] or 'present'}")
-
-        # Find decisions made in specific time window
-        result = query_temporal(
-            query="What decisions did I make?",
-            valid_from="2025-12-01T00:00:00",
-            valid_until="2025-12-31T23:59:59"
-        )
-
-    Performance: ~500-800ms per query (includes LLM-based temporal matching)
+    Note: Uses AI models, has cost (LLM for temporal matching).
     """
     return await query_temporal_impl(
         graph_store,
