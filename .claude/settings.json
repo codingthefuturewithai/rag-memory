@@ -1,15 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "Bash(docker *)",
-      "Bash(docker-compose *)",
-      "Bash(uv *)",
-      "Bash(python *)",
-      "Bash(python3 *)",
-      "Bash(which *)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(uv:*)",
+      "Bash(python:*)",
+      "Bash(python3:*)",
+      "Bash(which:*)",
       "Bash(pwd)",
-      "Bash(ls *)",
-      "Bash(cat *)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
       "Read(.reference/**)",
       "Read(README.md)",
       "Read(CLAUDE.md)",
@@ -22,17 +22,17 @@
       "Glob(*.md)"
     ],
     "deny": [
-      "Bash(rm *)",
-      "Bash(sudo *)",
-      "Bash(docker-compose down*)",
-      "Bash(docker rm*)",
-      "Bash(docker rmi*)",
-      "Bash(git push *)",
-      "Bash(git commit *)",
-      "Bash(echo $OPENAI_API_KEY*)",
-      "Bash(echo $*API_KEY*)",
-      "Bash(echo $*SECRET*)",
-      "Bash(echo $*PASSWORD*)",
+      "Bash(rm:*)",
+      "Bash(sudo:*)",
+      "Bash(docker-compose down:*)",
+      "Bash(docker rm:*)",
+      "Bash(docker rmi:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(echo $OPENAI_API_KEY:*)",
+      "Bash(echo $:*API_KEY:*)",
+      "Bash(echo $:*SECRET:*)",
+      "Bash(echo $:*PASSWORD:*)",
       "Bash(cat .env)",
       "Bash(cat **/.env)",
       "Write(**)",
@@ -46,12 +46,12 @@
       "Read(**/*credential*)"
     ],
     "ask": [
-      "Bash(docker-compose up*)",
-      "Bash(docker-compose restart*)",
-      "Bash(uv run rag init*)",
-      "Bash(uv run rag collection delete*)",
-      "Bash(uv run rag document delete*)",
-      "Bash(uv run rag recrawl*)"
+      "Bash(docker-compose up:*)",
+      "Bash(docker-compose restart:*)",
+      "Bash(uv run rag init:*)",
+      "Bash(uv run rag collection delete:*)",
+      "Bash(uv run rag document delete:*)",
+      "Bash(uv run rag recrawl:*)"
     ]
   }
 }
