@@ -29,7 +29,7 @@ services:
       POSTGRES_DB: rag_memory
     volumes:
       - postgres_data_local:/var/lib/postgresql/data
-      - ../init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser}"]
       interval: 10s
