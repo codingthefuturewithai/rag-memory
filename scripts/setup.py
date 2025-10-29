@@ -22,6 +22,7 @@ import socket
 import subprocess
 import time
 import signal
+import asyncio
 from pathlib import Path
 from typing import Tuple, Optional
 import json
@@ -764,7 +765,7 @@ def wait_for_health_checks(ports: dict, config_dir: Path, timeout_seconds: int =
 
 def validate_schemas(ports: dict) -> bool:
     """Validate that database schemas were created correctly"""
-    print_header("STEP 12: Validating Database Schemas")
+    print_header("STEP 15: Validating Database Schemas")
 
     # Check PostgreSQL schema
     print_info("Checking PostgreSQL schema...")
@@ -796,6 +797,38 @@ def validate_schemas(ports: dict) -> bool:
     return True
 
 
+async def init_neo4j_indices(ports: dict, api_key: str) -> bool:
+    """Initialize Neo4j Graphiti indices and constraints.
+
+    This must be called AFTER Neo4j container is verified healthy.
+    Creates the required indices and constraints for Graphiti to function.
+    """
+    print_header("STEP 14: Initializing Neo4j Indices")
+
+    try:
+        from graphiti_core import Graphiti
+        from graphiti_core.llm_client import OpenAIClient
+
+        neo4j_uri = f"bolt://localhost:{ports['neo4j_bolt']}"
+        neo4j_user = "neo4j"
+        neo4j_password = "graphiti-password"
+
+        print_info("Connecting to Neo4j...")
+        llm_client = OpenAIClient(api_key=api_key, model_name="gpt-4o-mini")
+        graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password, llm_client)
+
+        print_info("Creating indices and constraints (this is idempotent)...")
+        await graphiti.build_indices_and_constraints(delete_existing=False)
+
+        print_success("✅ Neo4j indices initialized successfully")
+        return True
+
+    except Exception as e:
+        print_warning(f"Failed to initialize Neo4j indices: {e}")
+        print_info("You can run 'rag init' manually after setup completes")
+        return False
+
+
 def print_final_summary(ports: dict, config_dir: Path):
     """Print final summary with all connection info and management commands"""
     print_header("✨ Setup Complete!")
@@ -825,6 +858,24 @@ def print_final_summary(ports: dict, config_dir: Path):
         print(f"    {Colors.YELLOW}  To:      {Colors.CYAN}bolt://localhost:{ports['neo4j_bolt']}{Colors.RESET}")
 
     print(f"  MCP Server: http://localhost:{ports['mcp']}/sse")
+    print()
+
+    # MCP Client Configuration
+    print(f"{Colors.BOLD}Connect to AI Assistants{Colors.RESET}")
+    print(f"\n  For Claude Code:")
+    print(f"    {Colors.CYAN}claude mcp add rag-memory --type sse --url http://localhost:{ports['mcp']}/sse{Colors.RESET}")
+    print(f"    Then restart Claude Code and verify with: {Colors.CYAN}claude mcp list{Colors.RESET}")
+
+    print(f"\n  For Claude Desktop, Cursor, or other MCP clients:")
+    print(f"    Add this to your MCP config file:")
+    print(f"""    {Colors.CYAN}{{
+      "mcpServers": {{
+        "rag-memory": {{
+          "url": "http://localhost:{ports['mcp']}/sse",
+          "transport": "sse"
+        }}
+      }}
+    }}{Colors.RESET}""")
     print()
 
     # Container management
@@ -864,7 +915,7 @@ def print_final_summary(ports: dict, config_dir: Path):
 
 def install_cli_tool() -> bool:
     """Install the RAG Memory CLI tool using uv tool install"""
-    print_header("STEP 13: Installing CLI Tool")
+    print_header("STEP 14: Installing CLI Tool")
 
     print_info("Installing rag-memory CLI tool globally...")
     project_root = Path(__file__).parent.parent
@@ -954,15 +1005,19 @@ def main():
         print_info("Try: docker-compose -f deploy/docker/compose/docker-compose.yml logs")
         sys.exit(1)
 
-    # Step 13: Install CLI tool
+    # Step 13: Initialize Neo4j indices
+    # Run this after health checks confirm Neo4j is up
+    asyncio.run(init_neo4j_indices(ports, api_key))
+
+    # Step 14: Install CLI tool
     if not install_cli_tool():
         print_warning("Failed to install CLI tool, but setup is otherwise complete")
 
-    # Step 14: Validate schemas
+    # Step 15: Validate schemas
     if not validate_schemas(ports):
         print_warning("Schema validation had issues, but setup may still work")
 
-    # Step 15: Print final summary
+    # Step 16: Print final summary
     print_final_summary(ports, config_dir)
 
 
