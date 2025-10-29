@@ -608,4 +608,4 @@ A: `fly deploy` automatically restarts. Downtime: 30-60 seconds.
 
 **Last Updated:** 2025-10-24
 **Status:** Production Ready
-**Version:** 0.8.0+
+**Version:** 0.13.0

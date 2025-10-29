@@ -49,6 +49,8 @@ Both databases work together automatically - when you ingest a document, it's in
 - Full document lifecycle (create, read, update, delete)
 - Cross-platform configuration system
 
+**📚 Complete Documentation:** See [`.reference/`](./.reference/) directory for comprehensive guides (setup, MCP tools, pricing, search optimization, knowledge graphs)
+
 ### For Developers (Code Modifications)
 
 If you want to modify the code:
@@ -117,15 +119,21 @@ rag recrawl https://docs.example.com --collection docs --follow-links --max-dept
 ```
 
 ### Search
+
+**⚠️ IMPORTANT: Use Natural Language, Not Keywords**
+This system uses **semantic similarity search**, not keyword matching. Always use complete questions or sentences:
+- ✅ Good: `"How do I configure authentication in the system?"`
+- ❌ Bad: `"authentication configuration"`
+
 ```bash
 # Basic search
-rag search "query" --collection <name>
+rag search "How do I configure authentication?" --collection <name>
 
 # Advanced options
-rag search "query" --collection <name> --limit 10 --threshold 0.7 --verbose --show-source
+rag search "What are the best practices for error handling?" --collection <name> --limit 10 --threshold 0.7 --verbose --show-source
 
 # Search with metadata filter
-rag search "query" --metadata '{"topic":"python"}'
+rag search "How do I use decorators in Python?" --metadata '{"topic":"python"}'
 ```
 
 ### Document Management

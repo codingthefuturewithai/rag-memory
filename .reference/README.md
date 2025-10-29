@@ -141,7 +141,7 @@ For detailed CLI commands: [OVERVIEW.md](OVERVIEW.md)
 - Document chunking
 - Collections
 - Web crawling & re-crawl
-- 16 MCP tools
+- 17 MCP tools
 - 25+ CLI commands
 
 **⚠️ Experimental (Phase 3 complete, Phase 4 pending):**
@@ -176,7 +176,7 @@ For detailed CLI commands: [OVERVIEW.md](OVERVIEW.md)
 - No duplication needed
 
 **MCP Server - PRODUCTION READY ✅**
-- 16 tools available
+- 17 tools available
 - Multiple transports (stdio, SSE, HTTP)
 - Graceful degradation if graph unavailable
 
@@ -281,7 +281,7 @@ See [OVERVIEW.md](OVERVIEW.md) - "What's Included & What's Not"
 ## 📝 Last Updated
 
 - **Documentation Date:** 2025-10-20
-- **RAG Memory Version:** 0.7.0
+- **RAG Memory Version:** 0.13.0
 - **Status:** Production Ready (except graph - Phase 4 pending)
 - **Next Review:** When Phase 4 (Graph Cleanup) completes
 

@@ -45,7 +45,7 @@ Use RAG Memory as an MCP server that AI agents can talk to.
 - Your AI agent has a memory of your documents
 - Persistent across conversations
 - Update knowledge anytime
-- 16 powerful tools available to agents
+- 17 powerful tools available to agents
 
 **Example Agent Conversation:**
 ```
@@ -251,7 +251,7 @@ rag recrawl https://docs.example.com \
 - ✅ Always fresh content
 - ✅ Tracks history via crawl metadata
 
-### 6. MCP Server: 16 Tools
+### 6. MCP Server: 17 Tools
 
 The MCP server exposes RAG Memory's capabilities to AI agents.
 
@@ -608,7 +608,7 @@ python scripts/setup.py
 - Collection management
 - Web crawling with link following
 - Re-crawl for updates
-- 16 MCP tools
+- 17 MCP tools
 - CLI with 25+ commands
 - Metadata filtering
 - HNSW indexing
@@ -706,4 +706,4 @@ python scripts/setup.py
 
 **Last Updated:** 2025-10-20
 **Status:** Production Ready
-**Version:** 0.7.0
+**Version:** 0.13.0
