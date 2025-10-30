@@ -666,16 +666,34 @@ BACKUP_RETENTION_DAYS={backup_retention}
             backup_mount_line
         )
 
-        # Write to repo location (keep ../init.sql path)
+        # Write to repo location (keep ../init.sql path and build context)
         with open(repo_compose_path, 'w') as f:
             f.write(compose_content)
         print_success(f"Docker Compose configuration created: {repo_compose_path}")
 
-        # For system location, fix the init.sql path to be relative to system directory
+        # For system location:
+        # 1. Fix init.sql path to be relative to system directory
+        # 2. Remove build section from rag-mcp-local (image is pre-built during setup)
         system_compose_content = compose_content.replace(
             "- ../init.sql:/docker-entrypoint-initdb.d/01-init.sql",
             "- ./init.sql:/docker-entrypoint-initdb.d/01-init.sql"
         )
+
+        # Remove build section from rag-mcp-local service
+        # The image will be pre-built during setup, so system compose doesn't need build context
+        import re
+        # Template format (lines 70-73):
+        #     image: rag-memory-rag-mcp-local:latest
+        #     build:
+        #       context: ../../../
+        #       dockerfile: deploy/docker/Dockerfile
+        # Remove the build, context, and dockerfile lines, keep image line
+        system_compose_content = re.sub(
+            r'    build:\n      context: \.\./\.\./\.\./\n      dockerfile: deploy/docker/Dockerfile\n',
+            '',
+            system_compose_content
+        )
+
         with open(system_compose_path, 'w') as f:
             f.write(system_compose_content)
         print_success(f"Docker Compose copied to system location: {system_compose_path}")
@@ -701,18 +719,30 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
     print_header("STEP 10: Building and Starting Containers")
 
     project_root = Path(__file__).parent.parent
-    env_file = config_dir / '.env'
+    repo_compose_file = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
+    system_compose_file = config_dir / 'docker-compose.yml'
 
     try:
-        # Run docker-compose WITHOUT changing directory so relative paths work correctly
-        compose_file = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
-
-        # Skip the build step - Docker will build automatically if needed when starting
-        # This avoids the hanging build issue with complex build contexts
-        print_info("Starting containers (will build if needed)...")
+        # Step 1: Build the MCP image using repo docker-compose.yml (needs build context)
+        print_info("Building MCP server image...")
         code, _, stderr = run_command([
             "docker-compose",
-            "-f", str(compose_file),
+            "-f", str(repo_compose_file),
+            "build", "rag-mcp-local"
+        ], timeout=600)
+
+        if code != 0:
+            print_error(f"Failed to build MCP image: {stderr}")
+            return False
+
+        print_success("MCP image built")
+
+        # Step 2: Start containers using SYSTEM docker-compose.yml
+        # This ensures containers are bound to the system file, not the repo file
+        print_info("Starting containers from system configuration...")
+        code, _, stderr = run_command([
+            "docker-compose",
+            "-f", str(system_compose_file),
             "up", "-d"
         ], timeout=None)
 
@@ -858,8 +888,8 @@ def validate_schemas(ports: dict) -> bool:
         "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public'"
     ])
 
-    if code == 0 and "3" in stdout:
-        print_success("PostgreSQL schema validated (3 tables found)")
+    if code == 0 and "4" in stdout:
+        print_success("PostgreSQL schema validated (4 tables found)")
     else:
         print_error("PostgreSQL schema validation failed")
         return False
@@ -885,25 +915,32 @@ async def init_neo4j_indices(ports: dict, api_key: str) -> bool:
 
     This must be called AFTER Neo4j container is verified healthy.
     Creates the required indices and constraints for Graphiti to function.
+
+    Note: Graphiti requires OPENAI_API_KEY environment variable even though
+    build_indices_and_constraints() doesn't call LLM (it creates clients internally).
     """
     print_header("STEP 14: Initializing Neo4j Indices")
 
     try:
         from graphiti_core import Graphiti
-        from graphiti_core.llm_client import OpenAIClient
+        import os
 
         neo4j_uri = f"bolt://localhost:{ports['neo4j_bolt']}"
         neo4j_user = "neo4j"
         neo4j_password = "graphiti-password"
 
         print_info("Connecting to Neo4j...")
-        llm_client = OpenAIClient(api_key=api_key, model_name="gpt-4o-mini")
-        graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password, llm_client)
+
+        # Set OPENAI_API_KEY in environment - Graphiti requires it even for schema operations
+        os.environ['OPENAI_API_KEY'] = api_key
+
+        graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password)
 
         print_info("Creating indices and constraints (this is idempotent)...")
         await graphiti.build_indices_and_constraints(delete_existing=False)
 
         print_success("✅ Neo4j indices initialized successfully")
+        await graphiti.close()
         return True
 
     except Exception as e:
@@ -946,7 +983,7 @@ def print_final_summary(ports: dict, config_dir: Path):
     # MCP Client Configuration
     print(f"{Colors.BOLD}Connect to AI Assistants{Colors.RESET}")
     print(f"\n  For Claude Code:")
-    print(f"    {Colors.CYAN}claude mcp add rag-memory --type sse --url http://localhost:{ports['mcp']}/sse{Colors.RESET}")
+    print(f"    {Colors.CYAN}claude mcp add --transport sse --scope user rag-memory http://localhost:{ports['mcp']}/sse{Colors.RESET}")
     print(f"    Then restart Claude Code and verify with: {Colors.CYAN}claude mcp list{Colors.RESET}")
 
     print(f"\n  For Claude Desktop, Cursor, or other MCP clients:")
@@ -962,19 +999,20 @@ def print_final_summary(ports: dict, config_dir: Path):
     print()
 
     # Container management
-    project_root = Path(__file__).parent.parent
-
     print(f"{Colors.BOLD}Managing Containers{Colors.RESET}")
-    print(f"  From the repository directory ({project_root}):")
+    print(f"  System configuration: {config_dir}/docker-compose.yml")
     print()
     print(f"  Stop containers:")
-    print(f"    {Colors.CYAN}docker-compose -f deploy/docker/compose/docker-compose.yml down{Colors.RESET}")
+    print(f"    {Colors.CYAN}docker-compose -f \"{config_dir}/docker-compose.yml\" down{Colors.RESET}")
     print()
     print(f"  Start containers:")
-    print(f"    {Colors.CYAN}docker-compose -f deploy/docker/compose/docker-compose.yml up -d{Colors.RESET}")
+    print(f"    {Colors.CYAN}docker-compose -f \"{config_dir}/docker-compose.yml\" up -d{Colors.RESET}")
     print()
     print(f"  View logs:")
-    print(f"    {Colors.CYAN}docker-compose -f deploy/docker/compose/docker-compose.yml logs{Colors.RESET}")
+    print(f"    {Colors.CYAN}docker-compose -f \"{config_dir}/docker-compose.yml\" logs{Colors.RESET}")
+    print()
+    print(f"  Rebuild and restart:")
+    print(f"    {Colors.CYAN}docker-compose -f \"{config_dir}/docker-compose.yml\" up -d --force-recreate{Colors.RESET}")
     print()
 
     # CLI commands
@@ -1088,12 +1126,15 @@ def main():
     # Step 12: Wait for health
     if not wait_for_health_checks(ports, config_dir):
         print_error("Setup completed but services are not responding")
-        print_info("Try: docker-compose -f deploy/docker/compose/docker-compose.yml logs")
+        print_info(f"Try: docker-compose -f \"{config_dir}/docker-compose.yml\" logs")
         sys.exit(1)
 
     # Step 13: Initialize Neo4j indices
     # Run this after health checks confirm Neo4j is up
-    asyncio.run(init_neo4j_indices(ports, api_key))
+    if not asyncio.run(init_neo4j_indices(ports, api_key)):
+        print_error("Failed to initialize Neo4j indices - this is REQUIRED for the system to work")
+        print_info("Neo4j indices are mandatory. Setup cannot continue.")
+        sys.exit(1)
 
     # Step 14: Install CLI tool
     if not install_cli_tool():

@@ -373,20 +373,29 @@ rag search "query" --limit 20 --threshold 0.3
 - "What is an embedding?"
 - "How do I use decorators?"
 - "What is machine learning?"
+- "How does semantic search work?"
+- "What are the benefits of vector databases?"
 
 **Specific (7 queries):**
-- "PostgreSQL vector search"
-- "Python async/await"
-- "RAG implementation"
+- "How do I implement vector search in my application?"
+- "What are the best practices for async/await in Python?"
+- "How do I build a RAG system?"
+- "What is the difference between HNSW and IVF indexing?"
+- "How do I normalize vectors before storing them?"
+- "What are common pitfalls when implementing semantic search?"
+- "How do I choose the right embedding model?"
 
 **Advanced (5 queries):**
-- "HNSW indexing parameters"
-- "Vector normalization effects"
-- "Query optimization strategies"
+- "What are the optimal HNSW indexing parameters for large datasets?"
+- "How does vector normalization affect similarity scores?"
+- "What query optimization strategies improve recall in semantic search?"
+- "How do I tune similarity thresholds for different use cases?"
+- "What are the tradeoffs between accuracy and performance in vector search?"
 
 **Edge Cases (3 queries):**
-- Very short query ("embeddings")
-- Very long query ("How can I implement...")
+- Very short query: "How do embeddings work?"
+- Very long query: "How can I implement a production-ready semantic search system with high recall and low latency while maintaining cost efficiency?"
+- Ambiguous query: "What is the best approach for search?"
 - Ambiguous query ("test")
 
 ### Statistical Analysis

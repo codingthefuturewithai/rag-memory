@@ -396,9 +396,7 @@ Takes 30-60 seconds (just rebuilds Docker, no cold start).
 ### Claude Code
 
 ```bash
-claude mcp add rag-memory \
-  --type sse \
-  --url https://rag-memory-mcp.fly.dev/sse
+claude mcp add --transport sse --scope user rag-memory https://rag-memory-mcp.fly.dev/sse
 ```
 
 Restart Claude Code, then test:

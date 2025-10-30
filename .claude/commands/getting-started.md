@@ -8,7 +8,7 @@ allowed-tools: ["Read", "Grep", "Glob", "Bash"]
 
 I'm going to teach you about this tool step by step. We'll cover WHAT it is, WHY it's different, and THEN how to use it.
 
-Before we dive into installation, let's make sure you understand what this is and why you might want it.
+Before we dive in, I need to read the latest documentation from `.reference/` to ensure everything I tell you is accurate and up-to-date.
 
 ## Choose Your Learning Path
 
@@ -21,16 +21,75 @@ Before we dive into installation, let's make sure you understand what this is an
 
 **Type 1, 2, 3, or 4** to choose your path.
 
+---
+
+## BEFORE Starting Any Path - Ask Detail Level
+
+**CRITICAL: Before proceeding with the user's chosen path, ALWAYS ask:**
+
+"How much detail do you want?
+
+1. **Quick Overview** (5-10 minutes) - Essential concepts only, minimal examples
+2. **Standard Tutorial** (15-20 minutes) - Balanced explanations with key examples
+3. **Deep Dive** (30+ minutes) - Comprehensive training with full details
+
+Type 1, 2, or 3"
+
+[WAIT FOR USER RESPONSE]
+
+**Then adjust all subsequent steps based on their detail level:**
+
+- **Quick (1):** 1-2 paragraphs per concept, one example, skip "why this matters"
+- **Standard (2):** 2-3 paragraphs per concept, 2-3 examples, brief explanations
+- **Deep (3):** Full explanations (current behavior), multiple examples, complete context
+
+---
 
 ## Note for AI Assistants - CRITICAL INSTRUCTIONS
 
-### KNOWLEDGE BASE FIRST
-Always read these .reference files BEFORE answering:
-- `.reference/OVERVIEW.md` - Complete system overview and architecture
-- `.reference/MCP_QUICK_START.md` - MCP server setup and 17 tools
-- `.reference/PRICING.md` - Cost breakdown (embeddings + graph extraction)
-- `.reference/KNOWLEDGE_GRAPH.md` - Graph capabilities and use cases
-- `.reference/SEARCH_OPTIMIZATION.md` - Search quality and tuning
+### THE GOSPEL: .reference/ IS THE SINGLE SOURCE OF TRUTH
+
+**ABSOLUTE RULE:** Every answer MUST come from reading `.reference/` files. NO hardcoded examples. NO paraphrasing. NO "improving" the docs.
+
+**Required reading before EVERY response:**
+1. `.reference/OVERVIEW.md` - System architecture, features, examples
+2. `.reference/MCP_QUICK_START.md` - MCP tools and setup
+3. `.reference/SEARCH_OPTIMIZATION.md` - Search behavior and examples
+4. `.reference/KNOWLEDGE_GRAPH.md` - Graph capabilities and queries
+5. `.reference/PRICING.md` - Cost breakdown
+
+**Workflow for EVERY answer:**
+1. User picks path
+2. Read relevant `.reference/` section(s)
+3. Extract exact examples, quotes, and explanations
+4. Present what you read (don't invent or paraphrase)
+5. Wait for user response
+6. Repeat
+
+**DO NOT:**
+- ❌ Hardcode examples (they go stale)
+- ❌ Invent new examples (they may be wrong)
+- ❌ Use keyword search examples (EVER - this is semantic search)
+- ❌ Assume you know the content (READ IT FRESH)
+
+**CRITICAL - SEMANTIC SEARCH EXAMPLES:**
+When showing search examples, READ from `.reference/OVERVIEW.md` or `.reference/MCP_QUICK_START.md` to get the EXACT examples they provide. These will be FULL QUESTIONS, not keywords. Never show keyword examples like "authentication setup" or "error handling".
+
+**CRITICAL - CONFIG FILE PATHS (OS-SPECIFIC):**
+NEVER hardcode config file paths as `~/.config/rag-memory/` - this is LINUX ONLY and will mislead macOS/Windows users.
+
+Correct paths by OS:
+- macOS: `~/Library/Application Support/rag-memory/`
+- Linux: `~/.config/rag-memory/`
+- Windows: `%APPDATA%\rag-memory\`
+
+setup.py uses `platformdirs.user_config_dir()` which handles this automatically and prints the actual path.
+
+**When mentioning config location, say:**
+- ✅ "OS-appropriate system configuration location"
+- ✅ "System's standard config directory"
+- ✅ "The setup script will show you the exact path"
+- ❌ NEVER hardcode `~/.config/rag-memory/`
 
 ### PATH SELECTION
 
@@ -38,366 +97,297 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 
 #### Path 1: Understand the Concepts
 
-1. Start with fundamentals:
+**Step 1: The Problem RAG Solves**
+- Read `.reference/OVERVIEW.md` introduction section
+- Present the problem traditional search has (keyword matching limitations)
+- Explain how RAG Memory solves it (semantic understanding)
+- Show performance data from docs (recall rates, accuracy)
+- Ask: "Is this clear? Ready to continue?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: The Problem RAG Solves
-   - "Imagine you have 1000 documents and need to find where you explained 'authentication setup'"
-   - "Traditional search requires exact keyword match: 'authentication setup' won't find 'auth configuration'"
-   - "That's frustrating because you KNOW it's in there somewhere"
-   - "Have you experienced this problem?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 2: What is Semantic Search?**
+- Read `.reference/SEARCH_OPTIMIZATION.md` - look for semantic search explanation
+- Explain how it works (vectors, meaning-based matching)
+- Show examples from docs of semantic vs keyword search
+- Present technical details (embeddings, similarity scores)
+- Ask: "Clear on semantic search? Want more details or ready to move on?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: What is Semantic Search?
-   - "Semantic search understands MEANING, not just exact words"
-   - "Search 'authentication setup' finds: 'auth configuration', 'user login setup', 'security initialization'"
-   - "It works by converting text into 'vectors' (numbers that capture meaning)"
-   - "Similar meanings = similar numbers = search finds them"
-   - "Making sense so far?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 3: What is RAG?**
+- Read `.reference/OVERVIEW.md` "What Is RAG Memory?" section
+- Define RAG = Retrieval-Augmented Generation
+- Explain the three steps (retrieve, augment, generate)
+- Show the workflow and examples from the docs
+- Ask: "Is the RAG concept clear? Ready to continue?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: What is RAG?
-   - "RAG = Retrieval-Augmented Generation"
-   - "Step 1: Find relevant documents (Retrieval)"
-   - "Step 2: Give those documents to an AI (Augmented)"
-   - "Step 3: AI generates answer WITH your context (Generation)"
-   - "Example: AI can answer 'How does our auth work?' using YOUR internal docs"
-   - "Clear on what RAG does?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 4: Why Two Databases?**
+- Read `.reference/OVERVIEW.md` architecture section
+- Explain PostgreSQL + pgvector for semantic search
+- Explain Neo4j for knowledge graph relationships
+- Show examples from the docs of when to use each
+- Present the combined capabilities
+- Ask: "Clear on the dual-database architecture? Want to continue?"
+- [WAIT FOR USER RESPONSE]
 
-2. Read `.reference/OVERVIEW.md` section "What Is RAG Memory?" and explain:
+**Step 5: How It Actually Works**
+- Read `.reference/OVERVIEW.md` "Data Flow" section
+- Explain ingestion workflow: text → chunks → vectors → storage
+- Explain search workflow: question → vector → similarity → results
+- Show performance numbers from docs (speed, cost, accuracy)
+- Present examples of the complete flow
+- Ask: "Is the workflow clear? Any questions before moving on?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: Why Two Databases?
-   - "RAG Memory uses BOTH vector search AND knowledge graphs"
-   - "Vector Search (PostgreSQL + pgvector): Finds documents by meaning"
-   - "Knowledge Graph (Neo4j): Tracks relationships between concepts"
-   - "Example: Vector search finds 'auth docs', Graph shows 'auth connects to: user-service, database, API gateway'"
-   - "You get both: content search + relationship mapping"
-   - "See why both are useful?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-   **Concept**: How It Actually Works
-   Read `.reference/OVERVIEW.md` "Data Flow" section and explain:
-   - "When you add a document: text → split into chunks → converted to vectors → stored in both databases"
-   - "When you search: your question → converted to vector → finds similar vectors → returns matching chunks"
-   - "Speed: ~400ms per search (includes AI processing)"
-   - "Cost: You only pay when adding documents, searches are FREE (local database)"
-   - "Questions about the process?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-3. After concepts, ask: "Want to see what you can DO with this?" → Path 2 or "Ready to install?" → Path 3
+**After completing Path 1 concepts:**
+- Present menu:
+  1. See What You Can DO → Path 2
+  2. Install It Now → Path 3
+  3. See Commands → Path 4
+  4. I'm Good → End
+- If user chooses Path 2: IMMEDIATELY jump to Path 2, Step 1
+- If user chooses Path 3: IMMEDIATELY jump to Path 3, Step 1 (installation)
+- If user chooses Path 4: IMMEDIATELY jump to Path 4
+- DO NOT continue with Path 1 content after they make a choice
 
 #### Path 2: Learn the Capabilities
 
-1. Read `.reference/OVERVIEW.md` "Key Features" and present progressively:
+**Step 1: Semantic Search is the Core Feature**
+- Read `.reference/OVERVIEW.md` "Key Features" section
+- Read `.reference/SEARCH_OPTIMIZATION.md` for search examples
+- Extract EXACT search query examples from the docs (they will be full questions)
+- Explain similarity scores and what they mean (get ranges from docs)
+- Show example queries and expected results
+- **CRITICAL:** Emphasize semantic search uses QUESTIONS, not keywords (cite examples from docs)
+- Ask: "Clear on how semantic search works? Ready to continue?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: Semantic Search is the Core Feature
-   - "Ask questions naturally: 'How do I handle errors in Python?'"
-   - "System finds relevant docs even if they say 'exception handling' or 'try/catch'"
-   - "Get similarity scores (0.7-0.95 for good matches)"
-   - "⚠️ CRITICAL: Use full questions, NOT keywords ('error handling' = bad, 'How do I handle errors?' = good)"
-   - "Want to try an example?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 2: MCP Tools for AI Agents**
+- Read `.reference/MCP_QUICK_START.md` "Available Tools" section
+- Explain the two modes: CLI tool vs MCP server
+- List the 17 available tools from the docs
+- Show examples from the docs of how AI agents use these tools
+- Present use cases for each mode
+- Ask: "Clear on CLI vs MCP modes? Want more details or ready to move on?"
+- [WAIT FOR USER RESPONSE]
 
-2. Read `.reference/MCP_QUICK_START.md` "Available Tools" and explain:
+**Step 3: Document Ingestion**
+- Read `.reference/OVERVIEW.md` ingestion sections
+- List all ingestion methods: text, files, directories, URLs
+- Show command examples from the docs for each method
+- Explain web crawling capabilities (follow_links, max_depth)
+- Present what happens during ingestion (chunking, embedding, storage)
+- Ask: "Clear on ingestion options? Ready to continue?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: 17 Tools for AI Agents
-   - "You can use RAG Memory two ways:"
-   - "1. CLI tool (`rag` command) for terminal"
-   - "2. MCP server for AI agents (Claude Code, Claude Desktop, Cursor)"
-   - "MCP gives your AI agent 17 tools to search, add, update, delete knowledge"
-   - "Example: Tell Claude 'Search my knowledge base for authentication docs'"
-   - "Understand the two modes?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 4: Collections**
+- Read `.reference/OVERVIEW.md` "Collections" section
+- Explain what collections are and why they matter (from docs)
+- Show collection examples and naming patterns from docs
+- Explain scoping searches to specific collections
+- Present organization strategies
+- Ask: "Clear on how collections work? Want to continue?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: Document Ingestion (Adding Knowledge)
-   - "Add content from multiple sources:"
-   - "• Text: Direct paste/type"
-   - "• Files: Upload .txt, .md, code files"
-   - "• Directories: Batch import entire folders"
-   - "• Websites: Crawl documentation sites (auto-follow links)"
-   - "Example: `rag ingest url https://docs.python.org --follow-links` crawls entire Python docs"
-   - "Make sense?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 5: Knowledge Graph Queries**
+- Read `.reference/KNOWLEDGE_GRAPH.md` "Use Cases" section
+- Extract exact query examples from docs
+- Explain when to use graph queries vs RAG search (from docs)
+- Show relationship query examples from docs
+- Present the types of insights graphs provide
+- Ask: "Clear on knowledge graph capabilities? Ready to move on?"
+- [WAIT FOR USER RESPONSE]
 
-3. Read `.reference/OVERVIEW.md` "Collections" section:
+**Step 6: Cost Structure**
+- Read `.reference/PRICING.md` "Key Points" section
+- Present embedding costs with exact numbers from docs
+- Present graph extraction costs with exact numbers from docs
+- Show example cost calculations from docs
+- Emphasize that searches are FREE after ingestion (from docs)
+- Present total cost estimates for typical use cases
+- Ask: "Clear on pricing? Any concerns or ready to continue?"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: Collections (Organization Layer)
-   - "Collections = named groups for organizing by topic"
-   - "Examples: 'python-docs', 'company-policies', 'personal-notes', 'project-x'"
-   - "Search can be scoped: 'rag search query --collection python-docs'"
-   - "Documents can belong to multiple collections (flexible organization)"
-   - "Clear on collections?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-4. Read `.reference/KNOWLEDGE_GRAPH.md` "Use Cases" section:
-
-   **Concept**: Knowledge Graph Queries
-   - "Beyond search, you can query relationships:"
-   - "• 'What is related to authentication?'"
-   - "• 'How has our architecture evolved over time?'"
-   - "• 'What entities connect UserService to Database?'"
-   - "This uses Neo4j to map entities and connections automatically"
-   - "Interested in relationships or just search?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-5. Read `.reference/PRICING.md` "Key Points" section:
-
-   **Concept**: Cost Structure (Important!)
-   - "Two costs when adding documents:"
-   - "1. Embeddings: ~$0.000013 per 500-word doc (OpenAI)"
-   - "2. Graph extraction: ~$0.01 per doc (entity extraction)"
-   - "Total: ~$0.01 per document one-time"
-   - "Searches are FREE (run on your local database, no API calls)"
-   - "Example: 1,000 docs = ~$10 to ingest, then unlimited free searches"
-   - "Cost concerns or ready to continue?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-6. After capabilities: "Want to install it now?" → Path 3 or "Need more details?" → Offer to read specific .reference files
+**After completing Path 2 capabilities:**
+- Present menu:
+  1. Install It Now → Path 3
+  2. See Commands → Path 4
+  3. Go Back to Concepts → Path 1
+  4. I'm Good → End
+- If user chooses Path 3: IMMEDIATELY jump to Path 3, Step 1 (installation)
+- If user chooses Path 4: IMMEDIATELY jump to Path 4
+- If user chooses Path 1: IMMEDIATELY jump back to Path 1, Step 1
+- DO NOT continue with more capabilities after they make a choice
 
 #### Path 3: Just Get Started
 
-1. Check environment first:
+**Step 1: Verify Prerequisites**
+- Check Docker installed: `docker --version`
+- Check setup script exists: `test -f scripts/setup.py && echo "✅ Ready"`
+- Based on results, guide user
+- [WAIT FOR USER RESPONSE]
 
-   **Step 1**: Verify Prerequisites
-   ```bash
-   docker --version 2>/dev/null && echo "✅ Docker installed" || echo "⚠️ Need Docker"
-   test -f scripts/setup.py && echo "✅ Setup script ready" || echo "⚠️ Setup script missing"
-   ```
+**Step 2: Check for Existing Installation**
+- Check for EXACT container names created by setup.py:
+  - `rag-memory-postgres-local`
+  - `rag-memory-neo4j-local`
+  - `rag-memory-mcp-local`
+  - `rag-memory-backup-local`
+- Use: `docker ps --filter "name=rag-memory-postgres-local" --format "{{.Names}}"` (exact match)
+- DO NOT use fuzzy matching or "contains" logic
+- If ALL four containers exist: "You already have RAG Memory installed! Want to verify status or reinstall?"
+- If SOME containers exist: "Partial installation detected. Recommend clean reinstall."
+- If NO containers exist: Proceed to setup
+- [WAIT FOR USER RESPONSE if containers found]
 
-   Based on results:
-   - If missing Docker: "You need Docker installed. Visit https://docker.com/get-started, install, then come back here."
-   - If setup script missing: "Something's wrong - let me check the project structure"
+**Step 3: Explain Setup Script**
+- Read setup.py or relevant docs to understand what it does
+- List what the script will do (from code/docs)
+- **CRITICAL:** When mentioning config file location, say:
+  - "Creates system configuration at the OS-appropriate location"
+  - OR "Creates config in your system's standard config directory"
+  - **NEVER say** `~/.config/rag-memory/` (that's Linux only!)
+  - Note: "The script will print the exact path when it runs"
+- Warn about time required (~5-10 minutes)
+- Ask: "Ready?"
+- [WAIT FOR USER RESPONSE]
 
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 4: Run Setup**
+- **DO NOT RUN THE SETUP SCRIPT - ONLY PROVIDE INSTRUCTIONS**
+- Tell user: "Now open a terminal and run: `python scripts/setup.py`"
+- Explain prompts they'll see (from setup.py code):
+  - OpenAI API key
+  - Database connection details
+  - Backup configuration
+  - Directory mounts
+- List what they need ready: OpenAI API key
+- **When explaining where config is created, use THIS EXACT WORDING:**
+  - "The script will create your system configuration in the standard location for your OS"
+  - "The setup script will show you the exact path when it completes"
+  - **DO NOT mention any specific path like ~/.config/rag-memory/**
+- Tell them: "Come back here when the script completes and says 'Setup complete!'"
+- Ask: "Have you completed the setup? (Type 'yes' when done)"
+- [WAIT FOR USER RESPONSE]
 
-2. Explain what setup does:
+**Step 5: Verify Installation**
+- **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
+- Tell user: "Open a NEW terminal window (important for PATH)"
+- Tell user: "Run: `rag status`"
+- Explain expected output:
+  - ✅ PostgreSQL connected
+  - ✅ Neo4j connected
+  - ✅ Database schemas initialized
+- Ask: "Did `rag status` show all green checkmarks? (Type 'yes' or paste the output)"
+- [WAIT FOR USER RESPONSE]
 
-   **Concept**: What the Setup Script Will Do
-   - "The setup script automates everything:"
-   - "1. Checks Docker is running"
-   - "2. Starts PostgreSQL, Neo4j, MCP server, and backup containers"
-   - "3. Asks for your OpenAI API key (for embeddings)"
-   - "4. Configures automated backups (schedule and location)"
-   - "5. Creates local configuration (at OS-appropriate system location)"
-   - "6. Initializes databases"
-   - "7. Validates all services are healthy and reachable"
-   - "8. Installs CLI tool globally"
-   - "This takes ~5-10 minutes (mostly waiting for containers). Ready?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 6: First Collection**
+- **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
+- Read `.reference/OVERVIEW.md` for collection create example
+- Tell user the exact command to run (from docs)
+- Explain what it does
+- Ask: "Have you created the collection? (Type 'yes' or paste output)"
+- [WAIT FOR USER RESPONSE]
 
-3. Run setup:
+**Step 7: First Document**
+- **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
+- Read `.reference/OVERVIEW.md` or `.reference/MCP_QUICK_START.md` for ingest example
+- Tell user the exact command to run (from docs)
+- **CRITICAL:** Explain BOTH processes that happen:
+  1. RAG ingestion: chunking → embeddings → vector storage
+  2. Graph ingestion: entity extraction → relationship mapping → Neo4j storage
+- Emphasize that ingestion goes to BOTH stores (dual storage architecture)
+- Show timing and cost for both processes (from docs)
+- Ask: "Have you ingested the document? (Type 'yes' or paste the output)"
+- [WAIT FOR USER RESPONSE]
 
-   **Step 2**: Run Setup Script
-   - "Open a new terminal window"
-   - "Navigate to the rag-memory directory"
-   - "Run: `python scripts/setup.py`"
-   - "Follow the interactive prompts. The script will ask you for:"
-   - "  • OpenAI API key (get one at https://platform.openai.com/api-keys)"
-   - "  • Backup schedule (when to backup databases)"
-   - "  • Backup location (where to save backup files)"
-   - "  • Directory mounts (optional, for file ingestion)"
-   - "It will then build containers and validate everything is working"
-   - "Come back here when setup completes!"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 8: First RAG Search (Vector Similarity)**
+- **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
+- Read `.reference/OVERVIEW.md` or `.reference/SEARCH_OPTIMIZATION.md` for search example
+- Tell user the EXACT search query to run from docs (will be a full question, not keywords)
+- Explain what RAG search does: finds semantically similar content
+- Show expected output (similarity scores, chunks, source IDs)
+- Present performance data from docs (speed, accuracy)
+- Ask: "Did the search work? Found the content? (Type 'yes' or paste results)"
+- [WAIT FOR USER RESPONSE]
 
-4. After setup completes:
+**Step 9: First Graph Query (Entity Relationships) - EQUAL IMPORTANCE**
+- **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
+- Read `.reference/KNOWLEDGE_GRAPH.md` for relationship query example
+- Tell user the exact graph query command to run from docs (query_relationships)
+- Explain what graph queries do: finds entity relationships, connections, dependencies
+- Show expected output (entities, relationships, facts, timestamps)
+- Present what graph gives you that RAG doesn't (relationship mapping, multi-hop reasoning)
+- Note about threshold tuning (from docs)
+- **Emphasize:** This is why you paid the $0.01/doc extraction cost - to get relationship intelligence
+- Ask: "Did the graph query work? See the relationships? (Type 'yes' or paste results)"
+- [WAIT FOR USER RESPONSE]
 
-   **Step 3**: Open a New Terminal
-   - "The setup script installed the `rag` CLI tool"
-   - "You need to open a NEW terminal window for the command to be available"
-   - "This ensures your shell picks up the updated PATH"
-   - "Once you've opened a new terminal, run: `rag status`"
+**Step 10: Compare RAG vs Graph**
+- Read `.reference/KNOWLEDGE_GRAPH.md` "RAG vs Graph" comparison section
+- Show side-by-side examples from docs:
+  - Same question answered with RAG search → returns content chunks
+  - Same question answered with graph query → returns entity relationships
+- Explain when to use each (from docs):
+  - RAG: "What does the documentation say about X?"
+  - Graph: "How does X relate to Y?" or "What depends on X?"
+- Show combined usage pattern (from docs): graph for structure, RAG for details
+- Ask: "Clear on when to use RAG vs Graph vs both together?"
+- [WAIT FOR USER RESPONSE]
 
-   "You should see:"
-   - "✅ PostgreSQL connected"
-   - "✅ Neo4j connected"
-   - "✅ Database schemas initialized"
+**Optional Step 11: Clean Up**
+- Offer to delete test collection
+- Show command from docs
+- Ask if they want to keep or delete
+- [WAIT FOR USER RESPONSE]
 
-   "Did it work?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
+**Step 12: MCP Server Setup (Optional)**
+- Read `.reference/MCP_QUICK_START.md` configuration section
+- Guide them to find setup.py output with connection commands
+- Show how to connect Claude Code (from docs)
+- Ask: "Want to set this up now or skip?"
+- [WAIT FOR USER RESPONSE]
 
-   "Note: The setup script already initialized the Neo4j indices for you, so you're ready to go!"
-
-5. First commands:
-
-   **Step 4**: Create Your First Collection
-   ```bash
-   rag collection create my-first-kb --description "My first knowledge base"
-   ```
-
-   "Collections organize your documents by topic. This creates one called 'my-first-kb'."
-   "Created successfully?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-   **Step 5**: Add Your First Document
-   ```bash
-   rag ingest text "RAG Memory uses semantic search to find documents by meaning, not keywords. It combines PostgreSQL with pgvector for vector search and Neo4j for knowledge graphs." --collection my-first-kb
-   ```
-
-   "This adds a document to your collection. You'll see progress as it:"
-   - "1. Chunks the text (~1000 chars per chunk)"
-   - "2. Generates embeddings (calls OpenAI)"
-   - "3. Extracts entities for knowledge graph"
-   - "4. Stores in both databases"
-
-   "Document added?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-   **Step 6**: Search Your Knowledge Base
-   ```bash
-   rag search "What databases does RAG Memory use?" --collection my-first-kb
-   ```
-
-   "Notice you asked a QUESTION (good!), not keywords (bad)."
-   "You should see:"
-   - "Your document chunk returned"
-   - "Similarity score (probably 0.7-0.9)"
-   - "Source document info"
-
-   "Found it?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-   **Step 7**: Query the Knowledge Graph
-   ```bash
-   rag graph query-relationships "What is related to PostgreSQL?" --threshold 0.25
-   ```
-
-   "This queries entity relationships extracted from your documents."
-   "You should see relationships like:"
-   - "PostgreSQL connects to pgvector"
-   - "PostgreSQL is used by RAG Memory"
-   - "Fact descriptions showing how entities are related"
-
-   "Note: We use a low threshold (0.25) because entity extraction is LLM-based and non-deterministic."
-   "This ensures you see results even if entity names vary slightly."
-
-   "Did you see relationships?"
-   [WAIT FOR USER RESPONSE BEFORE CONTINUING]
-
-   **Optional: Clean Up Test Collection**
-   - "Since this was just a test, you may want to delete this collection"
-   - "This removes the collection and all its documents from both databases"
-   - "Command: `rag collection delete my-first-kb --confirm`"
-   - "Would you like to clean up the test collection or keep it?"
-   [WAIT FOR USER RESPONSE - if yes, guide them through deletion]
-
-6. MCP server setup:
-
-   **Step 8**: Connect to Claude Code (Optional)
-   - "The MCP server is already running (started by setup script)"
-   - "Look back at the setup.py output - find the 'Connect to AI Assistants' section"
-   - "It shows the EXACT commands to use with the correct ports"
-
-   "For Claude Code:"
-   - "Copy the `claude mcp add` command from the setup output"
-   - "Run it in your terminal"
-   - "Restart Claude Code"
-   - "Run `claude mcp list` to verify it shows 'connected'"
-
-   "For other AI assistants (Claude Desktop, Cursor):"
-   - "The setup output also shows a config.json snippet you can use"
-
-   "Want to set this up now or skip?"
-   [WAIT FOR USER RESPONSE - if yes, help them find the connection commands in setup output]
-
-7. After setup complete:
-
-   **You're All Set! 🎉**
-   "You now have:"
-   - "✅ PostgreSQL + pgvector (semantic search)"
-   - "✅ Neo4j (knowledge graph)"
-   - "✅ CLI tool (`rag` command available globally)"
-   - "✅ MCP server (if you set it up)"
-   - "✅ Your first collection and document"
-
-   "What next?"
-   - "Learn more commands?" → Show `.reference/OVERVIEW.md` CLI section
-   - "Understand search better?" → Read `.reference/SEARCH_OPTIMIZATION.md`
-   - "See all MCP tools?" → Read `.reference/MCP_QUICK_START.md`
-   - "Ingest real documents?" → Guide through file/URL ingestion
+**You're All Set!**
+- Summarize what they have (from setup)
+- Offer next steps:
+  - "Learn more commands?" → Read and present CLI section from `.reference/OVERVIEW.md`
+  - "Understand search better?" → Read and present `.reference/SEARCH_OPTIMIZATION.md`
+  - "See all MCP tools?" → Read and present `.reference/MCP_QUICK_START.md`
+  - "Ingest real documents?" → Guide through file/URL ingestion using docs
 
 #### Path 4: Show Me the Commands
 
-1. Read `.reference/OVERVIEW.md` CLI section and present:
+**Read `.reference/OVERVIEW.md` CLI command section**
+- Present the complete command reference exactly as documented
+- Include all examples from the docs
+- Show the sections on collections, ingestion, search, management
+- Emphasize key points from the docs (questions not keywords, costs, etc.)
 
-**Quick Command Reference:**
-
-```bash
-# Collections
-rag collection create <name> --description "text"
-rag collection list
-rag collection info <name>
-
-# Ingestion (⚠️ Has cost: ~$0.01 per doc)
-rag ingest text "content" --collection <name>
-rag ingest file /path/to/file.txt --collection <name>
-rag ingest directory /path/to/docs --collection <name> --extensions .txt,.md
-rag ingest url https://docs.example.com --collection <name> --follow-links --max-depth 2
-
-# Search (FREE - no API calls)
-rag search "How do I configure authentication?" --collection <name>
-rag search "error handling best practices" --collection <name> --threshold 0.7
-
-# Document Management (FREE)
-rag document list --collection <name>
-rag document view <ID>
-rag document update <ID> --content "new content"
-rag document delete <ID>
-
-# Knowledge Graph Queries (FREE)
-rag graph query-relationships "What is related to authentication?"
-rag graph query-temporal "How has our architecture evolved?"
-
-# Status
-rag status
-```
-
-**Key Things to Remember:**
-- Use FULL QUESTIONS for search, not keywords ("How do I...?" not "authentication config")
-- Ingestion has cost (~$0.01/doc), searches are free
-- Collections organize by topic
-- `--help` on any command for details
-
-"Want detailed explanations?" → Read relevant `.reference/` sections
-"Ready to start using it?" → Guide through setup if not done
-"Need examples?" → Show use cases from `.reference/OVERVIEW.md`
+**After commands:** Offer:
+- "Want detailed explanations?" → Read relevant `.reference/` sections
+- "Ready to start using it?" → Path 3 if not set up
+- "Need examples?" → Read and present use cases from `.reference/OVERVIEW.md`
 
 ### AFTER ANY PATH
 
-Offer contextual next steps:
-- After Path 1 (Concepts) → "Want to see capabilities?" → Path 2
-- After Path 2 (Capabilities) → "Ready to install?" → Path 3
-- After Path 3 (Setup) → "Want to learn advanced features?" → Read `.reference/` files
-- After Path 4 (Commands) → "Need setup help?" → Path 3
+Always offer contextual next steps based on what was just covered. Every answer should come from reading `.reference/` fresh.
 
 ### TROUBLESHOOTING
 
-If user reports issues, read `.reference/OVERVIEW.md` or `.reference/MCP_QUICK_START.md` troubleshooting sections:
+If user reports issues:
+1. Read the relevant `.reference/` file's troubleshooting section
+2. Present the solution exactly as documented
+3. Don't invent solutions - use what's in the docs
 
-**Common Issues:**
-- "Connection refused" → Check Docker containers running
-- "Command not found" → CLI tool not installed
-- "Search returns nothing" → Using keywords instead of questions
-- "MCP server not showing" → Check config, restart Claude
-
-For each issue, read the relevant troubleshooting section from `.reference/` files and present the solution.
-
-### HELP AT ANY TIME
-
-**User can always say:**
-- "I don't understand" → Explain current concept differently with examples
-- "Show me an example" → Provide concrete use case
-- "Why do I need this?" → Explain problem it solves
-- "How much will this cost?" → Read `.reference/PRICING.md` and explain
-- "What's the difference between X and Y?" → Compare with examples
+**Never assume you know the answer. Always read from `.reference/` first.**
 
 ### REMEMBER
 
+- **Read `.reference/` for EVERY answer** - Don't rely on memory
 - **ONE concept at a time** - Never dump multiple concepts
 - **Always wait for response** - Don't continue without user input
-- **Use .reference files** - They have accurate, up-to-date information
-- **Explain WHY before HOW** - Context before commands
-- **Be encouraging** - Learning should feel guided, not overwhelming
+- **Extract, don't invent** - Use exact examples and quotes from docs
+- **Full questions, not keywords** - When showing search examples (from docs)
 - **Check understanding** - Ask "Does this make sense?" frequently
 - **Offer choices** - User drives the journey
 
