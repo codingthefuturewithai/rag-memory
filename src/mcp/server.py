@@ -113,7 +113,6 @@ async def lifespan(app: FastMCP):
             user=neo4j_user,
             password=neo4j_password
         )
-        await graphiti.build_indices_and_constraints()
 
         graph_store = GraphStore(graphiti)
         unified_mediator = UnifiedIngestionMediator(db, embedder, coll_mgr, graph_store)

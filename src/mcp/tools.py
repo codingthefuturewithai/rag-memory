@@ -546,7 +546,7 @@ async def delete_collection_impl(
                 source_doc_ids = []
 
         # Perform RAG deletion
-        deleted = coll_mgr.delete_collection(name)
+        deleted = await coll_mgr.delete_collection(name)
 
         if not deleted:
             raise ValueError(f"Collection '{name}' not found")

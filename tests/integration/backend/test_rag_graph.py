@@ -80,6 +80,7 @@ async def test_collection(test_infrastructure):
     Each test gets its own collection to ensure isolation.
     """
     collection_mgr = test_infrastructure["collection_mgr"]
+    graph_store = test_infrastructure["graph_store"]
 
     # Generate unique collection name based on test name
     import uuid
@@ -87,7 +88,7 @@ async def test_collection(test_infrastructure):
 
     # Ensure clean slate
     try:
-        collection_mgr.delete_collection(test_collection)
+        await collection_mgr.delete_collection(test_collection, graph_store=graph_store)
     except Exception:
         pass
 
@@ -103,7 +104,7 @@ async def test_collection(test_infrastructure):
 
     # ATOMIC CLEANUP: Delete collection and all its data
     try:
-        collection_mgr.delete_collection(test_collection)
+        await collection_mgr.delete_collection(test_collection, graph_store=graph_store)
     except Exception as e:
         print(f"Warning deleting collection {test_collection}: {e}")
 
@@ -169,12 +170,13 @@ class TestRAGIngestionAndSearch:
         db = test_infrastructure["db"]
         embedder = test_infrastructure["embedder"]
         collection_mgr = test_infrastructure["collection_mgr"]
+        graph_store = test_infrastructure["graph_store"]
 
         # Create second collection
         import uuid
         collection2 = f"test_collection_2_{uuid.uuid4().hex[:8]}"
         try:
-            collection_mgr.delete_collection(collection2)
+            await collection_mgr.delete_collection(collection2, graph_store=graph_store)
         except Exception:
             pass
         collection_mgr.create_collection(
@@ -228,7 +230,7 @@ class TestRAGIngestionAndSearch:
 
         # Cleanup collection2
         try:
-            collection_mgr.delete_collection(collection2)
+            await collection_mgr.delete_collection(collection2, graph_store=graph_store)
         except Exception as e:
             print(f"Warning cleaning up collection2: {e}")
 

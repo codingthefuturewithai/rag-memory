@@ -429,7 +429,7 @@ class CollectionManager:
         # Return updated collection info
         return self.get_collection(name)
 
-    def delete_collection(self, name: str, graph_store=None) -> bool:
+    async def delete_collection(self, name: str, graph_store=None) -> bool:
         """
         Delete a collection by name and clean up orphaned documents.
 
@@ -496,7 +496,7 @@ class CollectionManager:
                             failed_episodes += 1
 
                 # Run async deletion
-                asyncio.run(delete_all_episodes())
+                await delete_all_episodes()
 
                 logger.info(
                     f"Graph cleanup complete: {deleted_episodes} episodes deleted, "

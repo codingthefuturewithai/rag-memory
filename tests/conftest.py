@@ -407,8 +407,23 @@ async def setup_test_collection(collection_mgr, test_collection_name):
 
     yield test_collection_name
 
-    # Cleanup
+    # Cleanup: Must delete from BOTH PostgreSQL AND Neo4j to prevent state pollution
     try:
-        collection_mgr.delete_collection(test_collection_name)
+        # Initialize graph_store for cleanup (required to delete Neo4j episodes)
+        from graphiti_core import Graphiti
+        from src.unified import GraphStore
+        import os
+
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7689")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "test-password")
+
+        graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password)
+        graph_store = GraphStore(graphiti)
+
+        # Delete collection with graph cleanup
+        await collection_mgr.delete_collection(test_collection_name, graph_store=graph_store)
+
+        await graphiti.close()
     except Exception:
         pass

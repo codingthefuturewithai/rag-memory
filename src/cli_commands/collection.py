@@ -305,7 +305,7 @@ def collection_delete(name, yes):
     async def _delete_with_graph():
         """Helper to run deletion with graph cleanup."""
         # Import here to avoid circular dependencies
-        from src.cli_commands.ingest import _get_knowledge_graph_components
+        from src.cli_commands.ingest import initialize_graph_components
 
         try:
             db = get_database()
@@ -333,7 +333,7 @@ def collection_delete(name, yes):
                     return
 
             # Initialize graph components (may return None if not configured)
-            graph_store, _ = await _get_knowledge_graph_components()
+            graph_store, _ = await initialize_graph_components()
 
             if graph_store:
                 console.print("[cyan]Initializing graph cleanup...[/cyan]")
@@ -341,7 +341,7 @@ def collection_delete(name, yes):
                 console.print("[yellow]Knowledge Graph not configured - skipping graph cleanup[/yellow]")
 
             # Delete collection with graph cleanup if available
-            if mgr.delete_collection(name, graph_store=graph_store):
+            if await mgr.delete_collection(name, graph_store=graph_store):
                 console.print(f"[bold green]✓ Deleted collection '{name}' ({doc_count} documents)[/bold green]")
             else:
                 console.print(f"[yellow]Failed to delete collection '{name}'[/yellow]")

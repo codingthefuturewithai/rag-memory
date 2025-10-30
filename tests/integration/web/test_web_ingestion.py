@@ -35,7 +35,19 @@ class TestWebIngestionIntegration:
             )
         except ValueError:
             # Collection already exists - delete and recreate for clean state
-            coll_mgr.delete_collection(collection_name)
+            import asyncio
+            from graphiti_core import Graphiti
+            from src.unified import GraphStore
+
+            # Initialize graph_store for cleanup
+            neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7689")
+            neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+            neo4j_password = os.getenv("NEO4J_PASSWORD", "test-password")
+            graphiti = Graphiti(neo4j_uri, neo4j_user, neo4j_password)
+            graph_store = GraphStore(graphiti)
+
+            asyncio.run(coll_mgr.delete_collection(collection_name, graph_store=graph_store))
+            asyncio.run(graphiti.close())
             coll_mgr.create_collection(
                 collection_name,
                 "Test collection for web integration",

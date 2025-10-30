@@ -1,7 +1,7 @@
 """Unit tests for CLI commands using Click CliRunner and mocked components."""
 
 import json
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -70,19 +70,21 @@ class TestCollectionCommands:
     def test_collection_delete_confirmation(self, cli_runner):
         """Test deleting a collection with confirmation."""
         with patch("src.cli_commands.collection.get_collection_manager") as mock_coll_mgr, \
-             patch("src.cli_commands.collection.get_database") as mock_db:
+             patch("src.cli_commands.collection.get_database") as mock_db, \
+             patch("src.cli_commands.ingest.initialize_graph_components", new_callable=AsyncMock) as mock_init_graph:
             mock_mgr = MagicMock()
             mock_coll_mgr.return_value = mock_mgr
             mock_mgr.get_collection.return_value = {"id": 1, "name": "test-col", "document_count": 5}
-            mock_mgr.delete_collection.return_value = True
+            mock_mgr.delete_collection = AsyncMock(return_value=True)
             mock_db.return_value = MagicMock()
+            mock_init_graph.return_value = (None, None)
 
             # Invoke with --yes to skip confirmation prompt
             result = cli_runner.invoke(main, ["collection", "delete", "test-col", "--yes"])
 
             assert result.exit_code == 0
             assert "Deleted collection" in result.output
-            mock_mgr.delete_collection.assert_called_once_with("test-col")
+            mock_mgr.delete_collection.assert_called_once_with("test-col", graph_store=None)
 
 
 class TestIngestCommands:
