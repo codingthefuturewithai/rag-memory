@@ -43,7 +43,10 @@ RAG Memory is a **PostgreSQL pgvector + Neo4j + MCP server** system for managing
 **Three Supported Scenarios:**
 
 1. **System CLI Tool:** User installs `uv tool install rag-memory`, runs commands daily
-   - Config stored at: `~/.config/rag-memory/config.yaml` (system-level, persistent)
+   - Config stored at OS-specific location (system-level, persistent)
+     - macOS: `~/Library/Application Support/rag-memory/`
+     - Linux: `~/.config/rag-memory/`
+     - Windows: `%APPDATA%\rag-memory\`
    - Can delete repo anytime - config remains
    - Connects to LOCAL or CLOUD databases (user chooses one)
 
@@ -232,7 +235,10 @@ PostgreSQL: **54320** (not 5432 or 5433, to avoid conflicts with local PostgreSQ
 Three scenarios, three configurations:
 
 1. **System CLI (installed via setup.py):**
-   - `~/.config/rag-memory/config.yaml` - system-level, permanent, created by setup.py
+   - System config directory (OS-specific, permanent, created by setup.py)
+     - macOS: `~/Library/Application Support/rag-memory/config.yaml`
+     - Linux: `~/.config/rag-memory/config.yaml`
+     - Windows: `%APPDATA%\rag-memory\config.yaml`
    - Mount paths: Configured by user during setup (could be anywhere on their system)
    - OPENAI_API_KEY in config.yaml
 
@@ -306,10 +312,10 @@ Key principle: `.env` is ONLY for secrets (OPENAI_API_KEY), everything else is i
    - If invalid: re-prompt
 
 8. **Create system config directory**
-   - Ensure `~/.config/rag-memory/` exists
+   - Ensure OS-specific config directory exists (using platformdirs)
 
 9. **Write config.yaml**
-   - Write `~/.config/rag-memory/config.yaml` with all settings
+   - Write config.yaml to system config directory with all settings
    - Set permissions to 0o600 (user-only)
 
 10. **Install tool**
@@ -341,9 +347,9 @@ Key principle: `.env` is ONLY for secrets (OPENAI_API_KEY), everything else is i
   3. `uv tool install rag-memory` installs CLI system-wide from PyPI (optional convenience)
   4. Later: `git pull` upgrades MCP server code, Docker files
   5. Later: `uv tool upgrade rag-memory` upgrades CLI tool
-- Config file (`~/.config/rag-memory/config.yaml`) is portable, shared between both
+- Config file (in OS-specific location) is portable, shared between both
 
-**Key Principle:** Config file is the single source of truth, separate from both repo and PyPI distribution.
+**Key Principle:** Config file (stored in OS-specific location via platformdirs) is the single source of truth, separate from both repo and PyPI distribution.
 
 ---
 

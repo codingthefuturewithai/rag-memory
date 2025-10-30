@@ -724,33 +724,35 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
 
     try:
         # Step 1: Build the MCP image using repo docker-compose.yml (needs build context)
-        print_info("Building MCP server image...")
+        # Force fresh build with --no-cache to always pick up latest code changes
+        print_info("Building MCP server image (forcing fresh build)...")
         code, _, stderr = run_command([
             "docker-compose",
             "-f", str(repo_compose_file),
-            "build", "rag-mcp-local"
+            "build", "--no-cache", "rag-mcp-local"
         ], timeout=600)
 
         if code != 0:
             print_error(f"Failed to build MCP image: {stderr}")
             return False
 
-        print_success("MCP image built")
+        print_success("MCP image built (fresh build)")
 
         # Step 2: Start containers using SYSTEM docker-compose.yml
         # This ensures containers are bound to the system file, not the repo file
-        print_info("Starting containers from system configuration...")
+        # Use --force-recreate to ensure fresh containers with latest code
+        print_info("Starting containers from system configuration (forcing recreate)...")
         code, _, stderr = run_command([
             "docker-compose",
             "-f", str(system_compose_file),
-            "up", "-d"
+            "up", "-d", "--force-recreate"
         ], timeout=None)
 
         if code != 0:
             print_error(f"Failed to start containers: {stderr}")
             return False
 
-        print_success("Containers started")
+        print_success("Containers started (fresh recreate)")
         return True
 
     except Exception as e:

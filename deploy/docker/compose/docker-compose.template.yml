@@ -4,7 +4,10 @@ version: '3.9'
 # RAG Memory Local Deployment - Docker Compose Configuration
 # ================================================================================
 # This file defines all services for local development
-# Configuration files are stored in OS-standard location (e.g., ~/.config/rag-memory/)
+# Configuration files are stored in OS-standard location via platformdirs
+#   macOS: ~/Library/Application Support/rag-memory/
+#   Linux: ~/.config/rag-memory/
+#   Windows: %APPDATA%\rag-memory\
 #   - config.yaml (application configuration, created by setup.py)
 #
 # Usage:
@@ -29,7 +32,7 @@ services:
       POSTGRES_DB: rag_memory
     volumes:
       - postgres_data_local:/var/lib/postgresql/data
-      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ../init.sql:/docker-entrypoint-initdb.d/01-init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser}"]
       interval: 10s

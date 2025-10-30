@@ -1436,56 +1436,18 @@ async def query_temporal_impl(
                 "timeline": []
             }
 
-        from graphiti_core.search.search_filters import SearchFilters, DateFilter, ComparisonOperator
-        from datetime import datetime
-
         # Convert collection_name to group_ids for internal implementation
         group_ids = [collection_name] if collection_name else None
 
-        # Build SearchFilters for temporal filtering using Graphiti's API
-        # SearchFilters use list[list[DateFilter]] where:
-        # - Outer list = OR condition
-        # - Inner list = AND condition
-        search_filter = None
-        if valid_from or valid_until:
-            filter_dict = {}
-
-            if valid_until:
-                # Facts must have started on or before valid_until
-                # valid_at <= valid_until
-                valid_until_dt = datetime.fromisoformat(valid_until)
-                filter_dict['valid_at'] = [[DateFilter(date=valid_until_dt, comparison_operator='<=')]]
-
-            if valid_from:
-                # Facts must not have ended before valid_from
-                # (invalid_at >= valid_from) OR (invalid_at IS NULL)
-                valid_from_dt = datetime.fromisoformat(valid_from)
-                filter_dict['invalid_at'] = [
-                    [DateFilter(date=valid_from_dt, comparison_operator='>=')],  # OR
-                    [DateFilter(date=None, comparison_operator='IS NULL')]       # still valid
-                ]
-
-            search_filter = SearchFilters(**filter_dict)
-
-        # Search using Graphiti's search_() with SearchFilters
-        from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_CROSS_ENCODER
-        config = COMBINED_HYBRID_SEARCH_CROSS_ENCODER.model_copy(deep=True)
-        config.reranker_min_score = threshold
-
-        results = await graph_store.graphiti.search_(
+        # Delegate to GraphStore.search_temporal() - no direct Graphiti calls
+        edges = await graph_store.search_temporal(
             query,
-            config=config,
-            search_filter=search_filter,
-            group_ids=group_ids
+            num_results=num_results,
+            reranker_min_score=threshold,
+            group_ids=group_ids,
+            valid_from=valid_from,
+            valid_until=valid_until
         )
-
-        # Handle both old API (object with .edges) and new API (returns list directly)
-        if hasattr(results, 'edges'):
-            edges = results.edges
-        elif isinstance(results, list):
-            edges = results
-        else:
-            edges = []
 
         # Convert to timeline format, grouped by temporal validity
         timeline_items = []

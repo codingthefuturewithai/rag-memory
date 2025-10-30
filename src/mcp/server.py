@@ -885,7 +885,7 @@ def list_documents(
 @mcp.tool()
 async def query_relationships(
     query: str,
-    collection_name: str = None,
+    collection_name: str | None = None,
     num_results: int = 5,
     threshold: float = 0.35,
 ) -> dict:

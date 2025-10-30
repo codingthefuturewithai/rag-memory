@@ -426,6 +426,103 @@ class GraphStore:
         # but MCP tool returns edges for relationship queries
         return results.edges if hasattr(results, 'edges') else []
 
+    async def search_temporal(
+        self,
+        query: str,
+        num_results: int = 10,
+        reranker_min_score: float = None,
+        group_ids: list[str] = None,
+        valid_from: str = None,
+        valid_until: str = None,
+    ) -> list[Any]:
+        """
+        Search for temporal knowledge evolution in the knowledge graph.
+
+        Uses configurable search strategy (MMR, RRF, or cross-encoder) with temporal
+        filtering to show how facts changed over time.
+
+        Args:
+            query: Natural language query about temporal changes
+            num_results: Number of results to return
+            reranker_min_score: Minimum relevance score threshold (0.0-1.0).
+                               If None, uses strategy-specific default (same as search_relationships)
+            group_ids: (OPTIONAL) List of group IDs (collection names) to filter by
+            valid_from: (OPTIONAL) ISO 8601 date - filter facts valid after this date
+            valid_until: (OPTIONAL) ISO 8601 date - filter facts valid before this date
+
+        Returns:
+            List of search results (edges) with temporal validity information.
+        """
+        import os
+        from graphiti_core.search.search_config_recipes import (
+            COMBINED_HYBRID_SEARCH_MMR,
+            COMBINED_HYBRID_SEARCH_RRF,
+            COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+        )
+        from graphiti_core.search.search_filters import SearchFilters, DateFilter
+        from datetime import datetime
+
+        # Get strategy from environment (can be overridden with TEMPORAL_SEARCH_STRATEGY in future)
+        strategy = os.getenv('TEMPORAL_SEARCH_STRATEGY') or os.getenv('SEARCH_STRATEGY', 'mmr')
+        strategy = strategy.lower()
+
+        # Map strategy name to recipe
+        strategy_map = {
+            'mmr': COMBINED_HYBRID_SEARCH_MMR,
+            'rrf': COMBINED_HYBRID_SEARCH_RRF,
+            'cross_encoder': COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+        }
+
+        # Get the recipe (default to MMR if invalid strategy)
+        recipe = strategy_map.get(strategy, COMBINED_HYBRID_SEARCH_MMR)
+
+        # Use strategy-specific default threshold if not provided
+        if reranker_min_score is None:
+            default_thresholds = {
+                'mmr': 0.2,            # MMR with balanced filtering
+                'rrf': 0.2,            # RRF with balanced filtering
+                'cross_encoder': 0.35  # Cross-encoder needs stricter filtering
+            }
+            reranker_min_score = default_thresholds.get(strategy, 0.2)
+
+        # Build temporal filters if date parameters provided
+        search_filter = None
+        if valid_from or valid_until:
+            filter_dict = {}
+
+            if valid_until:
+                # Facts must have started on or before valid_until
+                # valid_at <= valid_until
+                valid_until_dt = datetime.fromisoformat(valid_until)
+                filter_dict['valid_at'] = [[DateFilter(date=valid_until_dt, comparison_operator='<=')]]
+
+            if valid_from:
+                # Facts must not have ended before valid_from
+                # (invalid_at >= valid_from) OR (invalid_at IS NULL)
+                valid_from_dt = datetime.fromisoformat(valid_from)
+                filter_dict['invalid_at'] = [
+                    [DateFilter(date=valid_from_dt, comparison_operator='>=')],  # OR
+                    [DateFilter(date=None, comparison_operator='IS NULL')]       # still valid
+                ]
+
+            search_filter = SearchFilters(**filter_dict)
+
+        # Create config from recipe
+        config = recipe.model_copy(deep=True)
+        config.limit = num_results
+        config.reranker_min_score = reranker_min_score
+
+        # Execute search with temporal filter
+        results = await self.graphiti.search_(
+            query,
+            config=config,
+            search_filter=search_filter,
+            group_ids=group_ids
+        )
+
+        # Return edges with temporal information
+        return results.edges if hasattr(results, 'edges') else []
+
     async def close(self):
         """Close the Graphiti connection."""
         await self.graphiti.close()

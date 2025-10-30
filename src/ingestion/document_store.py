@@ -128,9 +128,8 @@ class DocumentStore:
                 chunk_doc.page_content, normalize=True
             )
 
-            # Convert to numpy array for pgvector
-            embedding_array = np.array(embedding)
-
+            # embedding is already a list from normalize_embedding() - pass directly to pgvector
+            # (numpy 2.x breaks when passing np.array to psycopg3)
             # Store chunk
             with conn.cursor() as cur:
                 cur.execute(
@@ -148,7 +147,7 @@ class DocumentStore:
                         chunk_doc.metadata.get("char_start", 0),
                         chunk_doc.metadata.get("char_end", 0),
                         Jsonb(chunk_doc.metadata),
-                        embedding_array,
+                        embedding,
                     ),
                 )
                 chunk_id = cur.fetchone()[0]
@@ -582,8 +581,8 @@ class DocumentStore:
                     chunk_doc.page_content, normalize=True
                 )
 
-                embedding_array = np.array(embedding)
-
+                # embedding is already a list from normalize_embedding() - pass directly to pgvector
+                # (numpy 2.x breaks when passing np.array to psycopg3)
                 # Insert chunk
                 with conn.cursor() as cur:
                     cur.execute(
@@ -601,7 +600,7 @@ class DocumentStore:
                             chunk_doc.metadata.get("char_start", 0),
                             chunk_doc.metadata.get("char_end", 0),
                             Jsonb(chunk_doc.metadata),
-                            embedding_array,
+                            embedding,
                         ),
                     )
                     chunk_id = cur.fetchone()[0]
