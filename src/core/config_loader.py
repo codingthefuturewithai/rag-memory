@@ -35,6 +35,7 @@ REQUIRED_SERVER_KEYS = [
 OPTIONAL_SERVER_KEYS = [
     'graphiti_model',
     'graphiti_small_model',
+    'max_reflexion_iterations',
 ]
 
 
@@ -168,6 +169,7 @@ def load_environment_variables():
         'neo4j_password': 'NEO4J_PASSWORD',
         'graphiti_model': 'GRAPHITI_MODEL',
         'graphiti_small_model': 'GRAPHITI_SMALL_MODEL',
+        'max_reflexion_iterations': 'MAX_REFLEXION_ITERATIONS',
     }
 
     for config_key, env_var in key_mapping.items():

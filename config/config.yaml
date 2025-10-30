@@ -20,6 +20,13 @@ server:
   #graphiti_model: gpt-5          # Main extraction model (default: gpt-5-mini)
   #graphiti_small_model: gpt-5-nano    # Small task model (default: gpt-5-nano)
 
+  # Graphiti Reflexion (optional, default: 0)
+  # Number of recursive entity extraction iterations
+  # 0 = single-pass (fast, default)
+  # 1-3 = recursive (higher quality, 2-4x slower/costlier)
+  # NOTE: Only affects ingestion (ingest_text, ingest_url, etc.), not search
+  max_reflexion_iterations: 0
+
 mounts:
   # Reference documentation and examples for file/directory ingestion testing
   - path: .reference

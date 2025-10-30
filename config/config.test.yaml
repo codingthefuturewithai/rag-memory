@@ -22,6 +22,10 @@ server:
   # graphiti_model: gpt-5-mini          # Main extraction model (default: gpt-5-mini)
   # graphiti_small_model: gpt-5-nano    # Small task model (default: gpt-5-nano)
 
+  # Test with reflexion disabled for speed
+  # NOTE: Only affects ingestion, not search
+  max_reflexion_iterations: 0
+
 mounts:
   # Test documents for automated file/directory ingestion tests
   # Using relative path - will resolve relative to project root where MCP server runs

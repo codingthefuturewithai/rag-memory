@@ -421,9 +421,86 @@ def prompt_for_backup_retention() -> int:
     return retention_days
 
 
-def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str, backup_dir: str, backup_retention: int):
+def prompt_for_entity_extraction_quality() -> int:
+    """
+    Prompt user for entity extraction quality level.
+
+    This controls Graphiti's reflexion iterations - recursive entity extraction
+    that improves quality but increases costs and processing time.
+
+    Returns:
+        Number of reflexion iterations (0-2)
+    """
+    print_header("STEP 10: Entity Extraction Quality (Optional)")
+
+    print_info("RAG Memory uses AI to extract entities and relationships from your documents.")
+    print_info("You can choose between:")
+    print_info("  • Standard quality (default, faster and cheaper)")
+    print_info("  • Enhanced quality (slower but more thorough)\n")
+
+    print(f"{Colors.BOLD}Standard Quality (Recommended):{Colors.RESET}")
+    print("  • Single-pass extraction")
+    print("  • Fast processing (~30-60 seconds per document)")
+    print("  • Lower cost (~$0.01 per document)")
+    print("  • Good for most use cases\n")
+
+    print(f"{Colors.BOLD}Enhanced Quality:{Colors.RESET}")
+    print("  • Multi-pass recursive extraction")
+    print("  • Catches entities that might be missed in first pass")
+    print("  • Slower processing (2-3x longer)")
+    print("  • Higher cost (2-3x more expensive)")
+    print("  • Best for critical content where completeness matters\n")
+
+    print_warning("⚠  Enhanced quality increases processing time and OpenAI API costs")
+    print_info("ℹ  Only affects ingestion (ingest_text, ingest_url), not search")
+    print_info("ℹ  You can always change this later in your config file\n")
+
+    while True:
+        choice = input(
+            f"{Colors.CYAN}Choose quality level:\n"
+            f"  0 = Standard (default, recommended)\n"
+            f"  1 = Enhanced (1 additional pass)\n"
+            f"  2 = High (2 additional passes, expensive)\n"
+            f"Enter choice (0-2, default: 0): {Colors.RESET}"
+        ).strip()
+
+        # Default to 0 if empty
+        if choice == "":
+            choice = "0"
+
+        if choice in ["0", "1", "2"]:
+            level = int(choice)
+
+            if level == 0:
+                print_success("Using standard quality (fast, cost-effective)")
+            elif level == 1:
+                print_warning("Using enhanced quality (1 additional pass)")
+                print_warning("This will approximately double processing time and costs")
+                confirm = input(f"{Colors.YELLOW}Confirm enhanced quality? (yes/no): {Colors.RESET}").strip().lower()
+                if confirm != "yes":
+                    print_info("Reverting to standard quality")
+                    level = 0
+                else:
+                    print_success("Enhanced quality confirmed")
+            else:  # level == 2
+                print_warning("Using high quality (2 additional passes)")
+                print_warning("This will approximately triple processing time and costs")
+                print_warning("Only recommended for critical documents")
+                confirm = input(f"{Colors.YELLOW}Are you sure? (yes/no): {Colors.RESET}").strip().lower()
+                if confirm != "yes":
+                    print_info("Reverting to standard quality")
+                    level = 0
+                else:
+                    print_success("High quality confirmed")
+
+            return level
+
+        print_error("Invalid choice. Please enter 0, 1, or 2")
+
+
+def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str, backup_dir: str, backup_retention: int, max_reflexion_iterations: int):
     """Create all configuration files in OS-standard system directory"""
-    print_header("STEP 9: Creating Configuration Files")
+    print_header("STEP 11: Creating Configuration Files")
 
     import platformdirs
     import yaml
@@ -483,6 +560,12 @@ def create_config_yaml(api_key: str, ports: dict, mounts: list, backup_cron: str
         config_content = config_content.replace(
             'PLACEHOLDER_MCP_SSE_PORT_REPLACE_ME',
             str(ports['mcp'])
+        )
+
+        # 6. Entity extraction quality (max_reflexion_iterations)
+        config_content = config_content.replace(
+            'max_reflexion_iterations: 0',
+            f'max_reflexion_iterations: {max_reflexion_iterations}'
         )
 
         # Add mounts to config
@@ -990,8 +1073,11 @@ def main():
     # Step 10: Configure backup retention
     backup_retention = prompt_for_backup_retention()
 
-    # Step 11: Create YAML configuration from template
-    success, config_dir = create_config_yaml(api_key, ports, mounts, backup_cron, backup_dir, backup_retention)
+    # Step 11: Configure entity extraction quality
+    max_reflexion_iterations = prompt_for_entity_extraction_quality()
+
+    # Step 12: Create YAML configuration from template
+    success, config_dir = create_config_yaml(api_key, ports, mounts, backup_cron, backup_dir, backup_retention, max_reflexion_iterations)
     if not success:
         sys.exit(1)
 

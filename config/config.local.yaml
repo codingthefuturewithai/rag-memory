@@ -53,6 +53,13 @@ server:
   #graphiti_model: gpt-5          # Main extraction model (default: gpt-5-mini)
   #graphiti_small_model: gpt-5-nano    # Small task model (default: gpt-5-nano)
 
+  # Graphiti Reflexion (optional, default: 0)
+  # 0 = disabled (single-pass, fast)
+  # 1-3 = recursive extraction (higher quality, slower, more expensive)
+  # Each iteration adds ~30-60s and ~$0.01 per document
+  # NOTE: Only affects ingestion (ingest_text, ingest_url, etc.), not search
+  max_reflexion_iterations: 0
+
 mounts:
   # Read-only directory mounts for file/directory ingestion
   # Setup.py will prompt you to configure these

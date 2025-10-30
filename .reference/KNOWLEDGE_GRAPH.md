@@ -189,7 +189,7 @@ export NEO4J_PASSWORD="your-password"
 ### Step 1: User Ingests Document
 
 ```bash
-rag ingest text "PostgreSQL is a powerful database with pgvector extension..." \
+rag ingest text "React is a JavaScript library for building user interfaces with component-based architecture and hooks..." \
     --collection tech-docs
 ```
 
@@ -198,32 +198,33 @@ rag ingest text "PostgreSQL is a powerful database with pgvector extension..." \
 ```python
 # Inside mediator.ingest_text()
 
-# Step A: RAG Store (pgvector)
+# Step A: RAG Store (vector search)
 source_id, chunk_ids = rag_store.ingest_document(
-    content="PostgreSQL is a powerful...",
+    content="React is a JavaScript library for building user interfaces...",
     collection_name="tech-docs",
-    metadata={"topic": "databases"}
+    metadata={"topic": "frontend", "framework": "react"}
 )
 # Returns: source_id=42, chunk_ids=[101, 102, 103]
 
 # Step B: Graph Store (Neo4j + Graphiti)
 if graph_store_available:
     entities = await graph_store.add_knowledge(
-        content="PostgreSQL is a powerful...",
+        content="React is a JavaScript library for building user interfaces...",
         source_document_id=42,
-        metadata={"topic": "databases"}
+        metadata={"topic": "frontend", "framework": "react"}
     )
-    # Returns: [Entity(name="PostgreSQL", type="DATABASE"),
-    #           Entity(name="pgvector", type="EXTENSION"),
+    # Returns: [Entity(name="React", type="LIBRARY"),
+    #           Entity(name="JavaScript", type="LANGUAGE"),
+    #           Entity(name="hooks", type="FEATURE"),
     #           ...]
 ```
 
 ### Step 3: Graph Ingestion Details
 
 **What Graphiti Does:**
-1. Calls OpenAI GPT-4o for entity extraction
-2. Identifies entities: PostgreSQL, pgvector, database, extension...
-3. Infers relationships: PostgreSQL -[HAS]-> pgvector
+1. Calls configured LLM for entity extraction (default: GPT-4o-mini, recommended: GPT-5-mini)
+2. Identifies entities: React, hooks, components, state management...
+3. Infers relationships: React -[USES]-> hooks
 4. Creates episode node: `doc_42`
 5. Connects entities to episode
 
@@ -231,9 +232,9 @@ if graph_store_available:
 ```python
 episode_description = f"""
 Collection: tech-docs
-Title: PostgreSQL Basics
-Metadata: {{"topic": "databases", "category": "infrastructure"}}
-Key Concepts: PostgreSQL, pgvector, database, search, indexing
+Title: React Hooks Guide
+Metadata: {{"topic": "frontend", "category": "framework"}}
+Key Concepts: React, hooks, useState, useEffect, component lifecycle
 ...
 """
 # This description is searchable in Neo4j
@@ -244,15 +245,15 @@ Key Concepts: PostgreSQL, pgvector, database, search, indexing
 **RAG Ready:**
 ```python
 # Can search immediately
-results = search_documents("PostgreSQL", "tech-docs")
+results = search_documents("How do React hooks work?", "tech-docs")
 # Returns: content from source_id=42, chunks 101-103
 ```
 
 **Graph Ready:**
 ```python
 # Can query relationships
-results = query_relationships("What entities relate to PostgreSQL?")
-# Returns: {pgvector, database, search, indexing, ...}
+results = query_relationships("What entities relate to React?")
+# Returns: {hooks, components, state, props, JSX, ...}
 ```
 
 ---
@@ -277,9 +278,9 @@ query_relationships(
 
 **Example Queries:**
 - "Which projects depend on authentication?"
-- "What is related to PostgreSQL?"
+- "What is related to the payment service?"
 - "How do my services connect?"
-- "Which entities are used in database operations?"
+- "Which entities are used in user management?"
 
 **Returns:**
 ```python
@@ -287,15 +288,15 @@ query_relationships(
     "status": "available",  # or "unavailable" if Neo4j down
     "relationships": [
         {
-            "entity_a": "PostgreSQL",
-            "relationship": "HAS_EXTENSION",
-            "entity_b": "pgvector",
-            "description": "PostgreSQL has the pgvector extension for vector search",
+            "entity_a": "UserService",
+            "relationship": "DEPENDS_ON",
+            "entity_b": "AuthenticationAPI",
+            "description": "UserService depends on AuthenticationAPI for login validation",
             "timestamp": "2025-10-20T14:30:00Z"
         },
         ...
     ],
-    "query": "What relates to PostgreSQL?",
+    "query": "What relates to UserService?",
     "count": 5
 }
 ```
@@ -329,7 +330,7 @@ query_temporal(
 
 **Example Queries:**
 - "How has the authentication service changed?"
-- "What was updated about PostgreSQL?"
+- "What was updated about the payment processing?"
 - "Show me the evolution of the API design"
 - "When did we add rate limiting?"
 
@@ -363,7 +364,7 @@ query_temporal(
 
 **CLI (if available):**
 ```bash
-rag graph-timeline "How has PostgreSQL evolved?"
+rag graph-timeline "How has the authentication service evolved?"
 ```
 
 ### Other 14 Tools (RAG-Specific)
@@ -426,13 +427,13 @@ RAG:    [Returns PR/docs explaining decision]
 
 **Query Example:**
 ```
-"Which services that use PostgreSQL also connect to the API?"
+"Which services that use the payment processor also connect to the notification service?"
 
 Graph Traversal:
-  [PostgreSQL] ←[USES]← [Service A]
-  [Service A] ←[CALLS]← [API]
+  [PaymentProcessor] ←[USES]← [OrderService]
+  [OrderService] ←[CALLS]← [NotificationService]
 
-Result: [Service A] is the answer
+Result: [OrderService] is the answer
 ```
 
 ### Use Case 4: Compliance & Audit
@@ -452,10 +453,10 @@ Result: [Service A] is the answer
 
 **Problem:**
 ```
-Step 1: Ingest "PostgreSQL is powerful"
+Step 1: Ingest "React 17 introduced concurrent mode"
         RAG ✅ stored, Graph ✅ entities extracted
 
-Step 2: Edit document to "PostgreSQL 17 is powerful with pgvector"
+Step 2: Edit document to "React 18 introduced automatic batching and concurrent features"
         RAG ✅ updated, Graph ❌ STALE
 ```
 
@@ -526,9 +527,9 @@ Graph:  ⏱️ Timed out (60 seconds), 4 episodes created with 0 entities
 ```
 
 **Likely Cause:**
-- Graphiti LLM call (GPT-4o) took > 60 seconds
+- Graphiti LLM call took > 60 seconds
 - Page content too large/complex
-- OpenAI API timeout
+- OpenAI API timeout or rate limiting
 
 **Workaround:**
 - Try smaller Wikipedia pages
@@ -594,7 +595,7 @@ MATCH (e:Episode {name: 'doc_42'})--(n:Entity) RETURN n
 MATCH (n1)-[r]-(n2) RETURN n1, r, n2 LIMIT 10
 
 # Find specific entity
-MATCH (n:Entity) WHERE n.name CONTAINS 'PostgreSQL' RETURN n
+MATCH (n:Entity) WHERE n.name CONTAINS 'React' RETURN n
 
 # Count statistics
 MATCH (e:Episode) RETURN count(e) as episodes
@@ -620,10 +621,12 @@ docker-compose -f docker-compose.graphiti.yml logs neo4j -f
 
 ### Entity Extraction Cost
 
-**OpenAI GPT-4o Call:**
-- Time per document: 30-60 seconds
-- Cost: ~$0.01 per document (using GPT-4o turbo)
-- Significant vs RAG embedding cost (~$0.000001)
+**LLM Entity Extraction:**
+- Time per document: 30-60 seconds (varies by model and document complexity)
+- Cost: ~$0.01 per document (default GPT-4o-mini: $0.80/1M tokens)
+- Cost varies by configured model (GPT-4o-mini cheapest, GPT-5-mini recommended for quality)
+- Significant vs RAG embedding cost (~$0.000013)
+- See `.reference/PRICING.md` for detailed model cost comparison
 
 **Implications:**
 - Graph ingestion is 30-60x slower than RAG
@@ -657,6 +660,104 @@ docker-compose -f docker-compose.graphiti.yml logs neo4j -f
 **vs RAG Search:**
 - Vector search: 100-500ms (same range)
 - Advantage: No latency tradeoff
+
+---
+
+## Advanced Configuration: Reflexion
+
+Graphiti supports **recursive entity extraction** through a reflexion pattern. After the initial extraction, the LLM reviews what was extracted and identifies any missed entities or relationships, then re-extracts with hints.
+
+### Configuration
+
+```yaml
+# config.yaml or config.local.yaml
+server:
+  max_reflexion_iterations: 0  # 0-3 recommended
+```
+
+**Available via:**
+- YAML config files: `max_reflexion_iterations: 0`
+- Environment variable: `MAX_REFLEXION_ITERATIONS=0`
+- Setup script: Interactive prompt during installation
+
+### Trade-offs
+
+**0 iterations (default):**
+- ✅ Fast processing (~30-60 seconds per document)
+- ✅ Lower cost (~$0.01 per document)
+- ❌ May miss some entities or relationships
+
+**1 iteration (enhanced):**
+- ✅ Moderate quality improvement
+- ❌ 2x slower (~60-120 seconds per document)
+- ❌ 2x more expensive (~$0.02 per document)
+
+**2-3 iterations (high quality):**
+- ✅ High quality extraction
+- ❌ 3-4x slower (~90-180 seconds per document)
+- ❌ 3-4x more expensive (~$0.03-0.04 per document)
+
+### How It Works
+
+**Two-Phase Process per Iteration:**
+
+1. **Initial Extraction:** LLM extracts entities/edges from text
+   ```
+   Input: "Alice became CEO in 2023"
+   Extracted: [Entity: Alice, Entity: CEO]
+   Missing: [Relationship: BECAME → CEO]
+   ```
+
+2. **Reflexion:** LLM reviews extraction and identifies gaps
+   ```
+   Prompt: "Given these extracted entities, what did you miss?"
+   Response: "Missed relationship: Alice BECAME CEO"
+   ```
+
+3. **Re-extraction (with hints):** LLM re-extracts with explicit guidance
+   ```
+   Prompt: "Make sure to extract: Alice BECAME CEO"
+   Result: [Entity: Alice, Edge: BECAME, Entity: CEO, valid_at: 2023]
+   ```
+
+**Stops Early:** Loop exits if reflexion returns empty (nothing missed).
+
+### Cost Impact
+
+Each iteration adds:
+- **Time:** ~30-60 seconds (additional LLM call)
+- **Cost:** ~$0.01 (GPT-4o pricing)
+- **Quality:** Diminishing returns after 2 iterations
+
+**Example for 100 documents:**
+- 0 iterations: $1, ~1 hour
+- 1 iteration: $2, ~2 hours
+- 2 iterations: $3, ~3 hours
+
+### When to Use Enhanced Quality
+
+**Use Level 0 (default) for:**
+- General knowledge ingestion
+- Large document collections
+- Cost-sensitive applications
+- Quick prototyping
+
+**Use Level 1-2 for:**
+- Critical business documents
+- Legal or compliance content
+- High-value knowledge bases
+- When missing entities is costly
+
+### Important Notes
+
+- **Only affects ingestion:** Does NOT impact search performance
+- **Configurable per deployment:** Set once during setup, applies to all ingestion
+- **Can be changed later:** Edit `config.yaml` and restart MCP server
+- **Collection-independent:** Same quality level for all collections (not per-collection)
+
+### Recommendation
+
+**Start with 0 (default).** Only enable enhanced quality if you notice important entities being missed after testing with sample documents.
 
 ---
 
@@ -791,7 +892,7 @@ if response["status"] == "unavailable":
 ## Frequently Asked Questions
 
 **Q: Why is graph ingestion so slow?**
-A: Entity extraction uses GPT-4o which takes 30-60 seconds per document. It's the bottleneck.
+A: Entity extraction uses LLM calls (configurable model, default: GPT-4o-mini) which take 30-60 seconds per document depending on complexity. It's the bottleneck. Model choice is configurable via `GRAPHITI_MODEL` and `GRAPHITI_SMALL_MODEL` environment variables or config file settings. See `.reference/PRICING.md` for model comparison.
 
 **Q: Will my graph data be lost if I delete documents?**
 A: Until Phase 4: Yes, orphaned episodes accumulate. Workaround: manually clean Neo4j. Phase 4 will fix this.

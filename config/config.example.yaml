@@ -18,6 +18,13 @@ server:
   # OpenAI API key - SET VIA ENVIRONMENT VARIABLE, NOT HERE
   # export OPENAI_API_KEY="sk-..."
 
+  # Graphiti entity extraction configuration (optional)
+  # Number of reflexion iterations for recursive entity/relationship extraction
+  # 0 = disabled (single-pass, faster, default)
+  # 1-3 = recursive extraction (higher quality, slower, more expensive)
+  # NOTE: Only affects ingestion (ingest_text, ingest_url, etc.), not search
+  max_reflexion_iterations: 0
+
 mounts:
   # List of directories accessible to the MCP server (for file/directory ingestion)
   # Each mount is read-only for security
