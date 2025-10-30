@@ -1319,7 +1319,7 @@ async def query_relationships_impl(
     query: str,
     collection_name: str = None,
     num_results: int = 5,
-    threshold: float = 0.35,
+    threshold: float = 0.2,
 ) -> Dict[str, Any]:
     """
     Implementation of query_relationships tool.
@@ -1332,7 +1332,10 @@ async def query_relationships_impl(
         query: Natural language query
         collection_name: Optional collection to scope search
         num_results: Maximum number of results to return
-        threshold: Relationship confidence threshold (0.0-1.0, default 0.35)
+        threshold: Minimum relevance score (0.0-1.0, default 0.2)
+                  Higher = stricter filtering (fewer, more relevant results)
+                  Lower = more permissive (more results, may include less relevant)
+                  Strategy-specific defaults apply if not overridden
     """
     try:
         if not graph_store:
@@ -1407,7 +1410,7 @@ async def query_temporal_impl(
     query: str,
     collection_name: str = None,
     num_results: int = 10,
-    threshold: float = 0.35,
+    threshold: float = 0.2,
     valid_from: str = None,
     valid_until: str = None,
 ) -> Dict[str, Any]:

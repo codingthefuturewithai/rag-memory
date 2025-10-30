@@ -26,6 +26,9 @@ server:
   # NOTE: Only affects ingestion, not search
   max_reflexion_iterations: 0
 
+  # Knowledge Graph search strategy (default: mmr)
+  search_strategy: mmr
+
 mounts:
   # Test documents for automated file/directory ingestion tests
   # Using relative path - will resolve relative to project root where MCP server runs

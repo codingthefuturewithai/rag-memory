@@ -353,37 +353,77 @@ class GraphStore:
         self,
         query: str,
         num_results: int = 5,
-        reranker_min_score: float = 0.35,
+        reranker_min_score: float = None,
         group_ids: list[str] = None,
     ) -> list[Any]:
         """
         Search for relationships in the knowledge graph.
 
-        Uses cross-encoder reranking for relevance filtering.
+        Uses configurable search strategy (MMR, RRF, or cross-encoder) with both
+        node and edge search for comprehensive results.
 
         Args:
             query: Natural language query (e.g., "How does my YouTube channel relate to my business?")
-            num_results: Number of results to return
-            reranker_min_score: Cross-encoder confidence threshold (0.0-1.0, default 0.35).
-                               Higher values filter more strictly (fewer, more accurate results).
-                               Lower values are more permissive (more results, including potentially less relevant ones).
+            num_results: Number of results to return (applies to both nodes and edges)
+            reranker_min_score: Minimum relevance score threshold (0.0-1.0).
+                               If None, uses strategy-specific default:
+                               - MMR: 0.2 (balanced filtering)
+                               - RRF: 0.2 (balanced filtering)
+                               - cross_encoder: 0.35 (needs stricter filtering)
+                               Can be explicitly set to override defaults.
+                               Higher = stricter filtering, Lower = more permissive
             group_ids: (OPTIONAL) List of group IDs (collection names) to filter by.
-                      Only return relationships from episodes with these group IDs.
+                      Only return results from episodes with these group IDs.
 
         Returns:
-            List of search results (edges) with cross-encoder scores >= reranker_min_score.
+            List of search results (edges) from the knowledge graph.
+            Uses both nodes and edges for comprehensive context.
         """
-        from graphiti_core.search.search_config_recipes import COMBINED_HYBRID_SEARCH_CROSS_ENCODER
+        import os
+        from graphiti_core.search.search_config_recipes import (
+            COMBINED_HYBRID_SEARCH_MMR,
+            COMBINED_HYBRID_SEARCH_RRF,
+            COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+        )
 
-        # Use search_() (with underscore) for advanced search with custom config
-        # search_() supports the config parameter, search() does not
-        config = COMBINED_HYBRID_SEARCH_CROSS_ENCODER.model_copy(deep=True)
+        # Get strategy from environment (set from config.yaml)
+        strategy = os.getenv('SEARCH_STRATEGY', 'mmr').lower()
+
+        # Map strategy name to recipe
+        strategy_map = {
+            'mmr': COMBINED_HYBRID_SEARCH_MMR,
+            'rrf': COMBINED_HYBRID_SEARCH_RRF,
+            'cross_encoder': COMBINED_HYBRID_SEARCH_CROSS_ENCODER,
+        }
+
+        # Get the recipe (default to MMR if invalid strategy)
+        recipe = strategy_map.get(strategy, COMBINED_HYBRID_SEARCH_MMR)
+
+        # Use strategy-specific default threshold if not provided
+        if reranker_min_score is None:
+            default_thresholds = {
+                'mmr': 0.2,            # MMR with balanced filtering
+                'rrf': 0.2,            # RRF with balanced filtering
+                'cross_encoder': 0.35  # Cross-encoder needs stricter filtering
+            }
+            reranker_min_score = default_thresholds.get(strategy, 0.2)
+
+        # Create config from recipe
+        config = recipe.model_copy(deep=True)
+        config.limit = num_results
         config.reranker_min_score = reranker_min_score
 
-        results = await self.graphiti.search_(query, config=config, search_filter=None, group_ids=group_ids)
+        # Execute search
+        results = await self.graphiti.search_(
+            query,
+            config=config,
+            search_filter=None,
+            group_ids=group_ids
+        )
 
-        # search_() returns SearchResults object with .edges, .nodes, .episodes, .communities
-        # Graphiti internally filters by reranker_min_score, so we just return edges
+        # Return edges (primary relationship data)
+        # Note: results also contains .nodes which may have useful context,
+        # but MCP tool returns edges for relationship queries
         return results.edges if hasattr(results, 'edges') else []
 
     async def close(self):

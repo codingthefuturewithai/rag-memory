@@ -36,6 +36,7 @@ OPTIONAL_SERVER_KEYS = [
     'graphiti_model',
     'graphiti_small_model',
     'max_reflexion_iterations',
+    'search_strategy',  # Knowledge graph search strategy (mmr, rrf, cross_encoder)
 ]
 
 
@@ -170,6 +171,7 @@ def load_environment_variables():
         'graphiti_model': 'GRAPHITI_MODEL',
         'graphiti_small_model': 'GRAPHITI_SMALL_MODEL',
         'max_reflexion_iterations': 'MAX_REFLEXION_ITERATIONS',
+        'search_strategy': 'SEARCH_STRATEGY',
     }
 
     for config_key, env_var in key_mapping.items():
