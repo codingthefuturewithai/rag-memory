@@ -91,8 +91,16 @@ ingest_url(
 analyze_website() automatically tries root domain if sitemap not found at provided URL.
 Example: "https://docs.example.com/api" → tries /api/sitemap.xml, then falls back to https://docs.example.com/sitemap.xml
 
-**Error Handling:**
-If follow_links=True without analysis_token → Clear error with workflow steps
+**Analysis Token Behavior:**
+- Tokens are validated server-side (cannot fake)
+- One-time use (consumed on successful validation)
+- 4-hour lifetime (accounts for interruptions/breaks)
+- If validation fails → re-run analyze_website() for fresh token
+
+**Common Token Errors:**
+1. "Invalid or expired analysis_token" → Token fake, already used, or expired
+2. Solution: Always run analyze_website() again to get fresh token
+3. Pattern: analyze → review → ingest (token consumed) → if need more pages, analyze again
 
 ### Use Recrawl for Website Updates
 ```
@@ -163,13 +171,31 @@ Progress notifications track long-running operations for supporting clients.
 
 ## 6. COMMON PATTERNS
 
-**Documentation Ingestion:**
+**Documentation Ingestion (Single Section):**
 ```
 1. analyze_website(url) - understand scope, get analysis_token
 2. Review total_urls and pattern_stats
 3. create_collection(name, domain, description) - organize by source
-4. ingest_url(url, follow_links=True, max_pages=30, analysis_token=<token>)
+4. ingest_url(url, follow_links=True, max_pages=20, analysis_token=<token>)
 5. get_collection_info(name) - verify completion
+```
+
+**Documentation Ingestion (Multiple Sections):**
+```
+1. analyze_website("https://docs.example.com") - get overview
+   → Shows: /api (45 pages), /guides (30 pages), /reference (25 pages)
+2. create_collection(name, domain, description)
+
+# Each section needs fresh analysis and token
+3. analysis_api = analyze_website("https://docs.example.com/api")
+4. ingest_url("/api", follow_links=True, max_pages=20,
+              analysis_token=analysis_api["analysis_token"])
+
+5. analysis_guides = analyze_website("https://docs.example.com/guides")
+6. ingest_url("/guides", follow_links=True, max_pages=20,
+              analysis_token=analysis_guides["analysis_token"])
+
+# Tokens are one-time use - must analyze again for each ingest_url()
 ```
 
 **Research Query:**
@@ -193,7 +219,8 @@ Progress notifications track long-running operations for supporting clients.
 - **MUST** review collections before ingesting (see #1)
 - **MUST** use full questions for search, not keywords (see #2)
 - **MUST** check for duplicates before ingesting (see #3)
-- **MUST** analyze large websites before crawling (see #3)
+- **MUST** run analyze_website() before multi-page crawls (see #3)
+- **MUST** use fresh analysis_token for each ingest_url() call (tokens are one-time use)
 - **SHOULD** present scope to user for large operations and get confirmation
 - **SHOULD** use recrawl mode for website updates (see #3)
 - **SHOULD** combine RAG + Graph queries for comprehensive research (see #4)
