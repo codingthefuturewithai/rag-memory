@@ -182,6 +182,15 @@ PostgreSQL: **54320** (not 5432 or 5433, to avoid conflicts with local PostgreSQ
 | Low similarity scores | Missing normalization | Check `normalize_embedding()` is enabled |
 | Connection refused on 54320 | Docker not running | `docker-compose up -d` |
 | Server won't start | Neo4j or PostgreSQL unhealthy | Check Docker containers, run validation test |
+| Neo4j warnings about missing properties | Missing vector indices | Run setup.py or manually create vector indices |
+
+**Neo4j Vector Indices (2025-10-31):**
+- **Required for Performance:** Graphiti's `build_indices_and_constraints()` creates range/fulltext indices but NOT vector indices
+- **Vector Indices Needed:**
+  - `Entity.name_embedding` (1024 dimensions, cosine similarity)
+  - `RELATES_TO.fact_embedding` (1024 dimensions, cosine similarity)
+- **Created by:** `setup.py` in STEP 14.5 (after Graphiti indices)
+- **Why:** Without vector indices, Neo4j logs warnings during ingestion about missing properties. System works but performance is degraded.
 
 ---
 

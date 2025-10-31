@@ -951,6 +951,86 @@ async def init_neo4j_indices(ports: dict, api_key: str) -> bool:
         return False
 
 
+def create_neo4j_vector_indices(ports: dict) -> bool:
+    """Create Neo4j vector indices for optimal embedding search performance.
+
+    Graphiti's build_indices_and_constraints() creates range and fulltext indices,
+    but does NOT create vector indices. Without vector indices, Neo4j logs warnings
+    during ingestion when searching for similar entities/facts.
+
+    This function creates vector indices for:
+    - Entity.name_embedding (1024 dimensions, cosine similarity)
+    - RELATES_TO.fact_embedding (1024 dimensions, cosine similarity)
+
+    These are used during ingestion when Graphiti searches for duplicate/similar
+    entities and relationships. Vector indices dramatically improve performance.
+
+    This must be called AFTER init_neo4j_indices() completes.
+    """
+    print_header("STEP 14.5: Creating Neo4j Vector Indices")
+
+    print_info("Creating vector indices for embedding similarity search...")
+    print_info("This eliminates Neo4j warnings during ingestion and improves performance")
+
+    try:
+        # Create Entity.name_embedding vector index
+        code, stdout, stderr = run_command([
+            "docker", "exec", "rag-memory-neo4j-local",
+            "cypher-shell", "-u", "neo4j", "-p", "graphiti-password",
+            """CREATE VECTOR INDEX entity_name_embedding IF NOT EXISTS
+            FOR (n:Entity)
+            ON n.name_embedding
+            OPTIONS {indexConfig: {
+              `vector.dimensions`: 1024,
+              `vector.similarity_function`: 'cosine'
+            }}"""
+        ])
+
+        if code != 0:
+            print_warning(f"Failed to create Entity.name_embedding index: {stderr}")
+            return False
+
+        print_success("✅ Entity.name_embedding vector index created")
+
+        # Create RELATES_TO.fact_embedding vector index
+        code, stdout, stderr = run_command([
+            "docker", "exec", "rag-memory-neo4j-local",
+            "cypher-shell", "-u", "neo4j", "-p", "graphiti-password",
+            """CREATE VECTOR INDEX edge_fact_embedding IF NOT EXISTS
+            FOR ()-[r:RELATES_TO]-()
+            ON r.fact_embedding
+            OPTIONS {indexConfig: {
+              `vector.dimensions`: 1024,
+              `vector.similarity_function`: 'cosine'
+            }}"""
+        ])
+
+        if code != 0:
+            print_warning(f"Failed to create RELATES_TO.fact_embedding index: {stderr}")
+            return False
+
+        print_success("✅ RELATES_TO.fact_embedding vector index created")
+
+        # Verify both indices exist
+        code, stdout, stderr = run_command([
+            "docker", "exec", "rag-memory-neo4j-local",
+            "cypher-shell", "-u", "neo4j", "-p", "graphiti-password",
+            "SHOW INDEXES WHERE type = 'VECTOR'"
+        ])
+
+        if code == 0 and "entity_name_embedding" in stdout and "edge_fact_embedding" in stdout:
+            print_success("✅ Vector indices verified (2 VECTOR indices found)")
+            return True
+        else:
+            print_warning("Could not verify vector indices (may still be building)")
+            return True  # Don't fail setup, indices may be building
+
+    except Exception as e:
+        print_warning(f"Unexpected error creating vector indices: {e}")
+        print_info("Vector indices are optional - system will work without them")
+        return True  # Don't fail setup for optional optimization
+
+
 def print_final_summary(ports: dict, config_dir: Path):
     """Print final summary with all connection info and management commands"""
     print_header("✨ Setup Complete!")
@@ -1137,6 +1217,12 @@ def main():
         print_error("Failed to initialize Neo4j indices - this is REQUIRED for the system to work")
         print_info("Neo4j indices are mandatory. Setup cannot continue.")
         sys.exit(1)
+
+    # Step 13.5: Create Neo4j vector indices for performance
+    # Run this after Graphiti indices are created
+    if not create_neo4j_vector_indices(ports):
+        print_warning("Failed to create vector indices - performance may be degraded")
+        print_info("Vector indices are optional but recommended for best performance")
 
     # Step 14: Install CLI tool
     if not install_cli_tool():
