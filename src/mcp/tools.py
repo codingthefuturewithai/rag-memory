@@ -856,7 +856,8 @@ async def ingest_url_impl(
     url: str,
     collection_name: str,
     follow_links: bool = False,
-    max_depth: int = 1,
+    max_pages: int = 10,
+    analysis_token: str = None,
     mode: str = "crawl",
     metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
@@ -869,6 +870,9 @@ async def ingest_url_impl(
     Performs health checks on both databases before crawling (Option B: Mandatory).
 
     Args:
+        follow_links: If True, follows internal links (requires analysis_token)
+        max_pages: Maximum pages to crawl when follow_links=True (default=10, max=50)
+        analysis_token: Required when follow_links=True (from analyze_website)
         mode: "crawl" (new crawl, error if exists) or "recrawl" (update existing)
         progress_callback: Optional async callback for MCP progress notifications
     """
@@ -876,6 +880,32 @@ async def ingest_url_impl(
         # Progress: Starting
         if progress_callback:
             await progress_callback(0, 100, "Starting URL crawl...")
+
+        # ============================================================================
+        # COMPREHENSIVE PARAMETER VALIDATION
+        # ============================================================================
+
+        # Validate max_pages range
+        if max_pages < 1:
+            raise ValueError(
+                f"Invalid max_pages={max_pages}. Must be >= 1."
+            )
+        if max_pages > 50:
+            raise ValueError(
+                f"Invalid max_pages={max_pages}. Maximum allowed is 50. "
+                f"For large sites, run analyze_website() to plan multiple targeted crawls."
+            )
+
+        # Validate follow_links requires analysis_token
+        if follow_links and not analysis_token:
+            raise ValueError(
+                "follow_links=True requires analysis_token from analyze_website().\n\n"
+                "REQUIRED WORKFLOW:\n"
+                "1. analyze_website(url) - understand site structure\n"
+                "2. Review total_urls and pattern_stats\n"
+                "3. ingest_url(url, follow_links=True, analysis_token=<token>)\n\n"
+                "This ensures you understand crawl scope before proceeding."
+            )
 
         # Health check: both PostgreSQL and Neo4j must be reachable
         health_error = await ensure_databases_healthy(db, graph_store)
@@ -951,13 +981,22 @@ async def ingest_url_impl(
 
         # Progress: Crawling
         if progress_callback:
-            crawl_msg = f"Crawling {url}" + (" (following links)" if follow_links else "")
+            crawl_msg = f"Crawling {url}" + (f" (max {max_pages} pages)" if follow_links else "")
             await progress_callback(10, 100, crawl_msg)
 
         # Crawl web pages
         if follow_links:
             crawler = WebCrawler(headless=True, verbose=False)
-            results = await crawler.crawl_with_depth(url, max_depth=max_depth)
+            # Use max_depth=1 (fixed depth), limit results by max_pages
+            all_results = await crawler.crawl_with_depth(url, max_depth=1)
+            results = all_results[:max_pages]  # Truncate to max_pages
+
+            if len(all_results) > max_pages:
+                logger.warning(
+                    f"Crawl discovered {len(all_results)} pages but max_pages={max_pages}. "
+                    f"Only ingesting first {max_pages} pages. "
+                    f"Consider multiple targeted crawls for complete coverage."
+                )
         else:
             result = await crawl_single_page(url, headless=True, verbose=False)
             results = [result] if result.success else []

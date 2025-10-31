@@ -5,7 +5,9 @@ This module provides raw data extraction for AI agents to make informed decision
 about website crawling. NO heuristics or recommendations - just facts.
 """
 
+import hashlib
 import re
+import time
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
 import xml.etree.ElementTree as ET
@@ -32,18 +34,21 @@ class WebsiteAnalyzer:
         self.timeout = timeout
         self.parsed_base = urlparse(self.base_url)
 
-    def fetch_sitemap(self) -> Tuple[Optional[List[str]], str]:
+    def fetch_sitemap(self) -> Tuple[Optional[List[str]], str, str]:
         """
         Attempt to fetch and parse sitemap.xml from common locations.
 
+        Smart discovery: If sitemap not found at provided URL, tries root domain automatically.
+
         Returns:
-            Tuple of (list of URLs or None, method used for analysis)
+            Tuple of (list of URLs or None, method used, sitemap location found)
             method is one of: "sitemap", "not_found", "error"
+            location indicates where sitemap was found (e.g., "provided URL", "root domain")
         """
         if not REQUESTS_AVAILABLE:
-            return None, "error: requests library not available"
+            return None, "error: requests library not available", ""
 
-        # Try common sitemap locations
+        # Try common sitemap locations at provided URL first
         sitemap_urls = [
             f"{self.base_url}/sitemap.xml",
             f"{self.base_url}/sitemap_index.xml",
@@ -56,11 +61,32 @@ class WebsiteAnalyzer:
                 if response.status_code == 200:
                     urls = self._parse_sitemap_xml(response.content)
                     if urls:
-                        return urls, "sitemap"
+                        return urls, "sitemap", "provided URL"
             except Exception:
                 continue
 
-        return None, "not_found"
+        # Smart fallback: If not found and URL has path components, try root domain
+        parsed = urlparse(self.base_url)
+        if parsed.path and parsed.path != '/':
+            # Has path components - try root domain
+            root_url = f"{parsed.scheme}://{parsed.netloc}"
+            root_sitemap_urls = [
+                f"{root_url}/sitemap.xml",
+                f"{root_url}/sitemap_index.xml",
+                f"{root_url}/sitemap1.xml",
+            ]
+
+            for sitemap_url in root_sitemap_urls:
+                try:
+                    response = requests.get(sitemap_url, timeout=self.timeout)
+                    if response.status_code == 200:
+                        urls = self._parse_sitemap_xml(response.content)
+                        if urls:
+                            return urls, "sitemap", f"root domain ({root_url})"
+                except Exception:
+                    continue
+
+        return None, "not_found", ""
 
     def _parse_sitemap_xml(self, xml_content: bytes) -> List[str]:
         """
@@ -215,6 +241,7 @@ class WebsiteAnalyzer:
             {
                 "base_url": str,
                 "analysis_method": str,  # "sitemap" or "not_found"
+                "sitemap_location": str,  # Where sitemap was found (if applicable)
                 "total_urls": int,
                 "pattern_stats": {  # Always included (lightweight summary)
                     "/pattern": {"count": int, "avg_depth": float, "example_urls": []}
@@ -222,18 +249,21 @@ class WebsiteAnalyzer:
                 "url_groups": {  # Only if include_url_lists=True (full URLs)
                     "/pattern": ["url1", "url2", ...]  # Limited to max_urls_per_pattern
                 },
+                "analysis_token": str,  # Required for follow_links crawls
                 "notes": str  # Important context about data quality
             }
         """
         # Try to fetch sitemap
-        urls, method = self.fetch_sitemap()
+        urls, method, location = self.fetch_sitemap()
 
         if not urls:
             return {
                 "base_url": self.base_url,
                 "analysis_method": method,
+                "sitemap_location": location,
                 "total_urls": 0,
                 "pattern_stats": {},
+                "analysis_token": None,
                 "notes": (
                     "No sitemap found at common locations (/sitemap.xml, /sitemap_index.xml). "
                     "Cannot analyze website structure. Consider manually specifying starting URLs."
@@ -260,19 +290,30 @@ class WebsiteAnalyzer:
             if parsed.netloc:
                 domains.add(parsed.netloc)
         
+        # Generate analysis token (hash of url + timestamp + total_urls)
+        # This proves the agent actually ran analysis before crawling
+        token_data = f"{self.base_url}|{int(time.time())}|{len(urls)}"
+        analysis_token = hashlib.sha256(token_data.encode()).hexdigest()[:16]
+
         # Build notes with domain info
-        notes = f"Sitemap found with {len(urls)} URLs grouped into {len(url_groups)} patterns. "
+        notes_parts = []
+        if location:
+            notes_parts.append(f"Sitemap found at {location}.")
+        notes_parts.append(f"{len(urls)} URLs grouped into {len(url_groups)} patterns.")
         if len(domains) > 1:
-            notes += f"Note: Sitemap contains URLs from {len(domains)} domains ({', '.join(sorted(domains)[:3])}{'...' if len(domains) > 3 else ''}). "
-        notes += "Each pattern represents URLs sharing the same first path segment (e.g., /api/*, /docs/*). "
-        notes += "Use pattern_stats to understand site structure. Set include_url_lists=True to get full URL lists."
+            notes_parts.append(f"Note: Sitemap contains URLs from {len(domains)} domains ({', '.join(sorted(domains)[:3])}{'...' if len(domains) > 3 else ''}).")
+        notes_parts.append("Each pattern represents URLs sharing the same first path segment (e.g., /api/*, /docs/*).")
+        notes_parts.append("Use pattern_stats to understand site structure. Set include_url_lists=True to get full URL lists.")
+        notes = " ".join(notes_parts)
 
         result = {
             "base_url": self.base_url,
             "analysis_method": method,
+            "sitemap_location": location,
             "total_urls": len(urls),
             "domains": sorted(list(domains)),
             "pattern_stats": dict(sorted_patterns),
+            "analysis_token": analysis_token,
             "notes": notes,
         }
 

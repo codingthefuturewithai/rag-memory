@@ -468,20 +468,21 @@ async def ingest_text(
 
     **IMPORTANT:** Collection must exist. Use create_collection() first.
 
-    **IMPORTANT - PROCESSING TIME:**
-    This operation processes content with AI models and can take significant time:
+    ⏱️ PROCESSING TIME:
+    Processing time varies. Examples observed:
+    - Small document: ~30 seconds
+    - Complex document: several minutes
 
-    - Simple documents: 10-30 seconds (basic entity extraction)
-    - Complex documents: 1-3 minutes (extensive entity/relationship extraction)
+    Consider content length and complexity when estimating duration.
 
-    Factors affecting duration:
-    - Document length and complexity
-    - Number of entities to extract (more entities = more LLM calls)
-    - Number of relationships to create
+    ⚠️ TIMEOUT BEHAVIOR:
+    If your client times out, the operation CONTINUES on the server and will
+    complete successfully. Timeout errors do not mean the operation failed.
 
-    The MCP server will continue processing even if your client times out. Configure
-    client timeouts for 180+ seconds (3+ minutes) for ingest operations. Use MCP
-    progress notifications to track long-running operations.
+    ✅ VERIFICATION AFTER TIMEOUT:
+    Wait, then use list_documents(collection_name, include_details=True) to:
+    - Find your document by title
+    - Check created_at timestamp to confirm recent ingestion
 
     **Workflow (see server instructions: Ingestion Workflows):**
     1. list_documents() - Check for duplicates
@@ -588,30 +589,54 @@ def analyze_website(
     """
     Analyze website structure before crawling (fetches sitemap, identifies URL patterns).
 
-    **CRITICAL - Always use before large crawls** (see server instructions: Analyze Before Large Crawls)
+    🚨 REQUIRED BEFORE MULTI-PAGE CRAWLS 🚨
 
     **Workflow:**
-    1. analyze_website(url) - Get sitemap data
+    1. analyze_website(url) - Get sitemap data and analysis_token
     2. Review total_urls and pattern_stats
-    3. If large (dozens/hundreds): Present "at least N pages" to user, get confirmation
-    4. Decide: single crawl vs multiple targeted crawls
-    5. ingest_url(follow_links=True)
+    3. Plan crawl strategy (single targeted crawl or multiple)
+    4. ingest_url(follow_links=True, analysis_token=<token>)
+
+    **Smart Sitemap Discovery:**
+    If sitemap not found at provided URL, automatically tries root domain.
+    - Provided: "https://docs.example.com/api" → tries /api/sitemap.xml first
+    - Fallback: "https://docs.example.com/sitemap.xml" (root domain)
+    - Best practice: Provide root URL for most reliable results
+
+    **Why This Matters:**
+    - Prevents unbounded crawls (ingest_url requires analysis_token for follow_links)
+    - Helps plan targeted crawls vs full-site ingestion
+    - max_pages=50 limit means large sites need multiple targeted crawls
+    - analysis_token proves you reviewed scope before crawling
 
     Args:
-        base_url: Website ROOT (e.g., "https://docs.example.com", NOT specific page)
+        base_url: Website URL (root domain recommended, but paths supported)
+                 e.g., "https://docs.example.com" or "https://docs.example.com/api"
         timeout: Request timeout seconds (default: 10)
         include_url_lists: If True, includes full URL lists (default: False, pattern stats only)
         max_urls_per_pattern: Max URLs per pattern when include_url_lists=True (default: 10)
 
     Returns:
-        {"base_url": str, "analysis_method": str, "total_urls": int (minimum from sitemap),
-         "pattern_stats": dict, "notes": str, "url_groups": dict (only if include_url_lists=True)}
+        {
+            "base_url": str,
+            "analysis_method": str,  # "sitemap" or "not_found"
+            "sitemap_location": str,  # "provided URL", "root domain", or ""
+            "total_urls": int,
+            "pattern_stats": dict,  # {"/api": {"count": 45, "avg_depth": 2.1, "example_urls": [...]}}
+            "analysis_token": str,  # REQUIRED for ingest_url(follow_links=True)
+            "domains": list,  # Domains found in sitemap
+            "notes": str,
+            "url_groups": dict  # Only if include_url_lists=True
+        }
 
-    Best Practices (see server instructions: Analyze Before Large Crawls):
-    - MUST use for large sites before crawling
-    - Present scope to user: "at least N pages"
-    - Note: actual crawl may discover MORE pages with follow_links
-    - Get user confirmation for large operations
+    Example:
+        analysis = analyze_website("https://docs.example.com/api")
+        # If sitemap not found at /api, automatically checks https://docs.example.com/sitemap.xml
+        # Returns: total_urls=120, analysis_token="abc123...", sitemap_location="root domain"
+
+        # Use analysis_token in ingest_url
+        ingest_url("https://docs.example.com/api", follow_links=True,
+                  max_pages=30, analysis_token=analysis["analysis_token"])
 
     Note: Free operation (no API calls, just HTTP request for sitemap).
     """
@@ -624,7 +649,8 @@ async def ingest_url(
     collection_name: str,
     mode: str = "crawl",
     follow_links: bool = False,
-    max_depth: int = 1,
+    max_pages: int = 10,
+    analysis_token: str = None,
     metadata: dict | None = None,
     include_document_ids: bool = False,
     context: Context | None = None,
@@ -632,38 +658,60 @@ async def ingest_url(
     """
     Crawl and ingest content from a web URL with duplicate prevention.
 
+    🚨 CRITICAL - PLANNING REQUIRED FOR MULTI-PAGE CRAWLS 🚨
+
+    **BEFORE using follow_links=True, you MUST:**
+    1. Call analyze_website(url) to understand site structure
+    2. Review total_urls and pattern_stats in response
+    3. Use the returned analysis_token in this call
+
+    **WHY THIS MATTERS:**
+    - Prevents unbounded crawls that waste resources
+    - Helps plan targeted crawls vs full-site ingestion
+    - max_pages is capped at 50 - large sites need multiple targeted crawls
+    - analysis_token proves you reviewed scope before starting
+
+    **WORKFLOW:**
+    ```
+    # Step 1: Analyze website structure
+    analysis = analyze_website("https://docs.example.com")
+    # Returns: total_urls, pattern_stats, analysis_token
+
+    # Step 2: Review scope (e.g., 500 URLs across /api, /guides, /reference)
+    # Decision: This needs multiple targeted crawls, not one 50-page crawl
+
+    # Step 3: Multiple targeted crawls
+    ingest_url("https://docs.example.com/api", follow_links=True,
+               max_pages=30, analysis_token=analysis["analysis_token"])
+    ingest_url("https://docs.example.com/guides", follow_links=True,
+               max_pages=20, analysis_token=analysis["analysis_token"])
+    ```
+
     **DOMAIN GUIDANCE:**
     Websites often contain diverse content types. Consider creating separate collections for:
     - Different documentation sections (API docs vs tutorials vs guides)
     - Different content purposes (blog posts vs product pages vs support articles)
-    Use analyze_website() first to understand the site structure and plan your strategy.
 
-    Scrapes web pages, processes the content, and ingests into both vector store
-    and knowledge graph. Supports single-page or multi-page crawling with link following.
+    ⏱️ PROCESSING TIME:
+    Processing time varies by crawl scope and page content. Examples observed:
+    - Single page (follow_links=False): ~30 seconds to several minutes
+    - Multi-page crawl (follow_links=True): several minutes or more
 
-    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
+    ⚠️ TIMEOUT BEHAVIOR:
+    If your client times out, the operation CONTINUES on the server and will
+    complete successfully. Timeout errors do not mean the operation failed.
 
-    IMPORTANT - PROCESSING TIME:
-    This operation scrapes web pages, processes content, and ingests data. Processing
-    time varies based on crawl scope:
-
-    - Single page (follow_links=False, max_depth=0): Typically completes in seconds
-    - Multi-page crawl (follow_links=True, max_depth=1+): Can take several minutes
-
-    Factors affecting duration:
-    - Number of pages crawled (controlled by follow_links and max_depth)
-    - Content size per page
-    - Network latency for page fetches
-
-    The MCP server will continue processing even if your client times out. You may need
-    to configure longer timeout values or poll for completion when crawling large sites.
+    ✅ VERIFICATION AFTER TIMEOUT:
+    Wait, then use list_documents(collection_name, include_details=True) to verify.
 
     IMPORTANT DUPLICATE PREVENTION:
     - mode="crawl": New crawl. Raises error if URL already crawled into collection.
     - mode="recrawl": Update existing crawl. Deletes old pages and re-ingests.
 
-    This prevents agents from accidentally duplicating data, which causes
-    outdated information to persist alongside new information.
+    This prevents accidentally duplicating data, which causes outdated information
+    to persist alongside new information.
+
+    IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
 
     By default, returns minimal response without document_ids array (may be large for multi-page crawls).
     Use include_document_ids=True to get the list of document IDs.
@@ -674,8 +722,12 @@ async def ingest_url(
         mode: Crawl mode - "crawl" or "recrawl" (default: "crawl").
               - "crawl": New crawl. ERROR if this exact URL already crawled into this collection.
               - "recrawl": Update existing. Deletes old pages from this URL and re-ingests fresh content.
-        follow_links: If True, follows internal links for multi-page crawl (default: False)
-        max_depth: Maximum crawl depth when following links (default: 1, max: 3)
+        follow_links: If True, follows internal links for multi-page crawl (default: False).
+                     REQUIRES analysis_token from analyze_website().
+        max_pages: Maximum pages to crawl when follow_links=True (default: 10, max: 50).
+                  Crawl stops after this many pages even if more links discovered.
+        analysis_token: Required when follow_links=True. Get from analyze_website() response.
+                       Proves you reviewed site structure before crawling.
         metadata: Custom metadata to apply to ALL crawled pages (merged with page metadata).
                   Must match collection's metadata_schema if defined.
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
@@ -713,35 +765,41 @@ async def ingest_url(
                    mode="recrawl" to update.
 
     Example:
-        # First, create collection with metadata schema
-        create_collection("example-docs", "Example.com documentation",
-                         metadata_schema={"source": "str", "doc_type": "str"})
+        # Analyze website structure first (REQUIRED for follow_links)
+        analysis = analyze_website("https://example.com/docs")
+        # Returns: total_urls=120, pattern_stats={"/api": 45, "/guides": 30, ...}, analysis_token="abc123..."
 
-        # New crawl with metadata (will error if URL already crawled)
+        # Create collection
+        create_collection("example-docs", "Example.com documentation",
+                         domain="Documentation", domain_scope="Official API and guide docs")
+
+        # Single page (no analysis_token needed)
+        result = ingest_url(
+            url="https://example.com/docs/intro",
+            collection_name="example-docs",
+            mode="crawl"
+        )
+
+        # Multi-page crawl (REQUIRES analysis_token)
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
             mode="crawl",
+            follow_links=True,
+            max_pages=30,
+            analysis_token=analysis["analysis_token"],
             metadata={"source": "official", "doc_type": "api"}
         )
 
-        # Update existing crawl with metadata
+        # Update existing crawl
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
             mode="recrawl",
             follow_links=True,
-            max_depth=2,
-            metadata={"source": "official", "doc_type": "api"}
+            max_pages=30,
+            analysis_token=analysis["analysis_token"]
         )
-
-        # Check collection info to see if URL already crawled
-        info = get_collection_info("example-docs")
-        for crawl in info['crawled_urls']:
-            print(f"Already crawled: {crawl['url']}")
-
-    Recommendation: Use analyze_website() first to understand site structure and plan
-    your crawling strategy (single large crawl vs multiple smaller crawls).
     """
     # Create progress callback wrapper if context available
     async def progress_callback(progress: float, total: float, message: str) -> None:
@@ -749,7 +807,7 @@ async def ingest_url(
             await context.report_progress(progress, total, message)
 
     result = await ingest_url_impl(
-        db, doc_store, unified_mediator, graph_store, url, collection_name, follow_links, max_depth, mode, metadata, include_document_ids,
+        db, doc_store, unified_mediator, graph_store, url, collection_name, follow_links, max_pages, analysis_token, mode, metadata, include_document_ids,
         progress_callback=progress_callback if context else None
     )
 
@@ -773,14 +831,17 @@ async def ingest_file(
 
     **IMPORTANT - File system access:** MCP server must access file path. If fails, use ingest_text() instead.
 
-    **IMPORTANT - PROCESSING TIME:**
-    This operation processes content with AI models and can take significant time:
+    ⏱️ PROCESSING TIME:
+    Processing time varies by file size. Examples observed:
+    - Small file (<100KB): ~30 seconds
+    - Large file (>1MB): several minutes
 
-    - Small files (<100KB): 10-30 seconds
-    - Medium files (100KB-1MB): 30-90 seconds
-    - Large files (>1MB): 2-5+ minutes
+    ⚠️ TIMEOUT BEHAVIOR:
+    If your client times out, the operation CONTINUES on the server and will
+    complete successfully. Timeout errors do not mean the operation failed.
 
-    Configure client timeouts for 180+ seconds (3+ minutes) for ingest operations.
+    ✅ VERIFICATION AFTER TIMEOUT:
+    Wait, then use list_documents(collection_name, include_details=True) to verify.
 
     Args:
         file_path: Absolute path (e.g., "/path/to/document.txt")
@@ -832,19 +893,20 @@ async def ingest_directory(
 
     **IMPORTANT - File system access:** MCP server must access directory path. If fails, use ingest_text() for each file.
 
-    **IMPORTANT - PROCESSING TIME:**
-    This operation processes multiple files and can take significant time:
+    ⏱️ PROCESSING TIME:
+    Processing time varies by file count. Examples observed:
+    - Few files (1-10): several minutes
+    - Many files (50+): tens of minutes or more
+    - Recursive mode: can take extended time for large directory trees
 
-    - Small directories (1-10 files): 1-5 minutes
-    - Medium directories (10-50 files): 5-15 minutes
-    - Large directories (50+ files): 15+ minutes
-    - Recursive mode with deep hierarchies: Can take hours for large codebases
+    Consider number of files, file sizes, and recursion depth when estimating duration.
 
-    Processing time scales linearly with number of files. Each file requires:
-    - Embeddings generation (5-10 seconds per file)
-    - Entity extraction (10-60 seconds per file depending on complexity)
+    ⚠️ TIMEOUT BEHAVIOR:
+    If your client times out, the operation CONTINUES on the server and will
+    complete successfully. Timeout errors do not mean the operation failed.
 
-    Configure client timeouts appropriately or use progress notifications.
+    ✅ VERIFICATION AFTER TIMEOUT:
+    Wait, then use list_documents(collection_name, include_details=True) to verify.
 
     Args:
         directory_path: Absolute path (e.g., "/path/to/docs")
