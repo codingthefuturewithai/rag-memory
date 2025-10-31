@@ -52,6 +52,17 @@ logging.basicConfig(
         logging.StreamHandler()  # Also log to stderr for debugging
     ]
 )
+
+# Suppress harmless Neo4j server notifications (they query properties before they exist)
+# These are cosmetic warnings about missing indices on array properties, not errors.
+# Real Neo4j errors will still be shown.
+logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
+
+# Suppress verbose httpx HTTP request logs (OpenAI API calls)
+# These clutter logs during graph extraction and embeddings generation.
+# Errors and warnings still visible.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
 
 # Global variables to hold RAG components (initialized by lifespan)
