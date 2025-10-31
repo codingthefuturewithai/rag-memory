@@ -257,16 +257,26 @@ class WebsiteAnalyzer:
         urls, method, location = self.fetch_sitemap()
 
         if not urls:
+            # No sitemap found - still generate token for validation
+            # Use base_url domain as the authorized domain
+            parsed = urlparse(self.base_url)
+            domains = [parsed.netloc] if parsed.netloc else []
+
+            # Generate token (even without sitemap data)
+            token_data = f"{self.base_url}|{int(time.time())}|0"
+            analysis_token = hashlib.sha256(token_data.encode()).hexdigest()[:16]
+
             return {
                 "base_url": self.base_url,
                 "analysis_method": method,
                 "sitemap_location": location,
                 "total_urls": 0,
+                "domains": domains,
                 "pattern_stats": {},
-                "analysis_token": None,
+                "analysis_token": analysis_token,
                 "notes": (
                     "No sitemap found at common locations (/sitemap.xml, /sitemap_index.xml). "
-                    "Cannot analyze website structure. Consider manually specifying starting URLs."
+                    "Token generated for base domain only. Agent can crawl this domain with follow_links."
                 ),
             }
 

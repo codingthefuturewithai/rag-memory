@@ -93,14 +93,21 @@ Example: "https://docs.example.com/api" → tries /api/sitemap.xml, then falls b
 
 **Analysis Token Behavior:**
 - Tokens are validated server-side (cannot fake)
-- One-time use (consumed on successful validation)
+- REUSABLE - not consumed on use (supports multiple crawls of same site)
+- Domain-scoped - only works for domains found in the analysis
 - 4-hour lifetime (accounts for interruptions/breaks)
 - If validation fails → re-run analyze_website() for fresh token
 
+**Token Validation:**
+- Exact domain matching: ingest domain must be in analyzed domains list
+- Works for sites WITH sitemap (stores all sitemap domains)
+- Works for sites WITHOUT sitemap (stores base_url domain)
+- Prevents unbounded crawls while never blocking legitimate use cases
+
 **Common Token Errors:**
-1. "Invalid or expired analysis_token" → Token fake, already used, or expired
-2. Solution: Always run analyze_website() again to get fresh token
-3. Pattern: analyze → review → ingest (token consumed) → if need more pages, analyze again
+1. "Invalid or expired analysis_token" → Token fake or expired (4 hours)
+2. "Domain mismatch" → Trying to crawl domain not in analysis
+3. Solution: Run analyze_website() for the target domain
 
 ### Use Recrawl for Website Updates
 ```
@@ -182,20 +189,20 @@ Progress notifications track long-running operations for supporting clients.
 
 **Documentation Ingestion (Multiple Sections):**
 ```
-1. analyze_website("https://docs.example.com") - get overview
+1. analyze_website("https://docs.example.com") - get overview and token
    → Shows: /api (45 pages), /guides (30 pages), /reference (25 pages)
+   → Returns: analysis_token (reusable for 4 hours)
 2. create_collection(name, domain, description)
 
-# Each section needs fresh analysis and token
-3. analysis_api = analyze_website("https://docs.example.com/api")
-4. ingest_url("/api", follow_links=True, max_pages=20,
-              analysis_token=analysis_api["analysis_token"])
+# Use same token for multiple targeted crawls (reusable)
+3. ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20,
+              analysis_token=token)
+4. ingest_url("https://docs.example.com/guides", follow_links=True, max_pages=20,
+              analysis_token=token)  # Same token, still valid
+5. ingest_url("https://docs.example.com/reference", follow_links=True, max_pages=20,
+              analysis_token=token)  # Same token, still valid
 
-5. analysis_guides = analyze_website("https://docs.example.com/guides")
-6. ingest_url("/guides", follow_links=True, max_pages=20,
-              analysis_token=analysis_guides["analysis_token"])
-
-# Tokens are one-time use - must analyze again for each ingest_url()
+# Tokens are reusable - one analysis supports multiple crawls of same site
 ```
 
 **Research Query:**
@@ -220,7 +227,8 @@ Progress notifications track long-running operations for supporting clients.
 - **MUST** use full questions for search, not keywords (see #2)
 - **MUST** check for duplicates before ingesting (see #3)
 - **MUST** run analyze_website() before multi-page crawls (see #3)
-- **MUST** use fresh analysis_token for each ingest_url() call (tokens are one-time use)
+- **UNDERSTAND** tokens are reusable (one analysis supports multiple crawls, 4-hour expiry)
+- **UNDERSTAND** single-page crawls (follow_links=False) do NOT require tokens
 - **SHOULD** present scope to user for large operations and get confirmation
 - **SHOULD** use recrawl mode for website updates (see #3)
 - **SHOULD** combine RAG + Graph queries for comprehensive research (see #4)

@@ -4,7 +4,7 @@
 # ============================================================================
 # Stage 1: Build dependencies
 # ============================================================================
-FROM mcr.microsoft.com/playwright:v1.44.0-jammy AS builder
+FROM mcr.microsoft.com/playwright:v1.55.0-jammy AS builder
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y python3-pip && \
 # ============================================================================
 # Stage 2: Runtime image
 # ============================================================================
-FROM mcr.microsoft.com/playwright:v1.44.0-jammy
+FROM mcr.microsoft.com/playwright:v1.55.0-jammy
 
 WORKDIR /app
 

@@ -658,34 +658,45 @@ async def ingest_url(
     """
     Crawl and ingest content from a web URL with duplicate prevention.
 
-    🚨 CRITICAL - PLANNING REQUIRED FOR MULTI-PAGE CRAWLS 🚨
+    🚨 CRITICAL - UNDERSTAND TOKEN REQUIREMENTS 🚨
 
-    **BEFORE using follow_links=True, you MUST:**
-    1. Call analyze_website(url) to understand site structure
-    2. Review total_urls and pattern_stats in response
-    3. Use the returned analysis_token in this call
+    **TOKEN REQUIREMENTS:**
+    - follow_links=True → REQUIRES analysis_token from analyze_website()
+    - follow_links=False → NO token required (single page crawl, bounded to 1 page)
 
-    **WHY THIS MATTERS:**
-    - Prevents unbounded crawls that waste resources
-    - Helps plan targeted crawls vs full-site ingestion
-    - max_pages is capped at 20 - large sites need multiple targeted crawls
-    - analysis_token proves you reviewed scope before starting
-
-    **WORKFLOW:**
+    **MULTI-PAGE CRAWL WORKFLOW (follow_links=True):**
     ```
     # Step 1: Analyze website structure
     analysis = analyze_website("https://docs.example.com")
-    # Returns: total_urls, pattern_stats, analysis_token
+    # Returns: total_urls, pattern_stats, analysis_token, domains
 
     # Step 2: Review scope (e.g., 500 URLs across /api, /guides, /reference)
-    # Decision: This needs multiple targeted crawls, not one 50-page crawl
 
-    # Step 3: Multiple targeted crawls
+    # Step 3: Multiple targeted crawls (SAME TOKEN, reusable for 4 hours)
     ingest_url("https://docs.example.com/api", follow_links=True,
-               max_pages=30, analysis_token=analysis["analysis_token"])
-    ingest_url("https://docs.example.com/guides", follow_links=True,
                max_pages=20, analysis_token=analysis["analysis_token"])
+    ingest_url("https://docs.example.com/guides", follow_links=True,
+               max_pages=20, analysis_token=analysis["analysis_token"])  # Same token
     ```
+
+    **SINGLE-PAGE CRAWL (follow_links=False):**
+    ```
+    # No analysis needed - just crawl one specific page
+    ingest_url("https://example.com/specific-page")  # No token required
+    ```
+
+    **TOKEN BEHAVIOR:**
+    - REUSABLE: Not consumed on use, valid for 4 hours
+    - DOMAIN-SCOPED: Only works for domains found in analysis
+    - SERVER-VALIDATED: Cannot be faked, stored server-side
+    - Works for sites WITH sitemap (stores all sitemap domains)
+    - Works for sites WITHOUT sitemap (stores base_url domain)
+
+    **WHY THIS DESIGN:**
+    - Single-page crawls are bounded (1 page) → no planning needed
+    - Multi-page crawls are unbounded → requires analysis first
+    - Token reuse enables multiple targeted crawls without redundant analysis
+    - Domain scoping prevents crawling unrelated sites
 
     **DOMAIN GUIDANCE:**
     Websites often contain diverse content types. Consider creating separate collections for:
@@ -724,10 +735,12 @@ async def ingest_url(
               - "recrawl": Update existing. Deletes old pages from this URL and re-ingests fresh content.
         follow_links: If True, follows internal links for multi-page crawl (default: False).
                      REQUIRES analysis_token from analyze_website().
+                     If False, crawls only the single specified URL (no token required).
         max_pages: Maximum pages to crawl when follow_links=True (default: 10, max: 20).
                   Crawl stops after this many pages even if more links discovered.
         analysis_token: Required when follow_links=True. Get from analyze_website() response.
-                       Proves you reviewed site structure before crawling.
+                       Token is REUSABLE (not consumed), valid for 4 hours, domain-scoped.
+                       Not required when follow_links=False (single-page crawls).
         metadata: Custom metadata to apply to ALL crawled pages (merged with page metadata).
                   Must match collection's metadata_schema if defined.
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
