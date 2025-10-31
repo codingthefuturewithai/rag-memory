@@ -716,7 +716,7 @@ BACKUP_RETENTION_DAYS={backup_retention}
 
 def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
     """Build and start Docker containers"""
-    print_header("STEP 10: Building and Starting Containers")
+    print_header("STEP 12: Building and Starting Containers")
 
     project_root = Path(__file__).parent.parent
     repo_compose_file = project_root / 'deploy' / 'docker' / 'compose' / 'docker-compose.yml'
@@ -762,7 +762,7 @@ def build_and_start_containers(config_dir: Path, ports: dict = None) -> bool:
 
 def wait_for_health_checks(ports: dict, config_dir: Path, timeout_seconds: int = 300, check_interval: int = 30) -> bool:
     """Wait for all services to be healthy with status updates"""
-    print_header("STEP 11: Waiting for Services to Be Ready")
+    print_header("STEP 13: Waiting for Services to Be Ready")
 
     print_info(f"Checking services every {check_interval} seconds (timeout: {timeout_seconds}s)")
 
@@ -880,7 +880,7 @@ def wait_for_health_checks(ports: dict, config_dir: Path, timeout_seconds: int =
 
 def validate_schemas(ports: dict) -> bool:
     """Validate that database schemas were created correctly"""
-    print_header("STEP 15: Validating Database Schemas")
+    print_header("STEP 16: Validating Database Schemas")
 
     # Check PostgreSQL schema
     print_info("Checking PostgreSQL schema...")
@@ -1038,7 +1038,7 @@ def print_final_summary(ports: dict, config_dir: Path):
 
 def install_cli_tool() -> bool:
     """Install the RAG Memory CLI tool using uv tool install"""
-    print_header("STEP 14: Installing CLI Tool")
+    print_header("STEP 15: Installing CLI Tool")
 
     print_info("Installing rag-memory CLI tool globally...")
     project_root = Path(__file__).parent.parent

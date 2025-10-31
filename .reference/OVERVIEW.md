@@ -470,10 +470,16 @@ rag search "query" --threshold 0.3
 # Clone and run setup script
 git clone https://github.com/yourusername/rag-memory.git
 cd rag-memory
+
+# IMPORTANT: Activate virtual environment before running setup
+source .venv/bin/activate
+
 python scripts/setup.py
 
 # Setup handles everything: Docker, config, CLI installation, verification
 ```
+
+**⚠️ CRITICAL:** You MUST activate the virtual environment (`source .venv/bin/activate`) before running `setup.py`. The script requires `graphiti_core` which is only installed in the venv. Skipping this step will cause the script to fail at "STEP 14: Initializing Neo4j Indices" with error "No module named 'graphiti_core'".
 
 **Cost:** Free (self-hosted)
 
@@ -644,6 +650,7 @@ python scripts/setup.py
    ```bash
    git clone https://github.com/yourusername/rag-memory.git
    cd rag-memory
+   source .venv/bin/activate  # MUST activate venv first!
    python scripts/setup.py
    ```
 

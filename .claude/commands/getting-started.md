@@ -254,7 +254,18 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 
 **Step 4: Run Setup**
 - **DO NOT RUN THE SETUP SCRIPT - ONLY PROVIDE INSTRUCTIONS**
-- Tell user: "Now open a terminal and run: `python scripts/setup.py`"
+- **CRITICAL:** Tell user they MUST activate the virtual environment first:
+
+  "Open a terminal and run these commands IN ORDER:
+
+  ```bash
+  cd rag-memory
+  source .venv/bin/activate
+  python scripts/setup.py
+  ```
+
+  ⚠️ IMPORTANT: You MUST run `source .venv/bin/activate` before running setup.py or it will fail with 'No module named graphiti_core' error."
+
 - Explain prompts they'll see (from setup.py code):
   - OpenAI API key
   - Database connection details

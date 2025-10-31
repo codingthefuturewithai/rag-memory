@@ -8,12 +8,18 @@ Before configuring the MCP server, ensure you've completed the setup:
    ```bash
    git clone https://github.com/yourusername/rag-memory.git
    cd rag-memory
+
+   # CRITICAL: Activate virtual environment first!
+   source .venv/bin/activate
+
    python scripts/setup.py
 
-   # Start database
-   docker-compose up -d
-   docker-compose ps  # Verify running
+   # Databases are started automatically by setup.py
+   # Verify they're running:
+   docker ps | grep rag-memory
    ```
+
+   **⚠️ IMPORTANT:** You MUST run `source .venv/bin/activate` before `python scripts/setup.py` or the script will fail with "No module named 'graphiti_core'" error.
 
 3. **Environment variables configured:**
 
@@ -88,7 +94,7 @@ uv run python -m src.mcp.server --transport streamable-http --port 3001
 3. If you changed Docker settings, update the DATABASE_URL accordingly
 4. Ensure JSON syntax is correct (no trailing commas!)
 
-**Note:** The `rag-mcp-stdio` command is available globally after running `python scripts/setup.py`. No need to specify paths to the cloned repository.
+**Note:** The `rag-mcp-stdio` command is available globally after running setup (`source .venv/bin/activate && python scripts/setup.py`). No need to specify paths to the cloned repository.
 
 ### Claude Code
 
