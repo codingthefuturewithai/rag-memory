@@ -497,7 +497,7 @@ def ingest_url(
                         db, embedder, coll_mgr, chunker=web_chunker
                     )
 
-                    for doc_id, filename, metadata in existing_docs:
+                    for doc_id, filename, doc_metadata in existing_docs:
                         try:
                             # Get chunk count before deletion
                             chunks = web_doc_store.get_document_chunks(doc_id)
