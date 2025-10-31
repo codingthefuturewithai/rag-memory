@@ -456,6 +456,21 @@ async def ingest_text(
 
     **IMPORTANT:** Collection must exist. Use create_collection() first.
 
+    **IMPORTANT - PROCESSING TIME:**
+    This operation processes content with AI models and can take significant time:
+
+    - Simple documents: 10-30 seconds (basic entity extraction)
+    - Complex documents: 1-3 minutes (extensive entity/relationship extraction)
+
+    Factors affecting duration:
+    - Document length and complexity
+    - Number of entities to extract (more entities = more LLM calls)
+    - Number of relationships to create
+
+    The MCP server will continue processing even if your client times out. Configure
+    client timeouts for 180+ seconds (3+ minutes) for ingest operations. Use MCP
+    progress notifications to track long-running operations.
+
     **Workflow (see server instructions: Ingestion Workflows):**
     1. list_documents() - Check for duplicates
     2. If exists: update_document() instead
@@ -720,6 +735,15 @@ async def ingest_file(
 
     **IMPORTANT - File system access:** MCP server must access file path. If fails, use ingest_text() instead.
 
+    **IMPORTANT - PROCESSING TIME:**
+    This operation processes content with AI models and can take significant time:
+
+    - Small files (<100KB): 10-30 seconds
+    - Medium files (100KB-1MB): 30-90 seconds
+    - Large files (>1MB): 2-5+ minutes
+
+    Configure client timeouts for 180+ seconds (3+ minutes) for ingest operations.
+
     Args:
         file_path: Absolute path (e.g., "/path/to/document.txt")
         collection_name: Target collection (must exist)
@@ -733,7 +757,6 @@ async def ingest_file(
     Best Practices (see server instructions: Ingestion Workflows):
     - Supports: .txt, .md, code files, .json, .yaml, .html, etc. (UTF-8 text)
     - NOT supported: PDF, Office docs, images, archives
-    - Large files (>1MB) may take minutes to process
 
     Note: Uses AI models, has cost (embeddings + graph extraction).
     """
@@ -758,6 +781,20 @@ async def ingest_directory(
 
     **IMPORTANT - File system access:** MCP server must access directory path. If fails, use ingest_text() for each file.
 
+    **IMPORTANT - PROCESSING TIME:**
+    This operation processes multiple files and can take significant time:
+
+    - Small directories (1-10 files): 1-5 minutes
+    - Medium directories (10-50 files): 5-15 minutes
+    - Large directories (50+ files): 15+ minutes
+    - Recursive mode with deep hierarchies: Can take hours for large codebases
+
+    Processing time scales linearly with number of files. Each file requires:
+    - Embeddings generation (5-10 seconds per file)
+    - Entity extraction (10-60 seconds per file depending on complexity)
+
+    Configure client timeouts appropriately or use progress notifications.
+
     Args:
         directory_path: Absolute path (e.g., "/path/to/docs")
         collection_name: Target collection (must exist)
@@ -772,8 +809,7 @@ async def ingest_directory(
 
     Best Practices (see server instructions: Collection Discipline):
     - Assess domain consistency before batch ingesting
-    - Large directories (>10MB) may take several minutes
-    - Recursive mode with deep hierarchies takes significantly longer
+    - Use analyze_website() equivalent for directories to estimate scope
 
     Note: Uses AI models, has cost (embeddings + graph extraction per file).
     """
