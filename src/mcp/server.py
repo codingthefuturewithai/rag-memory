@@ -606,7 +606,7 @@ def analyze_website(
     **Why This Matters:**
     - Prevents unbounded crawls (ingest_url requires analysis_token for follow_links)
     - Helps plan targeted crawls vs full-site ingestion
-    - max_pages=50 limit means large sites need multiple targeted crawls
+    - max_pages=20 limit means large sites need multiple targeted crawls
     - analysis_token proves you reviewed scope before crawling
 
     Args:
@@ -668,7 +668,7 @@ async def ingest_url(
     **WHY THIS MATTERS:**
     - Prevents unbounded crawls that waste resources
     - Helps plan targeted crawls vs full-site ingestion
-    - max_pages is capped at 50 - large sites need multiple targeted crawls
+    - max_pages is capped at 20 - large sites need multiple targeted crawls
     - analysis_token proves you reviewed scope before starting
 
     **WORKFLOW:**
@@ -724,7 +724,7 @@ async def ingest_url(
               - "recrawl": Update existing. Deletes old pages from this URL and re-ingests fresh content.
         follow_links: If True, follows internal links for multi-page crawl (default: False).
                      REQUIRES analysis_token from analyze_website().
-        max_pages: Maximum pages to crawl when follow_links=True (default: 10, max: 50).
+        max_pages: Maximum pages to crawl when follow_links=True (default: 10, max: 20).
                   Crawl stops after this many pages even if more links discovered.
         analysis_token: Required when follow_links=True. Get from analyze_website() response.
                        Proves you reviewed site structure before crawling.

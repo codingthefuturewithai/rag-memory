@@ -68,15 +68,15 @@ analysis = analyze_website(url, include_url_lists=True)
   → Note: Smart sitemap discovery - auto-tries root domain if needed
 
 # STEP 2: Review scope and plan strategy
-  → If total_urls <= 50: Single targeted crawl
-  → If total_urls > 50: Multiple targeted crawls (max_pages=50 per crawl)
+  → If total_urls <= 20: Single targeted crawl
+  → If total_urls > 20: Multiple targeted crawls (max_pages=20 per crawl)
   → Review pattern_stats to identify sections (/api, /guides, /reference)
 
 # STEP 3: Execute crawl(s)
 ingest_url(
     url=target_url,
     follow_links=True,
-    max_pages=10,  # default=10, max=50
+    max_pages=10,  # default=10, max=20
     analysis_token=analysis["analysis_token"]  # REQUIRED
 )
 ```
@@ -84,7 +84,7 @@ ingest_url(
 **Why:**
 - Prevents unbounded crawls (analysis_token enforces planning)
 - Helps plan targeted crawls vs full-site ingestion
-- max_pages=50 hard limit requires multiple crawls for large sites
+- max_pages=20 hard limit requires multiple crawls for large sites
 - Sitemap shows minimum page count (actual crawl may find more)
 
 **Smart Sitemap Discovery:**
