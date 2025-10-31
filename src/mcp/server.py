@@ -616,6 +616,7 @@ async def ingest_url(
     max_depth: int = 1,
     metadata: dict | None = None,
     include_document_ids: bool = False,
+    context: Context | None = None,
 ) -> dict:
     """
     Crawl and ingest content from a web URL with duplicate prevention.
@@ -731,9 +732,21 @@ async def ingest_url(
     Recommendation: Use analyze_website() first to understand site structure and plan
     your crawling strategy (single large crawl vs multiple smaller crawls).
     """
-    return await ingest_url_impl(
-        db, doc_store, unified_mediator, graph_store, url, collection_name, follow_links, max_depth, mode, metadata, include_document_ids
+    # Create progress callback wrapper if context available
+    async def progress_callback(progress: float, total: float, message: str) -> None:
+        if context:
+            await context.report_progress(progress, total, message)
+
+    result = await ingest_url_impl(
+        db, doc_store, unified_mediator, graph_store, url, collection_name, follow_links, max_depth, mode, metadata, include_document_ids,
+        progress_callback=progress_callback if context else None
     )
+
+    # Progress: Complete
+    if context:
+        await context.report_progress(100, 100, f"Crawl complete! {result['pages_ingested']} pages ingested")
+
+    return result
 
 
 @mcp.tool()
@@ -742,6 +755,7 @@ async def ingest_file(
     collection_name: str,
     metadata: dict | None = None,
     include_chunk_ids: bool = False,
+    context: Context | None = None,
 ) -> dict:
     """
     Ingest text-based file from file system (text/code/config only, not binary).
@@ -773,9 +787,21 @@ async def ingest_file(
 
     Note: Uses AI models, has cost (embeddings + graph extraction).
     """
-    return await ingest_file_impl(
-        db, doc_store, unified_mediator, graph_store, file_path, collection_name, metadata, include_chunk_ids
+    # Create progress callback wrapper if context available
+    async def progress_callback(progress: float, total: float, message: str) -> None:
+        if context:
+            await context.report_progress(progress, total, message)
+
+    result = await ingest_file_impl(
+        db, doc_store, unified_mediator, graph_store, file_path, collection_name, metadata, include_chunk_ids,
+        progress_callback=progress_callback if context else None
     )
+
+    # Progress: Complete
+    if context:
+        await context.report_progress(100, 100, f"File ingestion complete!")
+
+    return result
 
 
 @mcp.tool()
@@ -786,6 +812,7 @@ async def ingest_directory(
     recursive: bool = False,
     metadata: dict | None = None,
     include_document_ids: bool = False,
+    context: Context | None = None,
 ) -> dict:
     """
     Batch ingest multiple text files from directory (text-based only, skips binary).
@@ -826,7 +853,12 @@ async def ingest_directory(
 
     Note: Uses AI models, has cost (embeddings + graph extraction per file).
     """
-    return await ingest_directory_impl(
+    # Create progress callback wrapper if context available
+    async def progress_callback(progress: float, total: float, message: str) -> None:
+        if context:
+            await context.report_progress(progress, total, message)
+
+    result = await ingest_directory_impl(
         db,
         doc_store,
         unified_mediator,
@@ -837,7 +869,14 @@ async def ingest_directory(
         recursive,
         metadata,
         include_document_ids,
+        progress_callback=progress_callback if context else None
     )
+
+    # Progress: Complete
+    if context:
+        await context.report_progress(100, 100, f"Directory ingestion complete! {result['files_ingested']} files ingested")
+
+    return result
 
 
 @mcp.tool()

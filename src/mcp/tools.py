@@ -860,6 +860,7 @@ async def ingest_url_impl(
     mode: str = "crawl",
     metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
+    progress_callback=None,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_url tool with mode support.
@@ -869,8 +870,13 @@ async def ingest_url_impl(
 
     Args:
         mode: "crawl" (new crawl, error if exists) or "recrawl" (update existing)
+        progress_callback: Optional async callback for MCP progress notifications
     """
     try:
+        # Progress: Starting
+        if progress_callback:
+            await progress_callback(0, 100, "Starting URL crawl...")
+
         # Health check: both PostgreSQL and Neo4j must be reachable
         health_error = await ensure_databases_healthy(db, graph_store)
         if health_error:
@@ -904,6 +910,9 @@ async def ingest_url_impl(
         # If recrawl mode, delete old documents first
         old_pages_deleted = 0
         if mode == "recrawl" and existing_crawl:
+            if progress_callback:
+                await progress_callback(5, 100, f"Deleting {existing_crawl['page_count']} old pages...")
+
             conn = db.connect()
             with conn.cursor() as cur:
                 # Find all documents with matching crawl_root_url
@@ -940,6 +949,11 @@ async def ingest_url_impl(
                     # Delete source document
                     cur.execute("DELETE FROM source_documents WHERE id = %s", (doc_id,))
 
+        # Progress: Crawling
+        if progress_callback:
+            crawl_msg = f"Crawling {url}" + (" (following links)" if follow_links else "")
+            await progress_callback(10, 100, crawl_msg)
+
         # Crawl web pages
         if follow_links:
             crawler = WebCrawler(headless=True, verbose=False)
@@ -948,15 +962,28 @@ async def ingest_url_impl(
             result = await crawl_single_page(url, headless=True, verbose=False)
             results = [result] if result.success else []
 
+        # Progress: Crawl complete, starting ingestion
+        if progress_callback:
+            await progress_callback(20, 100, f"Crawl complete ({len(results)} pages), starting ingestion...")
+
         # Ingest each page (route through unified mediator if available)
         document_ids = []
         total_chunks = 0
         total_entities = 0
         successful_ingests = 0
 
-        for result in results:
+        for idx, result in enumerate(results):
             if not result.success:
                 continue
+
+            # Progress: Per-page ingestion (20% to 90%)
+            if progress_callback:
+                page_progress = 20 + int((idx / len(results)) * 70)
+                await progress_callback(
+                    page_progress,
+                    100,
+                    f"Ingesting page {idx + 1}/{len(results)}: {result.metadata.get('title', result.url)[:50]}..."
+                )
 
             try:
                 page_title = result.metadata.get("title", result.url)
@@ -966,11 +993,13 @@ async def ingest_url_impl(
                 page_metadata.update(result.metadata)
 
                 logger.info(f"Ingesting page through unified mediator: {page_title}")
+                # Note: Don't pass progress_callback here - would conflict with parent progress
                 ingest_result = await unified_mediator.ingest_text(
                     content=result.content,
                     collection_name=collection_name,
                     document_title=page_title,
-                    metadata=page_metadata
+                    metadata=page_metadata,
+                    progress_callback=None  # Skip nested progress for multi-page crawls
                 )
                 document_ids.append(ingest_result["source_document_id"])
                 total_chunks += ingest_result["num_chunks"]
@@ -1017,14 +1046,22 @@ async def ingest_file_impl(
     collection_name: str,
     metadata: Optional[Dict[str, Any]] = None,
     include_chunk_ids: bool = False,
+    progress_callback=None,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_file tool.
 
     Routes through unified mediator to update both RAG and Knowledge Graph.
     Performs health checks on both databases before ingestion (Option B: Mandatory).
+
+    Args:
+        progress_callback: Optional async callback for MCP progress notifications
     """
     try:
+        # Progress: Starting
+        if progress_callback:
+            await progress_callback(0, 100, "Starting file ingestion...")
+
         # Health check: both PostgreSQL and Neo4j must be reachable
         health_error = await ensure_databases_healthy(db, graph_store)
         if health_error:
@@ -1053,6 +1090,10 @@ async def ingest_file_impl(
         file_size = path.stat().st_size
         file_type = path.suffix.lstrip(".").lower() or "text"
 
+        # Progress: Reading file
+        if progress_callback:
+            await progress_callback(5, 100, f"Reading file {path.name}...")
+
         logger.info(f"Ingesting file through unified mediator: {path.name}")
 
         # Read file content
@@ -1066,11 +1107,16 @@ async def ingest_file_impl(
             "file_size": file_size,
         })
 
+        # Progress: Ingesting (pass callback to mediator)
+        if progress_callback:
+            await progress_callback(10, 100, f"Processing {path.name}...")
+
         ingest_result = await unified_mediator.ingest_text(
             content=content,
             collection_name=collection_name,
             document_title=path.name,
-            metadata=file_metadata
+            metadata=file_metadata,
+            progress_callback=progress_callback
         )
 
         result = {
@@ -1103,14 +1149,22 @@ async def ingest_directory_impl(
     recursive: bool = False,
     metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
+    progress_callback=None,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_directory tool.
 
     Routes through unified mediator to update both RAG and Knowledge Graph.
     Performs health checks on both databases before ingestion (Option B: Mandatory).
+
+    Args:
+        progress_callback: Optional async callback for MCP progress notifications
     """
     try:
+        # Progress: Starting
+        if progress_callback:
+            await progress_callback(0, 100, "Starting directory ingestion...")
+
         # Health check: both PostgreSQL and Neo4j must be reachable
         health_error = await ensure_databases_healthy(db, graph_store)
         if health_error:
@@ -1140,6 +1194,10 @@ async def ingest_directory_impl(
         if not file_extensions:
             file_extensions = [".txt", ".md"]
 
+        # Progress: Scanning directory
+        if progress_callback:
+            await progress_callback(5, 100, f"Scanning directory for {', '.join(file_extensions)} files...")
+
         # Find files
         files = []
         for ext in file_extensions:
@@ -1150,13 +1208,26 @@ async def ingest_directory_impl(
 
         files = sorted(set(files))
 
+        # Progress: Found files
+        if progress_callback:
+            await progress_callback(10, 100, f"Found {len(files)} files, starting ingestion...")
+
         # Ingest each file through unified mediator
         document_ids = []
         total_chunks = 0
         total_entities = 0
         failed_files = []
 
-        for file_path in files:
+        for idx, file_path in enumerate(files):
+            # Progress: Per-file ingestion (10% to 90%)
+            if progress_callback:
+                file_progress = 10 + int((idx / len(files)) * 80)
+                await progress_callback(
+                    file_progress,
+                    100,
+                    f"Ingesting file {idx + 1}/{len(files)}: {file_path.name}..."
+                )
+
             try:
                 file_size = file_path.stat().st_size
                 file_type = file_path.suffix.lstrip(".").lower() or "text"
@@ -1174,11 +1245,13 @@ async def ingest_directory_impl(
                     "file_size": file_size,
                 })
 
+                # Note: Don't pass progress_callback here - would conflict with parent progress
                 ingest_result = await unified_mediator.ingest_text(
                     content=content,
                     collection_name=collection_name,
                     document_title=file_path.name,
-                    metadata=file_metadata
+                    metadata=file_metadata,
+                    progress_callback=None  # Skip nested progress for batch operations
                 )
                 document_ids.append(ingest_result["source_document_id"])
                 total_chunks += ingest_result["num_chunks"]
