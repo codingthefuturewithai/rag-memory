@@ -603,12 +603,16 @@ async def ingest_text_impl(
     document_title: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
     include_chunk_ids: bool = False,
+    progress_callback=None,
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_text tool.
 
     Routes through unified mediator to update both RAG and Knowledge Graph.
     Performs health checks on both databases before ingestion (Option B: Mandatory).
+
+    Args:
+        progress_callback: Optional async callback for MCP progress notifications
     """
     try:
         # Health check: both PostgreSQL and Neo4j must be reachable
@@ -629,13 +633,14 @@ async def ingest_text_impl(
                 f"Create it first using create_collection('{collection_name}', 'description')."
             )
 
-        # Route through unified mediator (RAG + Graph)
+        # Route through unified mediator (RAG + Graph) with progress callback
         logger.info("Ingesting text through unified mediator (RAG + Graph)")
         result = await unified_mediator.ingest_text(
             content=content,
             collection_name=collection_name,
             document_title=document_title,
-            metadata=metadata
+            metadata=metadata,
+            progress_callback=progress_callback
         )
 
         # Remove chunk_ids if not requested (minimize response size)

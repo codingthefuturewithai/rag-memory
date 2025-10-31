@@ -11,7 +11,7 @@ the second operation fails. Two-phase commit will be added in Phase 2.
 
 import logging
 from datetime import datetime
-from typing import Optional, Any
+from typing import Optional, Any, Callable, Awaitable
 from src.core.database import Database
 from src.core.embeddings import EmbeddingGenerator
 from src.core.collections import CollectionManager
@@ -57,7 +57,8 @@ class UnifiedIngestionMediator:
         content: str,
         collection_name: str,
         document_title: Optional[str] = None,
-        metadata: Optional[dict[str, Any]] = None
+        metadata: Optional[dict[str, Any]] = None,
+        progress_callback: Optional[Callable[[float, float, str], Awaitable[None]]] = None
     ) -> dict[str, Any]:
         """
         Ingest text content into both RAG and Graph stores.
@@ -67,6 +68,7 @@ class UnifiedIngestionMediator:
             collection_name: Collection to add content to (must exist)
             document_title: Optional human-readable title
             metadata: Optional metadata dict
+            progress_callback: Optional async callback(progress, total, message) for MCP progress notifications
 
         Returns:
             dict with:
@@ -84,8 +86,17 @@ class UnifiedIngestionMediator:
         logger.info(f"   Title: {document_title}")
         logger.info(f"   Content length: {len(content)} chars")
 
+        # Progress: Starting
+        if progress_callback:
+            await progress_callback(0, 100, "Starting ingestion...")
+
         # Step 1: Ingest into RAG store (existing functionality, unchanged)
         logger.info(f"📥 Step 1/2: Ingesting into RAG store (pgvector)...")
+
+        # Progress: RAG phase
+        if progress_callback:
+            await progress_callback(10, 100, "Processing RAG embeddings...")
+
         source_id, chunk_ids = self.rag_store.ingest_document(
             content=content,
             filename=document_title or f"Agent-Text-{content[:20]}",
@@ -94,6 +105,10 @@ class UnifiedIngestionMediator:
             file_type="text"
         )
         logger.info(f"✅ RAG ingestion completed - doc_id={source_id}, {len(chunk_ids)} chunks created")
+
+        # Progress: RAG complete
+        if progress_callback:
+            await progress_callback(40, 100, "RAG complete, starting knowledge graph extraction...")
 
         # Validate document metadata against collection (guidance only, doesn't fail)
         try:
@@ -106,6 +121,10 @@ class UnifiedIngestionMediator:
 
         # Step 2: Ingest into Graph store (new functionality)
         logger.info(f"🕸️  Step 2/2: Ingesting into Knowledge Graph (Neo4j/Graphiti)...")
+
+        # Progress: Graph extraction phase (this is the slow part!)
+        if progress_callback:
+            await progress_callback(50, 100, "Extracting entities and relationships (may take 1-2 minutes)...")
 
         # Build enhanced metadata with collection and title
         graph_metadata = metadata.copy() if metadata else {}
@@ -122,6 +141,11 @@ class UnifiedIngestionMediator:
                 ingestion_timestamp=datetime.now()
             )
             logger.info(f"✅ Graph ingestion completed - {len(entities)} entities extracted")
+
+            # Progress: Graph complete
+            if progress_callback:
+                await progress_callback(90, 100, f"Graph extraction complete ({len(entities)} entities)")
+
         except Exception as e:
             # Note: In Phase 1, we don't rollback RAG ingestion if graph fails
             # This is acceptable for POC but should be fixed in Phase 2

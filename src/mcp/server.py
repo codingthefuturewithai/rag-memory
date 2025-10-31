@@ -9,7 +9,7 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 
 from src.core.database import get_database
 from src.core.embeddings import get_embedding_generator
@@ -450,6 +450,7 @@ async def ingest_text(
     document_title: str | None = None,
     metadata: dict | None = None,
     include_chunk_ids: bool = False,
+    context: Context | None = None,
 ) -> dict:
     """
     Ingest text content into both vector store and knowledge graph with automatic chunking.
@@ -494,7 +495,12 @@ async def ingest_text(
 
     Note: Uses AI models, has cost (embeddings + graph extraction).
     """
-    return await ingest_text_impl(
+    # Create progress callback wrapper if context available
+    async def progress_callback(progress: float, total: float, message: str) -> None:
+        if context:
+            await context.report_progress(progress, total, message)
+
+    result = await ingest_text_impl(
         db,
         doc_store,
         unified_mediator,
@@ -504,7 +510,14 @@ async def ingest_text(
         document_title,
         metadata,
         include_chunk_ids,
+        progress_callback=progress_callback if context else None,
     )
+
+    # Progress: Complete
+    if context:
+        await context.report_progress(100, 100, "Ingestion complete!")
+
+    return result
 
 
 @mcp.tool()
