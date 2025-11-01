@@ -119,7 +119,10 @@ class CollectionManager:
         List all collections with their metadata and schemas.
 
         Returns:
-            List of dictionaries with collection information.
+            List of dictionaries with collection information including:
+            - document_count: number of unique documents (NOT chunks)
+            - chunk_count: total number of chunks across all documents
+            - metadata_schema: collection's metadata schema
         """
         conn = self.db.connect()
         with conn.cursor() as cur:
@@ -131,9 +134,11 @@ class CollectionManager:
                     c.description,
                     c.metadata_schema,
                     c.created_at,
-                    COUNT(DISTINCT cc.chunk_id) as document_count
+                    COUNT(DISTINCT dc.source_document_id) as document_count,
+                    COUNT(DISTINCT cc.chunk_id) as chunk_count
                 FROM collections c
                 LEFT JOIN chunk_collections cc ON c.id = cc.collection_id
+                LEFT JOIN document_chunks dc ON cc.chunk_id = dc.id
                 GROUP BY c.id, c.name, c.description, c.metadata_schema, c.created_at
                 ORDER BY c.created_at DESC;
                 """
@@ -150,6 +155,7 @@ class CollectionManager:
                         "metadata_schema": row[3],
                         "created_at": row[4],
                         "document_count": row[5],
+                        "chunk_count": row[6],
                     }
                 )
 

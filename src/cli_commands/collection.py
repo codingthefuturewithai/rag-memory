@@ -92,8 +92,9 @@ def collection_update_metadata(name, add_fields):
 
 
 @collection.command("list")
-def collection_list():
-    """List all collections."""
+@click.option("--show-schema", is_flag=True, help="Show metadata schema for each collection")
+def collection_list(show_schema):
+    """List all collections with document and chunk counts."""
     try:
         db = get_database()
         mgr = get_collection_manager(db)
@@ -107,7 +108,8 @@ def collection_list():
         table = Table(title="Collections")
         table.add_column("Name", style="cyan")
         table.add_column("Description", style="white")
-        table.add_column("Documents", style="green")
+        table.add_column("Documents", style="green", justify="right")
+        table.add_column("Chunks", style="yellow", justify="right")
         table.add_column("Created", style="blue")
 
         for coll in collections:
@@ -115,10 +117,23 @@ def collection_list():
                 coll["name"],
                 coll["description"] or "",
                 str(coll["document_count"]),
+                str(coll["chunk_count"]),
                 str(coll["created_at"]),
             )
 
         console.print(table)
+
+        # Optionally show metadata schemas
+        if show_schema:
+            console.print("\n[bold]Metadata Schemas:[/bold]\n")
+            for coll in collections:
+                console.print(f"[cyan]{coll['name']}:[/cyan]")
+                schema = coll.get("metadata_schema", {})
+                if schema:
+                    console.print_json(data=schema)
+                else:
+                    console.print("  [dim](no schema)[/dim]")
+                console.print()
 
     except Exception as e:
         console.print(f"[bold red]Error: {e}[/bold red]")
