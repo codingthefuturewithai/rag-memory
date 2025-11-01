@@ -1081,14 +1081,18 @@ async def ingest_url_impl(
 
             conn = db.connect()
             with conn.cursor() as cur:
-                # Find all documents with matching crawl_root_url
+                # Find all documents with matching crawl_root_url IN THIS COLLECTION ONLY
                 cur.execute(
                     """
-                    SELECT id, filename
-                    FROM source_documents
-                    WHERE metadata->>'crawl_root_url' = %s
+                    SELECT DISTINCT sd.id, sd.filename
+                    FROM source_documents sd
+                    JOIN document_chunks dc ON dc.source_document_id = sd.id
+                    JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                    JOIN collections c ON c.id = cc.collection_id
+                    WHERE sd.metadata->>'crawl_root_url' = %s
+                      AND c.name = %s
                     """,
-                    (url,),
+                    (url, collection_name),
                 )
                 existing_docs = cur.fetchall()
 
