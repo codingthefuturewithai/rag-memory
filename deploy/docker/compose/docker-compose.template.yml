@@ -77,6 +77,9 @@ services:
       dockerfile: deploy/docker/Dockerfile
     container_name: rag-memory-mcp-local
     shm_size: '2gb'  # Required for Chromium/Playwright web crawling
+    ipc: host  # Recommended by Playwright for Chromium to avoid memory issues
+    cap_add:
+      - SYS_ADMIN  # Recommended by Playwright for Chromium in Docker
     environment:
       # Override database URLs to use Docker service names instead of localhost
       DATABASE_URL: postgresql://${POSTGRES_USER:-raguser}:${POSTGRES_PASSWORD:-ragpassword}@postgres-local:5432/rag_memory

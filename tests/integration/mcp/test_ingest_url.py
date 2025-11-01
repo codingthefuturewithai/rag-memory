@@ -236,3 +236,57 @@ class TestIngestUrl:
         assert "crawl_root_url" in response["crawl_metadata"]
         assert "crawl_session_id" in response["crawl_metadata"]
         assert "crawl_timestamp" in response["crawl_metadata"]
+
+    async def test_ingest_url_with_follow_links(self, mcp_session, setup_test_collection):
+        """Test ingest_url with follow_links=True to crawl multiple pages.
+
+        This is the critical test that verifies the max_pages parameter fix works.
+        """
+        session, transport = mcp_session
+        collection_name = setup_test_collection
+
+        # First, analyze the website to get an analysis_token
+        analyze_result = await session.call_tool("analyze_website", {
+            "base_url": "https://python.org/about"
+        })
+
+        assert not analyze_result.isError, f"analyze_website failed: {analyze_result}"
+
+        analysis_text = extract_text_content(analyze_result)
+        analysis_response = json.loads(analysis_text)
+
+        assert "analysis_token" in analysis_response, "Analysis should return analysis_token"
+        analysis_token = analysis_response["analysis_token"]
+
+        # Now ingest with follow_links=True and max_pages=5
+        result = await session.call_tool("ingest_url", {
+            "url": "https://python.org/about",
+            "collection_name": collection_name,
+            "follow_links": True,
+            "max_pages": 5,
+            "analysis_token": analysis_token,
+            "mode": "crawl",
+            "include_document_ids": True
+        })
+
+        # Verify no error
+        assert not result.isError, f"ingest_url with follow_links failed: {result}"
+
+        response_text = extract_text_content(result)
+        assert response_text is not None, "Response should have text content"
+
+        response = json.loads(response_text)
+
+        # Verify we crawled multiple pages
+        assert response["pages_crawled"] >= 2, f"Should crawl at least 2 pages with follow_links, got {response['pages_crawled']}"
+        assert response["pages_crawled"] <= 5, f"Should not exceed max_pages=5, got {response['pages_crawled']}"
+
+        # Verify we ingested successfully
+        assert response["pages_ingested"] >= 2, f"Should ingest at least 2 pages, got {response['pages_ingested']}"
+        assert response["total_chunks"] >= 2, f"Should create at least 2 chunks, got {response['total_chunks']}"
+
+        # Verify document_ids are returned
+        assert "document_ids" in response, "Should include document_ids"
+        assert len(response["document_ids"]) >= 2, f"Should have at least 2 document IDs, got {len(response['document_ids'])}"
+
+        print(f"\n✅ SUCCESS: Crawled {response['pages_crawled']} pages with follow_links=True")

@@ -374,8 +374,8 @@ def create_collection_impl(
     name: str,
     description: str,
     domain: str,
-    domain_scope: str = None,
-    metadata_schema: Dict[str, Any] = None,
+    domain_scope: str | None = None,
+    metadata_schema: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """
     Implementation of create_collection MCP tool.
@@ -981,7 +981,7 @@ async def ingest_url_impl(
     collection_name: str,
     follow_links: bool = False,
     max_pages: int = 10,
-    analysis_token: str = None,
+    analysis_token: str | None = None,
     mode: str = "crawl",
     metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
@@ -1123,14 +1123,13 @@ async def ingest_url_impl(
         # Crawl web pages
         if follow_links:
             crawler = WebCrawler(headless=True, verbose=False)
-            # Use max_depth=1 (fixed depth), limit results by max_pages
-            all_results = await crawler.crawl_with_depth(url, max_depth=1)
-            results = all_results[:max_pages]  # Truncate to max_pages
+            # Use max_depth=1 (fixed depth), pass max_pages to BFSDeepCrawlStrategy
+            results = await crawler.crawl_with_depth(url, max_depth=1, max_pages=max_pages)
 
-            if len(all_results) > max_pages:
-                logger.warning(
-                    f"Crawl discovered {len(all_results)} pages but max_pages={max_pages}. "
-                    f"Only ingesting first {max_pages} pages. "
+            # Log if we hit the max_pages limit (crawler stopped early)
+            if len(results) == max_pages:
+                logger.info(
+                    f"Crawl reached max_pages limit ({max_pages}). "
                     f"Consider multiple targeted crawls for complete coverage."
                 )
         else:
@@ -1483,6 +1482,7 @@ async def update_document_impl(
                 "At least one of content, title, or metadata must be provided"
             )
 
+        # Update RAG store (also deletes old graph episode if content changed)
         result = await doc_store.update_document(
             document_id=document_id,
             content=content,
@@ -1490,6 +1490,56 @@ async def update_document_impl(
             metadata=metadata,
             graph_store=graph_store
         )
+
+        # If content was updated, re-index into knowledge graph
+        if content and graph_store and result.get("graph_episode_deleted"):
+            logger.info(f"🕸️  Re-indexing document {document_id} into Knowledge Graph after content update")
+
+            # Get updated document with merged metadata
+            updated_doc = doc_store.get_source_document(document_id)
+            if not updated_doc:
+                raise ValueError(f"Document {document_id} not found after update")
+
+            # Get collection name from chunks (since doc might be in multiple collections)
+            conn = db.connect()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT c.name
+                    FROM collections c
+                    JOIN chunk_collections cc ON cc.collection_id = c.id
+                    JOIN document_chunks dc ON dc.id = cc.chunk_id
+                    WHERE dc.source_document_id = %s
+                    LIMIT 1
+                    """,
+                    (document_id,)
+                )
+                row = cur.fetchone()
+                collection_name = row[0] if row else "unknown"
+
+            # Build graph metadata
+            graph_metadata = updated_doc["metadata"].copy() if updated_doc["metadata"] else {}
+            graph_metadata["collection_name"] = collection_name
+            graph_metadata["document_title"] = updated_doc["filename"]
+
+            # Re-index into graph
+            try:
+                entities = await graph_store.add_knowledge(
+                    content=content,
+                    source_document_id=document_id,
+                    metadata=graph_metadata,
+                    group_id=collection_name,
+                    ingestion_timestamp=datetime.now()
+                )
+                logger.info(f"✅ Graph re-indexing completed - {len(entities)} entities extracted")
+                result["entities_extracted"] = len(entities)
+            except Exception as e:
+                logger.error(f"❌ Graph re-indexing FAILED after RAG update (doc_id={document_id})")
+                logger.error(f"   Error: {e}", exc_info=True)
+                raise Exception(
+                    f"Graph re-indexing failed after RAG update (doc_id={document_id}). "
+                    f"Stores may be inconsistent. Error: {e}"
+                )
 
         return result
     except Exception as e:
@@ -1570,7 +1620,7 @@ def list_documents_impl(
 async def query_relationships_impl(
     graph_store,
     query: str,
-    collection_name: str = None,
+    collection_name: str | None = None,
     num_results: int = 5,
     threshold: float = 0.2,
 ) -> Dict[str, Any]:
@@ -1661,11 +1711,11 @@ async def query_relationships_impl(
 async def query_temporal_impl(
     graph_store,
     query: str,
-    collection_name: str = None,
+    collection_name: str | None = None,
     num_results: int = 10,
     threshold: float = 0.2,
-    valid_from: str = None,
-    valid_until: str = None,
+    valid_from: str | None = None,
+    valid_until: str | None = None,
 ) -> Dict[str, Any]:
     """
     Implementation of query_temporal tool.

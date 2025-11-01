@@ -345,7 +345,7 @@ def create_collection(
     description: str,
     domain: str,
     domain_scope: str,
-    metadata_schema: dict = None
+    metadata_schema: dict | None = None
 ) -> dict:
     """
     Create a new collection for organizing documents by domain.
@@ -467,6 +467,23 @@ async def ingest_text(
     Ingest text content into both vector store and knowledge graph with automatic chunking.
 
     **IMPORTANT:** Collection must exist. Use create_collection() first.
+
+    🚨 PAYLOAD SIZE LIMITS - CLIENT RESPONSIBILITY 🚨
+    MCP clients must respect their environment's payload size limitations:
+
+    - If your environment limits message sizes (e.g., ~1MB for some cloud hosts),
+      YOU MUST chunk large content and make multiple ingest_text() calls
+    - DO NOT pass content that exceeds your client's transport limits
+    - If uncertain, test with small content first, then scale up
+
+    Common limits:
+    - Cloud-hosted MCP clients (ChatGPT, etc.): ~1MB payload (~500K-1M chars)
+    - Local MCP clients (Claude Code, Claude Desktop): Much larger, environment-dependent
+
+    For large documents that exceed your client's limits:
+    - Option 1: Split into smaller chunks, ingest each separately
+    - Option 2: Use ingest_url() if content is web-accessible
+    - Option 3: Use ingest_file() if using local MCP client with filesystem access
 
     ⏱️ PROCESSING TIME:
     Processing time varies. Examples observed:
@@ -650,7 +667,7 @@ async def ingest_url(
     mode: str = "crawl",
     follow_links: bool = False,
     max_pages: int = 10,
-    analysis_token: str = None,
+    analysis_token: str | None = None,
     metadata: dict | None = None,
     include_document_ids: bool = False,
     context: Context | None = None,
@@ -842,7 +859,24 @@ async def ingest_file(
     """
     Ingest text-based file from file system (text/code/config only, not binary).
 
-    **IMPORTANT - File system access:** MCP server must access file path. If fails, use ingest_text() instead.
+    🚨 FILESYSTEM ACCESS REQUIRED - CLIENT RESPONSIBILITY 🚨
+    This tool ONLY works when the MCP server has direct filesystem access to file_path.
+
+    **WHEN THIS WORKS:**
+    ✅ Local MCP clients (Claude Code, Claude Desktop) with configured filesystem mounts
+    ✅ MCP server and client share the same filesystem (local deployment)
+
+    **WHEN THIS FAILS:**
+    ❌ Cloud-hosted MCP clients (ChatGPT, web-based agents) → server cannot access client's local files
+    ❌ Client's virtual/sandboxed filesystem (like /mnt/data in ChatGPT) → not visible to remote server
+    ❌ File paths that don't exist on the server's filesystem
+
+    **CRITICAL: DO NOT attempt to mount files in YOUR local environment and pass those paths.**
+    The file_path MUST exist on the MCP SERVER's filesystem, not your client's environment.
+
+    **For cloud-hosted MCP clients, use instead:**
+    - ingest_url() - If content is web-accessible
+    - ingest_text() - Pass file content directly as text (mind payload limits, see ingest_text docs)
 
     ⏱️ PROCESSING TIME:
     Processing time varies by file size. Examples observed:
@@ -857,7 +891,7 @@ async def ingest_file(
     Wait, then use list_documents(collection_name, include_details=True) to verify.
 
     Args:
-        file_path: Absolute path (e.g., "/path/to/document.txt")
+        file_path: Absolute path ON THE MCP SERVER's filesystem (e.g., "/path/to/document.txt")
         collection_name: Target collection (must exist)
         metadata: Optional metadata dict
         include_chunk_ids: If True, returns chunk IDs (default: False)
@@ -904,7 +938,24 @@ async def ingest_directory(
 
     **DOMAIN GUIDANCE:** If directory has mixed content (code + docs + configs), create separate collections per domain or use file_extensions to filter.
 
-    **IMPORTANT - File system access:** MCP server must access directory path. If fails, use ingest_text() for each file.
+    🚨 FILESYSTEM ACCESS REQUIRED - CLIENT RESPONSIBILITY 🚨
+    This tool ONLY works when the MCP server has direct filesystem access to directory_path.
+
+    **WHEN THIS WORKS:**
+    ✅ Local MCP clients (Claude Code, Claude Desktop) with configured filesystem mounts
+    ✅ MCP server and client share the same filesystem (local deployment)
+
+    **WHEN THIS FAILS:**
+    ❌ Cloud-hosted MCP clients (ChatGPT, web-based agents) → server cannot access client's local directories
+    ❌ Client's virtual/sandboxed filesystem (like /mnt/data in ChatGPT) → not visible to remote server
+    ❌ Directory paths that don't exist on the server's filesystem
+
+    **CRITICAL: DO NOT attempt to mount directories in YOUR local environment and pass those paths.**
+    The directory_path MUST exist on the MCP SERVER's filesystem, not your client's environment.
+
+    **For cloud-hosted MCP clients, use instead:**
+    - ingest_url() - If content is web-accessible (websites, documentation sites)
+    - Multiple ingest_text() calls - For small files (mind payload limits per call)
 
     ⏱️ PROCESSING TIME:
     Processing time varies by file count. Examples observed:
@@ -922,7 +973,7 @@ async def ingest_directory(
     Wait, then use list_documents(collection_name, include_details=True) to verify.
 
     Args:
-        directory_path: Absolute path (e.g., "/path/to/docs")
+        directory_path: Absolute path ON THE MCP SERVER's filesystem (e.g., "/path/to/docs")
         collection_name: Target collection (must exist)
         file_extensions: Extensions to process (default: [".txt", ".md"])
         recursive: If True, searches subdirectories (default: False)

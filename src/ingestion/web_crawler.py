@@ -58,9 +58,18 @@ class WebCrawler:
         self.visited_urls: Set[str] = set()  # Track visited URLs to prevent duplicates
 
         # Browser configuration
+        # Extra args to prevent Playwright multi-process deadlocks in Docker
+        # See: https://github.com/microsoft/playwright/issues/4761
         self.browser_config = BrowserConfig(
             headless=headless,
             verbose=verbose,
+            extra_args=[
+                "--disable-dev-shm-usage",     # Don't use /dev/shm (shared memory)
+                "--no-sandbox",                 # Disable Chrome sandbox (required in Docker)
+                "--single-process",             # CRITICAL - force single process to prevent deadlock
+                "--no-zygote",                  # CRITICAL - prevent process forking
+                "--disable-features=IsolateOrigins,site-per-process",  # Disable multi-process features
+            ],
         )
 
         # Crawler run configuration (for single-page crawls)
@@ -215,20 +224,22 @@ class WebCrawler:
         self,
         url: str,
         max_depth: int = 1,
+        max_pages: int = float('inf'),
         crawl_root_url: Optional[str] = None,
     ) -> List[CrawlResult]:
         """
-        Crawl a website following links up to max_depth.
+        Crawl a website following links up to max_depth and max_pages.
 
         Uses BFSDeepCrawlStrategy for breadth-first traversal.
 
         Args:
             url: Starting URL
             max_depth: Maximum depth to crawl (0 = only starting page, 1 = starting + direct links, etc.)
+            max_pages: Maximum number of pages to crawl (default: unlimited)
             crawl_root_url: Root URL for the crawl session (defaults to url)
 
         Returns:
-            List of CrawlResult objects, one per page crawled
+            List of CrawlResult objects, one per page crawled (limited to max_pages)
         """
         if not crawl_root_url:
             crawl_root_url = url
@@ -237,35 +248,42 @@ class WebCrawler:
         crawl_session_id = str(uuid.uuid4())
 
         logger.info(
-            f"Starting deep crawl from {url} (max_depth={max_depth}, session={crawl_session_id})"
+            f"Starting deep crawl from {url} (max_depth={max_depth}, max_pages={max_pages}, session={crawl_session_id})"
         )
 
         results: List[CrawlResult] = []
         self.visited_urls.clear()  # Reset visited tracking for this crawl session
 
-        # Configure BFSDeepCrawlStrategy
-        crawl_strategy = BFSDeepCrawlStrategy(max_depth=max_depth)
+        # Configure BFSDeepCrawlStrategy with max_pages limit
+        crawl_strategy = BFSDeepCrawlStrategy(max_depth=max_depth, max_pages=max_pages)
 
         # Multi-page crawler config
+        # stream=True processes pages one-at-a-time to prevent browser context leaks in Docker
+        # session_id ensures clean browser session management
         deep_crawler_config = CrawlerRunConfig(
             cache_mode=CacheMode.BYPASS,
             word_count_threshold=10,
             excluded_tags=["nav", "footer", "header", "aside"],
             remove_overlay_elements=True,
             deep_crawl_strategy=crawl_strategy,
+            session_id=crawl_session_id,  # Force new session for proper cleanup
+            stream=True,  # Process pages individually (fixes Docker browser leak in v0.6.0)
         )
 
         try:
             with suppress_crawl4ai_stdout():
                 async with AsyncWebCrawler(config=self.browser_config) as crawler:
-                    # Start crawling - returns list when deep_crawl_strategy is set
+                    # Start crawling
+                    # stream=True returns async generator, otherwise returns list
                     crawl_results = await crawler.arun(
                         url=url,
                         config=deep_crawler_config,
                     )
 
                     # Process each crawled page
-                    for depth, crawl_result in enumerate(crawl_results):
+                    # stream=True returns async generator, we need to iterate with async for
+                    depth = 0
+                    async for crawl_result in crawl_results:
                         page_url = crawl_result.url
                         self.visited_urls.add(page_url)
 
@@ -320,6 +338,9 @@ class WebCrawler:
                                 )
                             )
                             logger.warning(f"Failed to crawl {page_url}: {error.error_message}")
+
+                        # Increment depth for next page
+                        depth += 1
 
                     logger.info(
                         f"Deep crawl completed: {len(results)} pages crawled, "
