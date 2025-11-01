@@ -91,3 +91,4 @@ CLAUDE.md
 
 # Claude Code local settings (user-specific overrides)
 .claude/settings.local.json
+crawl4ai-local/

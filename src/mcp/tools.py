@@ -19,6 +19,7 @@ from src.ingestion.document_store import DocumentStore
 from src.ingestion.web_crawler import WebCrawler, crawl_single_page
 from src.ingestion.website_analyzer import analyze_website
 from src.unified.graph_store import GraphStore
+from src.mcp.deduplication import deduplicate_request
 
 logger = logging.getLogger(__name__)
 
@@ -709,6 +710,7 @@ async def delete_collection_impl(
         raise
 
 
+@deduplicate_request()
 async def ingest_text_impl(
     db: Database,
     doc_store: DocumentStore,
@@ -972,6 +974,7 @@ def check_existing_crawl(
         raise
 
 
+@deduplicate_request()
 async def ingest_url_impl(
     db: Database,
     doc_store: DocumentStore,
@@ -1215,6 +1218,7 @@ async def ingest_url_impl(
         raise
 
 
+@deduplicate_request()
 async def ingest_file_impl(
     db: Database,
     doc_store: DocumentStore,
@@ -1316,6 +1320,7 @@ async def ingest_file_impl(
         raise
 
 
+@deduplicate_request()
 async def ingest_directory_impl(
     db: Database,
     doc_store: DocumentStore,

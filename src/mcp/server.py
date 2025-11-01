@@ -501,6 +501,18 @@ async def ingest_text(
     - Find your document by title
     - Check created_at timestamp to confirm recent ingestion
 
+    🔒 DUPLICATE REQUEST PROTECTION:
+    If you submit the same request while one is already processing, you will receive:
+    {"error": "This exact request is already processing (started Xs ago).
+               Please wait for the current operation to complete.",
+     "status": "duplicate_request"}
+
+    This prevents data corruption from concurrent identical operations. If you see this:
+    1. WAIT - The original request is still processing on the server
+    2. DO NOT retry immediately - You'll get the same error
+    3. Verify completion using list_documents() as described above
+    4. Only retry after confirming the original request completed or failed
+
     **Workflow (see server instructions: Ingestion Workflows):**
     1. list_documents() - Check for duplicates
     2. If exists: update_document() instead
@@ -732,6 +744,18 @@ async def ingest_url(
     ✅ VERIFICATION AFTER TIMEOUT:
     Wait, then use list_documents(collection_name, include_details=True) to verify.
 
+    🔒 DUPLICATE REQUEST PROTECTION:
+    If you submit the same request while one is already processing, you will receive:
+    {"error": "This exact request is already processing (started Xs ago).
+               Please wait for the current operation to complete.",
+     "status": "duplicate_request"}
+
+    This prevents data corruption from concurrent identical operations. If you see this:
+    1. WAIT - The original request is still processing on the server
+    2. DO NOT retry immediately - You'll get the same error
+    3. Verify completion using list_documents() as described above
+    4. Only retry after confirming the original request completed or failed
+
     IMPORTANT DUPLICATE PREVENTION:
     - mode="crawl": New crawl. Raises error if URL already crawled into collection.
     - mode="recrawl": Update existing crawl. Deletes old pages and re-ingests.
@@ -890,6 +914,18 @@ async def ingest_file(
     ✅ VERIFICATION AFTER TIMEOUT:
     Wait, then use list_documents(collection_name, include_details=True) to verify.
 
+    🔒 DUPLICATE REQUEST PROTECTION:
+    If you submit the same request while one is already processing, you will receive:
+    {"error": "This exact request is already processing (started Xs ago).
+               Please wait for the current operation to complete.",
+     "status": "duplicate_request"}
+
+    This prevents data corruption from concurrent identical operations. If you see this:
+    1. WAIT - The original request is still processing on the server
+    2. DO NOT retry immediately - You'll get the same error
+    3. Verify completion using list_documents() as described above
+    4. Only retry after confirming the original request completed or failed
+
     Args:
         file_path: Absolute path ON THE MCP SERVER's filesystem (e.g., "/path/to/document.txt")
         collection_name: Target collection (must exist)
@@ -971,6 +1007,18 @@ async def ingest_directory(
 
     ✅ VERIFICATION AFTER TIMEOUT:
     Wait, then use list_documents(collection_name, include_details=True) to verify.
+
+    🔒 DUPLICATE REQUEST PROTECTION:
+    If you submit the same request while one is already processing, you will receive:
+    {"error": "This exact request is already processing (started Xs ago).
+               Please wait for the current operation to complete.",
+     "status": "duplicate_request"}
+
+    This prevents data corruption from concurrent identical operations. If you see this:
+    1. WAIT - The original request is still processing on the server
+    2. DO NOT retry immediately - You'll get the same error
+    3. Verify completion using list_documents() as described above
+    4. Only retry after confirming the original request completed or failed
 
     Args:
         directory_path: Absolute path ON THE MCP SERVER's filesystem (e.g., "/path/to/docs")

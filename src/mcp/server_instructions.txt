@@ -162,6 +162,23 @@ after waiting appropriate time based on your scope assessment.
 
 Progress notifications track long-running operations for supporting clients.
 
+**DUPLICATE REQUEST PROTECTION:**
+
+If you submit the same ingestion request while one is already processing, you will receive:
+```json
+{"error": "This exact request is already processing (started Xs ago).
+           Please wait for the current operation to complete.",
+ "status": "duplicate_request"}
+```
+
+This prevents data corruption from concurrent identical operations. **If you see this error:**
+1. **WAIT** - The original request is still processing on the server
+2. **DO NOT retry immediately** - You'll get the same duplicate error
+3. **Verify completion** using `list_documents(collection_name, include_details=True)`
+4. **Only retry** after confirming the original request completed or failed
+
+**Why this matters:** After a timeout, some MCP bridges (like OpenAI's) automatically retry with a new session. The duplicate protection catches this and prevents double-ingestion, which would corrupt your knowledge base with redundant data.
+
 **Query operations are FREE** (local database):
 - `search_documents`
 - `query_relationships`
