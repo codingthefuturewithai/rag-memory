@@ -117,7 +117,9 @@ class GraphStore:
         Validate Neo4j graph is properly initialized (startup only).
 
         Performs lightweight checks:
-        1. Indexes and constraints exist (validates Graphiti initialization)
+        1. Required Graphiti indexes exist (validates build_indices_and_constraints() was run)
+           - Checks for: node_name_and_summary, edge_name_and_fact, episode_content, community_name
+           - These are CRITICAL fulltext indexes created by Graphiti initialization
         2. Can query nodes (validates graph operability)
 
         Returns:
@@ -134,6 +136,7 @@ class GraphStore:
             - Only called at server startup
             - Latency: ~5-15ms local, ~20-40ms cloud
             - Provides early failure if Neo4j not initialized
+            - Server WILL NOT START if required Graphiti indexes are missing
         """
         if self.graphiti is None:
             return {
@@ -150,19 +153,44 @@ class GraphStore:
         can_query_nodes = False
 
         try:
-            # Check 1: Indexes and constraints exist
+            # Check 1: Verify SPECIFIC Graphiti indexes exist
+            # These are created by graphiti.build_indices_and_constraints()
+            # and are REQUIRED for entity extraction to work
+            required_indexes = {
+                "node_name_and_summary",  # FULLTEXT index on Entity nodes (CRITICAL)
+                "edge_name_and_fact",     # FULLTEXT index on RELATES_TO edges
+                "episode_content",        # FULLTEXT index on Episodic nodes
+                "community_name",         # FULLTEXT index on Community nodes
+            }
+
             try:
                 result = await self.graphiti.driver.execute_query(
-                    "SHOW INDEXES YIELD name"
+                    "SHOW INDEXES YIELD name, type"
                 )
-                indexes_found = len(result.records) if result.records else 0
 
-                if indexes_found == 0:
+                if not result.records:
                     errors.append(
                         "No Neo4j indexes found. "
-                        "Graphiti schema may not be initialized. "
-                        "Restart the server to trigger Graphiti initialization."
+                        "Graphiti schema not initialized. "
+                        "Run setup.py or manually initialize with: "
+                        "docker exec <container> python -c 'from graphiti_core import Graphiti; "
+                        "import asyncio; g = Graphiti(...); "
+                        "asyncio.run(g.build_indices_and_constraints())'"
                     )
+                else:
+                    # Extract index names from results
+                    existing_indexes = {record["name"] for record in result.records}
+                    indexes_found = len(existing_indexes)
+
+                    # Check for missing REQUIRED Graphiti indexes
+                    missing_indexes = required_indexes - existing_indexes
+
+                    if missing_indexes:
+                        errors.append(
+                            f"Missing required Graphiti indexes: {', '.join(sorted(missing_indexes))}. "
+                            "These are created by graphiti.build_indices_and_constraints(). "
+                            "Run setup.py or manually initialize Graphiti schema."
+                        )
             except Exception as e:
                 errors.append(f"Failed to check indexes: {str(e)}")
 
