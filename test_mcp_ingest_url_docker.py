@@ -54,20 +54,18 @@ async def main():
                 })
                 logger.info("Collection created")
 
-            # Step 2: Analyze website
-            logger.info("\nStep 2: Analyzing website...")
+            # Step 2: Analyze website (optional, for understanding scope)
+            logger.info("\nStep 2: Analyzing website (optional)...")
             analyze_result = await session.call_tool("analyze_website", {
                 "base_url": "https://docs.python.org"
             })
 
             analyze_text = analyze_result.content[0].text if analyze_result.content else "{}"
             analyze_data = json.loads(analyze_text)
-            analysis_token = analyze_data.get("analysis_token")
 
             logger.info(f"Analysis complete: {analyze_data.get('total_urls', 0)} URLs found")
-            logger.info(f"Analysis token: {analysis_token[:20]}...")
 
-            # Step 3: Ingest with follow_links=True
+            # Step 3: Ingest with follow_links=True (analysis_token no longer required)
             logger.info("\nStep 3: Ingesting URL with follow_links=True, max_pages=5...")
             logger.info("This will take several minutes - crawler is running in Docker...")
 
@@ -76,7 +74,6 @@ async def main():
                 "collection_name": collection_name,
                 "follow_links": True,
                 "max_pages": 5,
-                "analysis_token": analysis_token,
                 "mode": "crawl",
                 "include_document_ids": True
             })

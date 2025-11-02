@@ -5,9 +5,7 @@ This module provides raw data extraction for AI agents to make informed decision
 about website crawling. NO heuristics or recommendations - just facts.
 """
 
-import hashlib
 import re
-import time
 from typing import Dict, List, Optional, Set, Tuple
 from urllib.parse import urljoin, urlparse
 import xml.etree.ElementTree as ET
@@ -249,7 +247,7 @@ class WebsiteAnalyzer:
                 "url_groups": {  # Only if include_url_lists=True (full URLs)
                     "/pattern": ["url1", "url2", ...]  # Limited to max_urls_per_pattern
                 },
-                "analysis_token": str,  # Required for follow_links crawls
+                "domains": list,  # Domains found in sitemap (if applicable)
                 "notes": str  # Important context about data quality
             }
         """
@@ -257,14 +255,9 @@ class WebsiteAnalyzer:
         urls, method, location = self.fetch_sitemap()
 
         if not urls:
-            # No sitemap found - still generate token for validation
-            # Use base_url domain as the authorized domain
+            # No sitemap found - return analysis results without sitemap data
             parsed = urlparse(self.base_url)
             domains = [parsed.netloc] if parsed.netloc else []
-
-            # Generate token (even without sitemap data)
-            token_data = f"{self.base_url}|{int(time.time())}|0"
-            analysis_token = hashlib.sha256(token_data.encode()).hexdigest()[:16]
 
             return {
                 "base_url": self.base_url,
@@ -273,10 +266,9 @@ class WebsiteAnalyzer:
                 "total_urls": 0,
                 "domains": domains,
                 "pattern_stats": {},
-                "analysis_token": analysis_token,
                 "notes": (
                     "No sitemap found at common locations (/sitemap.xml, /sitemap_index.xml). "
-                    "Token generated for base domain only. Agent can crawl this domain with follow_links."
+                    "Agent can still crawl this domain using link-following strategy."
                 ),
             }
 
@@ -299,11 +291,6 @@ class WebsiteAnalyzer:
             parsed = urlparse(url)
             if parsed.netloc:
                 domains.add(parsed.netloc)
-        
-        # Generate analysis token (hash of url + timestamp + total_urls)
-        # This proves the agent actually ran analysis before crawling
-        token_data = f"{self.base_url}|{int(time.time())}|{len(urls)}"
-        analysis_token = hashlib.sha256(token_data.encode()).hexdigest()[:16]
 
         # Build notes with domain info
         notes_parts = []
@@ -323,7 +310,6 @@ class WebsiteAnalyzer:
             "total_urls": len(urls),
             "domains": sorted(list(domains)),
             "pattern_stats": dict(sorted_patterns),
-            "analysis_token": analysis_token,
             "notes": notes,
         }
 

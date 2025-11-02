@@ -245,26 +245,13 @@ class TestIngestUrl:
         session, transport = mcp_session
         collection_name = setup_test_collection
 
-        # First, analyze the website to get an analysis_token
-        analyze_result = await session.call_tool("analyze_website", {
-            "base_url": "https://python.org/about"
-        })
-
-        assert not analyze_result.isError, f"analyze_website failed: {analyze_result}"
-
-        analysis_text = extract_text_content(analyze_result)
-        analysis_response = json.loads(analysis_text)
-
-        assert "analysis_token" in analysis_response, "Analysis should return analysis_token"
-        analysis_token = analysis_response["analysis_token"]
-
-        # Now ingest with follow_links=True and max_pages=5
+        # Ingest with follow_links=True and max_pages=5
+        # analyze_website is optional for decision-making, not required
         result = await session.call_tool("ingest_url", {
             "url": "https://python.org/about",
             "collection_name": collection_name,
             "follow_links": True,
             "max_pages": 5,
-            "analysis_token": analysis_token,
             "mode": "crawl",
             "include_document_ids": True
         })

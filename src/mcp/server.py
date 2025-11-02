@@ -619,27 +619,17 @@ def analyze_website(
     max_urls_per_pattern: int = 10
 ) -> dict:
     """
-    Analyze website structure before crawling (fetches sitemap, identifies URL patterns).
+    Analyze website structure to understand sitemap and URL patterns.
 
-    🚨 REQUIRED BEFORE MULTI-PAGE CRAWLS 🚨
-
-    **Workflow:**
-    1. analyze_website(url) - Get sitemap data and analysis_token
-    2. Review total_urls and pattern_stats
-    3. Plan crawl strategy (single targeted crawl or multiple)
-    4. ingest_url(follow_links=True, analysis_token=<token>)
+    **Purpose:**
+    Helps AI agents make informed decisions about multi-page crawls by providing
+    data about site structure. Analyzes are FREE (no AI models, just HTTP requests).
 
     **Smart Sitemap Discovery:**
     If sitemap not found at provided URL, automatically tries root domain.
     - Provided: "https://docs.example.com/api" → tries /api/sitemap.xml first
     - Fallback: "https://docs.example.com/sitemap.xml" (root domain)
     - Best practice: Provide root URL for most reliable results
-
-    **Why This Matters:**
-    - Prevents unbounded crawls (ingest_url requires analysis_token for follow_links)
-    - Helps plan targeted crawls vs full-site ingestion
-    - max_pages=20 limit means large sites need multiple targeted crawls
-    - analysis_token proves you reviewed scope before crawling
 
     Args:
         base_url: Website URL (root domain recommended, but paths supported)
@@ -655,7 +645,6 @@ def analyze_website(
             "sitemap_location": str,  # "provided URL", "root domain", or ""
             "total_urls": int,
             "pattern_stats": dict,  # {"/api": {"count": 45, "avg_depth": 2.1, "example_urls": [...]}}
-            "analysis_token": str,  # REQUIRED for ingest_url(follow_links=True)
             "domains": list,  # Domains found in sitemap
             "notes": str,
             "url_groups": dict  # Only if include_url_lists=True
@@ -663,12 +652,10 @@ def analyze_website(
 
     Example:
         analysis = analyze_website("https://docs.example.com/api")
-        # If sitemap not found at /api, automatically checks https://docs.example.com/sitemap.xml
-        # Returns: total_urls=120, analysis_token="abc123...", sitemap_location="root domain"
+        # Returns: total_urls=120, pattern_stats={"/api": 45, "/guides": 30}
 
-        # Use analysis_token in ingest_url
-        ingest_url("https://docs.example.com/api", follow_links=True,
-                  max_pages=30, analysis_token=analysis["analysis_token"])
+        # Use results to decide on crawl scope
+        ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20)
 
     Note: Free operation (no API calls, just HTTP request for sitemap).
     """
@@ -690,45 +677,25 @@ async def ingest_url(
     """
     Crawl and ingest content from a web URL with duplicate prevention.
 
-    🚨 CRITICAL - UNDERSTAND TOKEN REQUIREMENTS 🚨
-
-    **TOKEN REQUIREMENTS:**
-    - follow_links=True → REQUIRES analysis_token from analyze_website()
-    - follow_links=False → NO token required (single page crawl, bounded to 1 page)
-
-    **MULTI-PAGE CRAWL WORKFLOW (follow_links=True):**
+    **RECOMMENDED WORKFLOW (follow_links=True):**
+    For multi-page crawls, it's recommended (but not required) to first analyze the website:
     ```
-    # Step 1: Analyze website structure
+    # Step 1: Analyze website structure (recommended)
     analysis = analyze_website("https://docs.example.com")
-    # Returns: total_urls, pattern_stats, analysis_token, domains
+    # Returns: total_urls, pattern_stats, domains
 
     # Step 2: Review scope (e.g., 500 URLs across /api, /guides, /reference)
 
-    # Step 3: Multiple targeted crawls (SAME TOKEN, reusable for 4 hours)
-    ingest_url("https://docs.example.com/api", follow_links=True,
-               max_pages=20, analysis_token=analysis["analysis_token"])
-    ingest_url("https://docs.example.com/guides", follow_links=True,
-               max_pages=20, analysis_token=analysis["analysis_token"])  # Same token
+    # Step 3: Multi-page crawl with link following
+    ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20)
+    ingest_url("https://docs.example.com/guides", follow_links=True, max_pages=20)
     ```
 
     **SINGLE-PAGE CRAWL (follow_links=False):**
     ```
-    # No analysis needed - just crawl one specific page
-    ingest_url("https://example.com/specific-page")  # No token required
+    # Crawl just one specific page (no analysis needed)
+    ingest_url("https://example.com/specific-page")
     ```
-
-    **TOKEN BEHAVIOR:**
-    - REUSABLE: Not consumed on use, valid for 4 hours
-    - DOMAIN-SCOPED: Only works for domains found in analysis
-    - SERVER-VALIDATED: Cannot be faked, stored server-side
-    - Works for sites WITH sitemap (stores all sitemap domains)
-    - Works for sites WITHOUT sitemap (stores base_url domain)
-
-    **WHY THIS DESIGN:**
-    - Single-page crawls are bounded (1 page) → no planning needed
-    - Multi-page crawls are unbounded → requires analysis first
-    - Token reuse enables multiple targeted crawls without redundant analysis
-    - Domain scoping prevents crawling unrelated sites
 
     **DOMAIN GUIDANCE:**
     Websites often contain diverse content types. Consider creating separate collections for:
@@ -778,13 +745,10 @@ async def ingest_url(
               - "crawl": New crawl. ERROR if this exact URL already crawled into this collection.
               - "recrawl": Update existing. Deletes old pages from this URL and re-ingests fresh content.
         follow_links: If True, follows internal links for multi-page crawl (default: False).
-                     REQUIRES analysis_token from analyze_website().
-                     If False, crawls only the single specified URL (no token required).
+                     If False, crawls only the single specified URL.
         max_pages: Maximum pages to crawl when follow_links=True (default: 10, max: 20).
                   Crawl stops after this many pages even if more links discovered.
-        analysis_token: Required when follow_links=True. Get from analyze_website() response.
-                       Token is REUSABLE (not consumed), valid for 4 hours, domain-scoped.
-                       Not required when follow_links=False (single-page crawls).
+        analysis_token: Optional. Deprecated parameter, no longer required. Kept for backward compatibility.
         metadata: Custom metadata to apply to ALL crawled pages (merged with page metadata).
                   Must match collection's metadata_schema if defined.
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
@@ -822,29 +786,27 @@ async def ingest_url(
                    mode="recrawl" to update.
 
     Example:
-        # Analyze website structure first (REQUIRED for follow_links)
-        analysis = analyze_website("https://example.com/docs")
-        # Returns: total_urls=120, pattern_stats={"/api": 45, "/guides": 30, ...}, analysis_token="abc123..."
-
         # Create collection
         create_collection("example-docs", "Example.com documentation",
                          domain="Documentation", domain_scope="Official API and guide docs")
 
-        # Single page (no analysis_token needed)
+        # Single page crawl
         result = ingest_url(
             url="https://example.com/docs/intro",
             collection_name="example-docs",
             mode="crawl"
         )
 
-        # Multi-page crawl (REQUIRES analysis_token)
+        # Multi-page crawl (recommended: analyze first to understand scope)
+        analysis = analyze_website("https://example.com/docs")
+        # Review: total_urls, pattern_stats to understand site structure
+
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
             mode="crawl",
             follow_links=True,
-            max_pages=30,
-            analysis_token=analysis["analysis_token"],
+            max_pages=20,
             metadata={"source": "official", "doc_type": "api"}
         )
 
@@ -854,8 +816,7 @@ async def ingest_url(
             collection_name="example-docs",
             mode="recrawl",
             follow_links=True,
-            max_pages=30,
-            analysis_token=analysis["analysis_token"]
+            max_pages=20
         )
     """
     # Create progress callback wrapper if context available

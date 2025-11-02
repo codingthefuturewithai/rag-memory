@@ -78,7 +78,7 @@ async def main():
             collection_name="test_mcp_crawl",
             follow_links=True,
             max_pages=5,
-            analysis_token=analysis['analysis_token'],
+            analysis_token=None,  # Token is now optional
             mode="recrawl",  # Use recrawl to avoid duplicate errors
             metadata=None,
             include_document_ids=False,
