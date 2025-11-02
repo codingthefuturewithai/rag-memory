@@ -16,6 +16,8 @@ from crawl4ai import (
     CacheMode,
     CrawlerRunConfig,
 )
+from crawl4ai.content_filter_strategy import PruningContentFilter
+from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 
 from src.ingestion.models import CrawlError, CrawlResult
 
@@ -72,15 +74,39 @@ class WebCrawler:
             ],
         )
 
+        # Content filter to remove navigation noise and reduce document-to-document relationships
+        # in knowledge graph extraction. Uses algorithmic text density + link density scoring.
+        # Issue: Web pages contain navigation elements (links, breadcrumbs, sidebars) that confuse
+        # Graphiti's LLM-based entity extraction, causing extraction of document structure instead of
+        # semantic relationships. PruningContentFilter removes ~50-55% of navigation clutter while
+        # preserving 100% of valuable documentation content.
+        # See: Issue 10 in TASKS_AND_ISSUES.md for detailed analysis
+        content_filter = PruningContentFilter(
+            threshold=0.40,           # Lower threshold (0.35-0.40) more permissive for documentation sites
+            threshold_type="fixed",   # Fixed mode is more predictable than dynamic
+            min_word_threshold=5      # Keep small but meaningful content blocks
+        )
+
+        # Wrap filter in markdown generator (filter must be passed through generator, not directly)
+        self.markdown_generator = DefaultMarkdownGenerator(
+            content_filter=content_filter
+        )
+
         # Crawler run configuration (for single-page crawls)
         self.crawler_config = CrawlerRunConfig(
+            markdown_generator=self.markdown_generator,  # Pass generator with filter to clean content
             cache_mode=CacheMode.BYPASS,  # Always fetch fresh content
             word_count_threshold=10,  # Minimum words to consider valid content
-            excluded_tags=["nav", "footer", "header", "aside"],  # Remove navigation
+            excluded_tags=[
+                "nav", "footer", "header", "aside",  # Remove navigation
+                "form", "iframe", "script", "style",  # Remove interactive/styling elements
+                "noscript", "meta", "link"  # Remove non-content elements
+            ],
             remove_overlay_elements=True,  # Remove popups/modals
         )
 
         logger.info(f"WebCrawler initialized (headless={headless}, verbose={verbose})")
+        logger.info(f"Content filtering enabled: PruningContentFilter (threshold=0.40, fixed mode)")
 
     async def crawl_page(self, url: str, crawl_root_url: Optional[str] = None) -> CrawlResult:
         """
@@ -136,8 +162,10 @@ class WebCrawler:
                         result=result,
                     )
 
-                    # Get clean markdown content
-                    content = result.markdown.raw_markdown
+                    # Use filtered markdown output to reduce navigation noise
+                    # fit_markdown is ONLY populated when PruningContentFilter is used
+                    # Falls back to markdown_with_citations if filtered version not available
+                    content = result.markdown.fit_markdown or result.markdown.markdown_with_citations
 
                     logger.info(
                         f"Successfully crawled {url} ({len(content)} chars, "
@@ -261,6 +289,7 @@ class WebCrawler:
         # stream=True processes pages one-at-a-time to prevent browser context leaks in Docker
         # session_id ensures clean browser session management
         deep_crawler_config = CrawlerRunConfig(
+            markdown_generator=self.markdown_generator,  # Use PruningContentFilter to remove navigation noise
             cache_mode=CacheMode.BYPASS,
             word_count_threshold=10,
             excluded_tags=["nav", "footer", "header", "aside"],
@@ -307,7 +336,7 @@ class WebCrawler:
                             results.append(
                                 CrawlResult(
                                     url=page_url,
-                                    content=crawl_result.markdown.raw_markdown,
+                                    content=crawl_result.markdown.fit_markdown or crawl_result.markdown.raw_markdown,  # Use filtered if available, fallback to raw
                                     metadata=metadata,
                                     success=True,
                                     links_found=(

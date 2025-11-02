@@ -66,3 +66,7 @@ build.sh
 
 # Deployment docs (not needed in container)
 DEPLOYMENT_READY.md
+
+# Crawl4AI development directories (use PyPI package instead)
+crawl4ai-local/
+crawl4ai-fork/

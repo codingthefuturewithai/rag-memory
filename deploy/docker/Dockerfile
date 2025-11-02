@@ -17,11 +17,6 @@ RUN apt-get update && apt-get install -y python3-pip && \
     uv sync --frozen --no-dev && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Copy local patched crawl4ai and install it (replaces pyproject.toml version)
-COPY crawl4ai-local /tmp/crawl4ai-local
-RUN uv pip uninstall -y crawl4ai || true && \
-    uv pip install /tmp/crawl4ai-local
-
 # ============================================================================
 # Stage 2: Runtime image
 # ============================================================================

@@ -42,7 +42,7 @@ dependencies = [
     "platformdirs>=4.0.0",
     "pyyaml>=6.0.0",
     # Web Crawling
-    "crawl4ai>=0.4.0",
+    "crawl4ai-ctf>=0.7.6.post3",
     "playwright>=1.49.0",
     # MCP Server
     "mcp[cli]>=1.0.0",

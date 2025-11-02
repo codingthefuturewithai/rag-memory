@@ -63,6 +63,9 @@ logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
 # Errors and warnings still visible.
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
+# TEMPORARILY: Ensure crawl4ai logging is visible (for verifying patched code)
+logging.getLogger("crawl4ai").setLevel(logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 # Global variables to hold RAG components (initialized by lifespan)
@@ -148,7 +151,7 @@ async def lifespan(app: FastMCP):
         logger.info(
             f"PostgreSQL schema valid ✓ "
             f"(tables: 3/3, pgvector: {'✓' if pg_validation['pgvector_loaded'] else '✗'}, "
-            f"indexes: {pg_validation['hnsw_indexes']}/2)"
+            f"indexes: {pg_validation['hnsw_indexes']}/1)"
         )
     except SystemExit:
         raise
