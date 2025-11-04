@@ -795,15 +795,14 @@ async def analyze_website_impl(
     """
     Implementation of analyze_website tool.
 
-    Discovers URL patterns for a website using AsyncUrlSeeder with sitemap+cc source.
-    Tries sitemap first, falls back to Common Crawl if no sitemap available.
+    Discovers URL patterns for a website from public sources.
     Includes 50-second hard timeout with graceful error handling.
 
     GUARANTEED to return structured response in ALL scenarios:
     - Success: URL patterns and statistics
     - Timeout: Informative message about site size
     - Error: Description of what went wrong
-    - Missing AsyncUrlSeeder: Installation instructions
+    - Tool unavailable: Setup instructions
 
     NO recommendations or heuristics - just facts for AI agent to reason about.
 

@@ -611,8 +611,8 @@ async def analyze_website(
 
     **Purpose:**
     Helps AI agents make informed decisions about multi-page crawls by discovering
-    URL patterns. Uses AsyncUrlSeeder to try sitemap first, falls back to Common Crawl
-    for sites without sitemaps. Analyzes are FREE (no AI models, just HTTP requests).
+    URL patterns. Discovers URLs from public sources (sitemaps and search indexes).
+    Analyzes are FREE (no AI models, just HTTP requests).
 
     **URL Discovery Strategy:**
     1. Tries sitemap.xml (both provided URL and root domain)

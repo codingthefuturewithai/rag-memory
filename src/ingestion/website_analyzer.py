@@ -1,10 +1,9 @@
 """
-Website analysis utilities for discovering URL patterns using AsyncUrlSeeder.
+Website analysis utilities for discovering URL patterns.
 
 This module provides raw data extraction for AI agents to make informed decisions
-about website crawling. Uses Crawl4AI's AsyncUrlSeeder to discover URLs via
-sitemap (if available) or Common Crawl (fallback), with 50-second timeout and
-graceful error handling.
+about website crawling. Discovers URLs from public sources with 50-second timeout
+and graceful error handling.
 
 NO heuristics or recommendations - just facts.
 """
@@ -28,9 +27,8 @@ class WebsiteAnalyzer:
     """
     Analyzes website structure by discovering URL patterns.
 
-    Uses AsyncUrlSeeder with source="sitemap+cc" to try sitemap first,
-    falls back to Common Crawl if no sitemap available. Includes 50-second
-    timeout with graceful error handling.
+    Discovers URLs from public sources (sitemaps and search indexes).
+    Includes 50-second timeout with graceful error handling.
     """
 
     ANALYSIS_TIMEOUT = 50  # seconds - hard timeout for complete analysis
@@ -82,10 +80,10 @@ class WebsiteAnalyzer:
         if not ASYNCURLSEEDER_AVAILABLE:
             return self._error_response(
                 analysis_method="not_available",
-                error="AsyncUrlSeeder not available",
+                error="tool_unavailable",
                 message=(
-                    "Crawl4AI not installed. Install with: uv add crawl4ai. "
-                    "Website analysis requires AsyncUrlSeeder for reliable URL discovery."
+                    "Website analysis tool is not available. "
+                    "This is typically a setup issue. Contact support for details."
                 )
             )
 
