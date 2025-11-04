@@ -819,7 +819,7 @@ async def analyze_website_impl(
     Returns:
         Dictionary with analysis results. ALWAYS includes:
         - base_url: Input URL
-        - analysis_method: "asyncurlseeder", "timeout", "error", or "not_available"
+        - status: "asyncurlseeder", "timeout", "error", or "not_available"
         - total_urls: Number of URLs discovered (0 on error)
         - pattern_stats: Dictionary of URL patterns (empty on error)
         - notes: Informative message describing results or error
@@ -839,7 +839,7 @@ async def analyze_website_impl(
         logger.error(f"Unexpected error in analyze_website_impl: {e}")
         return {
             "base_url": base_url,
-            "analysis_method": "error",
+            "status": "error",
             "error": "unexpected",
             "total_urls": 0,
             "pattern_stats": {},

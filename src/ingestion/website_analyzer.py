@@ -67,7 +67,7 @@ class WebsiteAnalyzer:
         Returns:
             Dictionary with analysis results. ALWAYS includes:
             - base_url: Input URL
-            - analysis_method: "success", "timeout", "error", "not_available"
+            - status: "success", "timeout", "error", "not_available"
             - total_urls: Number of URLs discovered (0 on error/timeout)
             - pattern_stats: Dictionary of URL patterns or empty dict
             - notes: Informative message about what happened
@@ -79,7 +79,7 @@ class WebsiteAnalyzer:
         """
         if not ASYNCURLSEEDER_AVAILABLE:
             return self._error_response(
-                analysis_method="not_available",
+                status="not_available",
                 error="tool_unavailable",
                 message=(
                     "Website analysis tool is not available. "
@@ -98,7 +98,7 @@ class WebsiteAnalyzer:
         except asyncio.TimeoutError:
             # Timeout - 50+ seconds elapsed
             return self._error_response(
-                analysis_method="timeout",
+                status="timeout",
                 error="timeout",
                 message=(
                     f"Website analysis exceeded {self.ANALYSIS_TIMEOUT}-second timeout. "
@@ -126,7 +126,7 @@ class WebsiteAnalyzer:
                 user_message = f"Analysis failed: {error_msg}"
 
             return self._error_response(
-                analysis_method="error",
+                status="error",
                 error=error_code,
                 message=(
                     f"{user_message} "
@@ -165,7 +165,7 @@ class WebsiteAnalyzer:
         if not urls:
             # No URLs discovered
             return self._error_response(
-                analysis_method="error",
+                status="error",
                 error="no_urls",
                 message=(
                     f"No publicly discoverable URLs found for {self.domain}. "
@@ -184,7 +184,7 @@ class WebsiteAnalyzer:
 
         if not url_strings:
             return self._error_response(
-                analysis_method="error",
+                status="error",
                 error="no_valid_urls",
                 message="URLs discovered but none were valid. This is an internal error.",
                 elapsed_seconds=round(elapsed, 2)
@@ -211,7 +211,7 @@ class WebsiteAnalyzer:
         # Build response
         result = {
             "base_url": self.base_url,
-            "analysis_method": "success",
+            "status": "success",
             "total_urls": len(url_strings),
             "url_patterns": len(url_groups),
             "elapsed_seconds": round(elapsed, 2),
@@ -301,7 +301,7 @@ class WebsiteAnalyzer:
 
     def _error_response(
         self,
-        analysis_method: str,
+        status: str,
         error: str,
         message: str,
         elapsed_seconds: float = 0
@@ -312,7 +312,7 @@ class WebsiteAnalyzer:
         Ensures agent always gets valid response even on failure.
 
         Args:
-            analysis_method: "timeout", "error", "not_available", etc
+            status: "timeout", "error", "not_available", etc
             error: Short error code
             message: Informative user-friendly message
             elapsed_seconds: How long analysis took before failure
@@ -322,7 +322,7 @@ class WebsiteAnalyzer:
         """
         return {
             "base_url": self.base_url,
-            "analysis_method": analysis_method,
+            "status": status,
             "error": error,
             "total_urls": 0,
             "pattern_stats": {},
@@ -392,7 +392,7 @@ async def analyze_website_async(
         # Invalid URL
         return {
             "base_url": base_url,
-            "analysis_method": "error",
+            "status": "error",
             "error": "invalid_url",
             "total_urls": 0,
             "pattern_stats": {},
@@ -404,7 +404,7 @@ async def analyze_website_async(
         logger.error(f"Unexpected error in analyze_website_async: {e}")
         return {
             "base_url": base_url,
-            "analysis_method": "error",
+            "status": "error",
             "error": "unexpected_error",
             "total_urls": 0,
             "pattern_stats": {},

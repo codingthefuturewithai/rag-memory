@@ -55,14 +55,14 @@ def analyze_website_cmd(url, include_urls, max_urls, timeout):
 
         # Show results
         if result["total_urls"] == 0:
-            console.print(f"[yellow]⚠ {result.get('analysis_method', 'unknown').upper()}[/yellow]")
+            console.print(f"[yellow]⚠ {result.get('status', 'unknown').upper()}[/yellow]")
             if "error" in result:
                 console.print(f"[yellow]Error: {result['error']}[/yellow]")
             console.print(f"[yellow]{result['notes']}[/yellow]")
             return
 
         console.print(f"[green]✓ Discovered {result['total_urls']:,} URLs[/green]")
-        console.print(f"[dim]Method: {result['analysis_method']} | Time: {result.get('elapsed_seconds', 0):.2f}s[/dim]")
+        console.print(f"[dim]Method: {result['status']} | Time: {result.get('elapsed_seconds', 0):.2f}s[/dim]")
 
         # Show domains if multiple
         if "domains" in result and len(result["domains"]) > 1:

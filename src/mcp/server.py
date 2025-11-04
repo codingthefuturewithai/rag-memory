@@ -621,19 +621,19 @@ async def analyze_website(
 
     **⚠️ CRITICAL: 50-Second Hard Timeout**
     Analysis has a hard 50-second timeout. If site exceeds this:
-    - Response: analysis_method="timeout"
+    - Response: status="timeout"
     - You must: Try analyzing a specific subsection (e.g., /docs, /api)
     - Or: Use manual crawling with limited depth
     - NOTE: The timeout response is still structured and informative
 
-    **Possible Response Scenarios (check analysis_method field):**
+    **Possible Response Scenarios (check status field):**
     1. "success" - URLs discovered successfully
     2. "timeout" - Analysis exceeded 50 seconds (site too large for automatic analysis)
     3. "error" - Analysis failed (connection error, invalid input, etc.)
     4. "not_available" - Analysis tool unavailable (rare, see notes for fix)
 
     **Error Cases - YOU Must Handle:**
-    When analysis_method != "success", check the "notes" field for guidance.
+    When status != "success", check the "notes" field for guidance.
     You are responsible for deciding next steps:
     - Timeout: Choose to analyze subsection, use manual crawl, or skip
     - No URLs found: Site may be authenticated, not indexed, or robots.txt blocking
@@ -648,10 +648,10 @@ async def analyze_website(
         max_urls_per_pattern: Max URLs per pattern when include_url_lists=True (default: 10)
 
     Returns (ALWAYS returns one of these structures):
-        Success (analysis_method="success"):
+        Success (status="success"):
         {
             "base_url": str,
-            "analysis_method": "success",
+            "status": "success",
             "total_urls": int,  # URLs discovered (1-150)
             "url_patterns": int,  # Number of pattern groups
             "elapsed_seconds": float,
@@ -667,10 +667,10 @@ async def analyze_website(
             "url_groups": dict  # Only if include_url_lists=True
         }
 
-        Timeout (analysis_method="timeout"):
+        Timeout (status="timeout"):
         {
             "base_url": str,
-            "analysis_method": "timeout",
+            "status": "timeout",
             "error": "timeout",
             "total_urls": 0,
             "pattern_stats": {},
@@ -678,10 +678,10 @@ async def analyze_website(
             "elapsed_seconds": 50
         }
 
-        Error (analysis_method="error"):
+        Error (status="error"):
         {
             "base_url": str,
-            "analysis_method": "error",
+            "status": "error",
             "error": str,  # Error code: "invalid_url", "network_error", "analysis_failed", "no_urls"
             "total_urls": 0,
             "pattern_stats": {},
@@ -689,10 +689,10 @@ async def analyze_website(
             "elapsed_seconds": float
         }
 
-        Not Available (analysis_method="not_available"):
+        Not Available (status="not_available"):
         {
             "base_url": str,
-            "analysis_method": "not_available",
+            "status": "not_available",
             "error": "tool_unavailable",
             "total_urls": 0,
             "pattern_stats": {},
@@ -703,11 +703,11 @@ async def analyze_website(
     **Examples:**
         # Simple analysis (pattern stats only)
         analysis = analyze_website("https://docs.python.org")
-        if analysis["analysis_method"] == "success":
+        if analysis["status"] == "success":
             # Success - plan crawl based on patterns
             for pattern, stats in analysis["pattern_stats"].items():
                 print(f"{pattern}: {stats['count']} URLs")
-        elif analysis["analysis_method"] == "timeout":
+        elif analysis["status"] == "timeout":
             # Too large - try subsection instead
             analysis = analyze_website("https://docs.python.org/3.11")
         else:
@@ -719,7 +719,7 @@ async def analyze_website(
 
     **Usage Pattern (from server_instructions.txt):**
         1. Call analyze_website() - understand scope
-        2. Check analysis_method (success vs timeout vs error)
+        2. Check status (success vs timeout vs error)
         3. If success: Review pattern_stats, plan targeted crawls
         4. If timeout: Analyze subsection or use manual crawl
         5. If error: See notes field, decide next approach
