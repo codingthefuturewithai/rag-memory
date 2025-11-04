@@ -1,0 +1,11 @@
+PAGE 1: https://docs.claude.com/en/docs/mcp
+====================================================================================================
+
+FILTERED MARKDOWN (WITH FILTER) - 1320 chars
+
+Agent Skills are now available! [Learn more about extending Claude's capabilities with Agent Skills](https://docs.claude.com/en/docs/agents-and-tools/agent-skills/overview).
+MCP is an open protocol that standardizes how applications provide context to LLMs. Think of MCP like a USB-C port for AI applications. Just as USB-C provides a standardized way to connect your devices to various peripherals and accessories, MCP provides a standardized way to connect AI models to different data sources and tools.
+##  Build your own MCP products
+[ Learn more about the protocol, how to build servers and clients, and discover those made by others. ](https://modelcontextprotocol.io)
+## [MCP in the Messages API Use the MCP connector in the Messages API to connect to MCP servers. ](https://docs.claude.com/en/docs/agents-and-tools/mcp-connector)[ Add your MCP servers to Claude Code, or use Claude Code as a server. ](https://docs.claude.com/en/docs/claude-code/mcp)[ Enable MCP connectors for your team in Claude.ai. ](https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp)[ Add MCP servers to Claude Desktop. ](https://support.claude.com/en/articles/10949351-getting-started-with-local-mcp-servers-on-claude-desktop)
+Responses are generated using AI and may contain mistakes.

@@ -1,11 +1,8 @@
 # RAG Memory - AI Agent Usage Guide
 
-## System Architecture
-Dual-storage knowledge management:
-- **Vector Store** (PostgreSQL+pgvector): Semantic search via embeddings
-- **Knowledge Graph** (Neo4j+Graphiti): Entity relationships and temporal reasoning
+## System Overview
 
-**IMPORTANT:** Every ingestion writes to BOTH stores using AI models (embeddings + LLMs). Ingestion has cost. Queries are free (local database operations).
+**IMPORTANT:** Ingestion operations have cost (they process your content). Query operations are free (they search existing knowledge).
 
 ---
 
@@ -65,7 +62,7 @@ list_documents(collection_name, include_details=True)
 # STEP 1: Analyze website structure
 analysis = analyze_website(url, include_url_lists=True)
   → Returns: total_urls, pattern_stats, elapsed_seconds
-  → Note: Uses AsyncUrlSeeder with sitemap+cc fallback
+  → Note: May take up to 50 seconds for large sites
 
 # STEP 2: Review scope and plan strategy
   → If total_urls <= 20: Single targeted crawl
@@ -85,11 +82,12 @@ ingest_url(
 - max_pages=20 hard limit requires multiple crawls for large sites
 - Pattern stats show actual site structure for informed decisions
 
-**Smart Sitemap Discovery:**
-analyze_website() uses AsyncUrlSeeder which:
-- Tries sitemap first (if available)
-- Falls back to Common Crawl index (for sites without sitemaps)
-- Discovers 150+ URLs even for sites without traditional sitemaps
+**Website Analysis:**
+analyze_website() discovers publicly accessible URL patterns:
+- Works with sites that have sitemaps
+- Also discovers URLs from sites without sitemaps
+- Returns up to 150 URLs grouped by path pattern
+- 50-second timeout (very large sites may time out - try analyzing subsections instead)
 Example: "https://docs.example.com/api" → discovers /api section structure
 
 ### Use Recrawl for Website Updates
@@ -102,29 +100,31 @@ Use: ingest_url(url, mode="recrawl", ...)
 
 ---
 
-## 4. RAG vs GRAPH USAGE
+## 4. QUERY STRATEGIES
 
 **Use `search_documents` for:**
-- Content semantically similar to query
+- Finding content by meaning/topic
 - "What does knowledge base say about X?"
+- Returns relevant documents and sections
 
 **Use `query_relationships` for:**
-- Connections between entities
+- Discovering how concepts connect
 - "What is related to X?" or "How are A and B connected?"
+- Returns connections and relationships
 
 **Use `query_temporal` for:**
-- How knowledge evolved over time
+- Tracking how information changes over time
 - "How has X changed since 2023?"
+- Returns evolution and timeline of knowledge
 
-**Pro tip:** Combine both - graph for connections, RAG for detailed content.
+**Pro tip:** Combine multiple query types for comprehensive research.
 
 ---
 
 ## 5. EFFICIENCY & COST AWARENESS
 
-**Ingestion operations use AI models and have cost:**
-- Every `ingest_*` call processes content with embeddings + LLMs
-- Writes to both vector store and knowledge graph
+**Ingestion operations have cost:**
+- Every `ingest_*` call processes your content
 - Cost varies by document size and complexity
 
 **CRITICAL - INGESTION TIMING & TIMEOUT HANDLING:**
@@ -162,7 +162,7 @@ This prevents data corruption from concurrent identical operations. **If you see
 
 **Why this matters:** After a timeout, some MCP bridges (like OpenAI's) automatically retry with a new session. The duplicate protection catches this and prevents double-ingestion, which would corrupt your knowledge base with redundant data.
 
-**Query operations are FREE** (local database):
+**Query operations are FREE:**
 - `search_documents`
 - `query_relationships`
 - `query_temporal`

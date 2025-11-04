@@ -156,12 +156,12 @@ class WebsiteAnalyzer:
         if not urls:
             # No URLs discovered
             return self._error_response(
-                analysis_method="asyncurlseeder",
+                analysis_method="error",
                 error="no_urls",
                 message=(
                     f"No publicly discoverable URLs found for {self.domain}. "
                     "This may indicate: site behind authentication, "
-                    "no sitemap and not indexed by Common Crawl, or "
+                    "no sitemap and not indexed by public indexes, or "
                     "robots.txt blocking. "
                     "Try manual crawling if you have access."
                 ),
@@ -169,13 +169,13 @@ class WebsiteAnalyzer:
             )
 
         # Group and analyze discovered URLs
-        url_dicts = urls  # AsyncUrlSeeder returns List[Dict]
+        url_dicts = urls
         url_strings = [u.get('url', '') if isinstance(u, dict) else u for u in url_dicts]
         url_strings = [u for u in url_strings if u]  # Filter empty
 
         if not url_strings:
             return self._error_response(
-                analysis_method="asyncurlseeder",
+                analysis_method="error",
                 error="no_valid_urls",
                 message="URLs discovered but none were valid. This is an internal error.",
                 elapsed_seconds=round(elapsed, 2)
@@ -202,7 +202,7 @@ class WebsiteAnalyzer:
         # Build response
         result = {
             "base_url": self.base_url,
-            "analysis_method": "asyncurlseeder",
+            "analysis_method": "success",
             "total_urls": len(url_strings),
             "url_patterns": len(url_groups),
             "elapsed_seconds": round(elapsed, 2),
@@ -341,7 +341,7 @@ class WebsiteAnalyzer:
             Informative notes string
         """
         notes_parts = [
-            f"Discovered {total_urls} URLs in {elapsed:.2f}s using AsyncUrlSeeder (sitemap+cc).",
+            f"Discovered {total_urls} URLs in {elapsed:.2f}s.",
             f"URLs grouped into {num_patterns} patterns by first path segment.",
         ]
 

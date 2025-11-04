@@ -213,66 +213,54 @@ def search_documents(
     metadata_filter: dict | None = None,
 ) -> list[dict]:
     """
-    Search for relevant document chunks using vector similarity.
+    Search for relevant document chunks by meaning.
 
-    This is the primary RAG retrieval method. Uses OpenAI text-embedding-3-small
-    embeddings with pgvector HNSW indexing for fast, accurate semantic search.
+    Find documents and sections that match your query. Results are ranked by relevance
+    (most relevant first). Query using natural language - think of it as asking a
+    question rather than providing keywords.
 
     **IMPORTANT - Query Format:**
-    This tool uses SEMANTIC SEARCH with vector embeddings, NOT keyword search.
-    You MUST use natural language queries (complete sentences/questions), not keywords.
+    Use natural language questions and complete sentences, not isolated keywords.
 
     ✅ GOOD QUERIES (natural language):
         - "How do I create custom tools in the Agent SDK?"
         - "What's the best way to handle errors in my code?"
         - "Show me examples of parallel subagent execution"
 
-    ❌ BAD QUERIES (keywords - these will fail):
+    ❌ BAD QUERIES (keywords alone - won't work well):
         - "custom tools register createTool implementation"
         - "error handling exceptions try catch"
         - "subagent parallel concurrent execution"
 
-    TIP: Ask questions as if talking to a person. The system understands meaning,
-    not just matching words.
-
     **Collection Scoping:**
-    Specifying collection_name limits search to that domain's vector embeddings.
-    For relationship queries in the same domain, use query_graph_relationships
-    with the same collection_name.
-
-    By default, returns minimal response optimized for AI agent context windows
-    (only content, similarity, source_document_id, and source_filename). Use
-    include_metadata=True to get extended chunk details.
+    Optionally limit search to a specific collection. For relationship queries,
+    use query_relationships with the same collection_name.
 
     Args:
-        query: (REQUIRED) Natural language search query - use complete sentences, not keywords!
-        collection_name: Optional collection to scope search. If None, searches all collections.
-        limit: Maximum number of results to return (default: 5, max: 50)
-        threshold: Minimum similarity score 0-1 (default: 0.35). Lower = more permissive.
-                  Score interpretation for text-embedding-3-small:
-                  - 0.60+: Excellent match (highly relevant)
-                  - 0.40-0.60: Good match (semantically related)
-                  - 0.25-0.40: Moderate match (may be relevant)
-                  - <0.25: Weak match (likely not relevant)
-                  Results are always sorted by similarity (best first).
+        query: (REQUIRED) Natural language question - complete sentences work best!
+        collection_name: Optional - limit search to one collection. If None, searches all.
+        limit: Maximum results to return (default: 5, max: 50)
+        threshold: Minimum relevance score 0-1 (default: 0.35). Lower = less strict.
+                  - 0.60+: Excellent match
+                  - 0.40-0.60: Good match
+                  - 0.25-0.40: Moderate match
+                  - <0.25: Weak match
                   Set threshold=None to return all results ranked by relevance.
-        include_source: If True, includes full source document content in results
-        include_metadata: If True, includes chunk_id, chunk_index, char_start, char_end,
-                         and metadata dict. Default: False (minimal response).
-        metadata_filter: Optional dict for filtering by custom metadata fields (e.g., {"domain": "backend"}).
-                        All fields must match (AND logic). Default: None (no filtering).
+        include_source: If True, includes full source document content
+        include_metadata: If True, includes chunk_id, chunk_index, char_start, char_end
+        metadata_filter: Optional dict for filtering by custom metadata fields
 
     Returns:
-        List of matching chunks ordered by similarity (highest first).
+        List of matching chunks ordered by relevance (best first).
 
-        Minimal response (default, include_metadata=False):
+        Minimal response (default):
         [
             {
-                "content": str,  # Chunk content (~1000 chars)
-                "similarity": float,  # 0-1, higher is better
-                "source_document_id": int,  # For calling get_document_by_id()
-                "source_filename": str,  # Document title/filename
-                "source_content": str  # Full document (only if include_source=True)
+                "content": str,  # Chunk content
+                "similarity": float,  # 0-1 relevance score (higher = better match)
+                "source_document_id": int,
+                "source_filename": str,
+                "source_content": str  # Only if include_source=True
             }
         ]
 
@@ -283,32 +271,30 @@ def search_documents(
                 "similarity": float,
                 "source_document_id": int,
                 "source_filename": str,
-                "chunk_id": int,  # Internal chunk ID
-                "chunk_index": int,  # Position in document (0-based)
-                "char_start": int,  # Character position in source
+                "chunk_id": int,
+                "chunk_index": int,
+                "char_start": int,
                 "char_end": int,
-                "metadata": dict,  # Custom metadata from ingestion
+                "metadata": dict,
                 "source_content": str  # Only if include_source=True
             }
         ]
 
     Example:
-        # Minimal response (recommended for most queries)
+        # Basic search
         results = search_documents(
-            query="Python async programming",
-            collection_name="tutorials",
+            query="How do I configure authentication?",
+            collection_name="api-docs",
             limit=3
         )
 
-        # Extended response with all metadata
+        # With full details
         results = search_documents(
-            query="Python async programming",
-            collection_name="tutorials",
+            query="How do I configure authentication?",
+            collection_name="api-docs",
             limit=3,
             include_metadata=True
         )
-
-    Performance: ~400-500ms per query (includes embedding generation + vector search)
     """
     return search_documents_impl(
         searcher, query, collection_name, limit, threshold, include_source, include_metadata, metadata_filter
@@ -641,13 +627,13 @@ async def analyze_website(
     - NOTE: The timeout response is still structured and informative
 
     **Possible Response Scenarios (check analysis_method field):**
-    1. "asyncurlseeder" - Success: URLs discovered via sitemap or Common Crawl
+    1. "success" - URLs discovered successfully
     2. "timeout" - Analysis exceeded 50 seconds (site too large for automatic analysis)
     3. "error" - Analysis failed (connection error, invalid input, etc.)
-    4. "not_available" - AsyncUrlSeeder not installed (rare, see notes for fix)
+    4. "not_available" - Analysis tool unavailable (rare, see notes for fix)
 
     **Error Cases - YOU Must Handle:**
-    When analysis_method != "asyncurlseeder", check the "notes" field for guidance.
+    When analysis_method != "success", check the "notes" field for guidance.
     You are responsible for deciding next steps:
     - Timeout: Choose to analyze subsection, use manual crawl, or skip
     - No URLs found: Site may be authenticated, not indexed, or robots.txt blocking
@@ -662,10 +648,10 @@ async def analyze_website(
         max_urls_per_pattern: Max URLs per pattern when include_url_lists=True (default: 10)
 
     Returns (ALWAYS returns one of these structures):
-        Success (analysis_method="asyncurlseeder"):
+        Success (analysis_method="success"):
         {
             "base_url": str,
-            "analysis_method": "asyncurlseeder",
+            "analysis_method": "success",
             "total_urls": int,  # URLs discovered (1-150)
             "url_patterns": int,  # Number of pattern groups
             "elapsed_seconds": float,
@@ -707,17 +693,17 @@ async def analyze_website(
         {
             "base_url": str,
             "analysis_method": "not_available",
-            "error": "AsyncUrlSeeder not available",
+            "error": "tool_unavailable",
             "total_urls": 0,
             "pattern_stats": {},
-            "notes": "Crawl4AI not installed. Install with: uv add crawl4ai...",
+            "notes": "Website analysis tool not available. See notes for setup instructions.",
             "elapsed_seconds": 0
         }
 
     **Examples:**
         # Simple analysis (pattern stats only)
         analysis = analyze_website("https://docs.python.org")
-        if analysis["analysis_method"] == "asyncurlseeder":
+        if analysis["analysis_method"] == "success":
             # Success - plan crawl based on patterns
             for pattern, stats in analysis["pattern_stats"].items():
                 print(f"{pattern}: {stats['count']} URLs")
