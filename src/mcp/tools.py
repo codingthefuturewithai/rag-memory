@@ -910,7 +910,7 @@ async def ingest_url_impl(
     follow_links: bool = False,
     max_pages: int = 10,
     analysis_token: str | None = None,
-    mode: str = "crawl",
+    mode: str = "ingest",
     metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
     progress_callback=None,
@@ -919,19 +919,19 @@ async def ingest_url_impl(
     Implementation of ingest_url tool with mode support.
 
     Routes through unified mediator to update both RAG and Knowledge Graph.
-    Performs health checks on both databases before crawling (Option B: Mandatory).
+    Performs health checks on both databases before ingestion (Option B: Mandatory).
 
     Args:
         follow_links: If True, follows internal links for multi-page crawl
         max_pages: Maximum pages to crawl when follow_links=True (default=10, max=20)
         analysis_token: Optional. Deprecated parameter, kept for backward compatibility.
-        mode: "crawl" (new crawl, error if exists) or "recrawl" (update existing)
+        mode: "ingest" (new ingest, error if exists) or "reingest" (update existing)
         progress_callback: Optional async callback for MCP progress notifications
     """
     try:
         # Progress: Starting
         if progress_callback:
-            await progress_callback(0, 100, "Starting URL crawl...")
+            await progress_callback(0, 100, "Starting URL ingest...")
 
         # ============================================================================
         # COMPREHENSIVE PARAMETER VALIDATION
@@ -955,8 +955,8 @@ async def ingest_url_impl(
             return health_error
 
         # Validate mode
-        if mode not in ["crawl", "recrawl"]:
-            raise ValueError(f"Invalid mode '{mode}'. Must be 'crawl' or 'recrawl'")
+        if mode not in ["ingest", "reingest"]:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
 
         # Check collection exists
         collection = doc_store.collection_mgr.get_collection(collection_name)
@@ -970,18 +970,18 @@ async def ingest_url_impl(
         # Check for existing crawl
         existing_crawl = check_existing_crawl(db, url, collection_name)
 
-        if mode == "crawl" and existing_crawl:
+        if mode == "ingest" and existing_crawl:
             raise ValueError(
-                f"URL '{url}' has already been crawled into collection '{collection_name}'.\n"
-                f"Existing crawl: {existing_crawl['page_count']} pages, "
+                f"This URL has already been ingested into collection '{collection_name}'.\n"
+                f"Existing ingest: {existing_crawl['page_count']} pages, "
                 f"{existing_crawl['chunk_count']} chunks, "
                 f"timestamp: {existing_crawl['crawl_timestamp']}\n"
-                f"To update existing content, use mode='recrawl'."
+                f"To overwrite existing content, use mode='reingest'."
             )
 
-        # If recrawl mode, delete old documents first
+        # If reingest mode, delete old documents first
         old_pages_deleted = 0
-        if mode == "recrawl" and existing_crawl:
+        if mode == "reingest" and existing_crawl:
             if progress_callback:
                 await progress_callback(5, 100, f"Deleting {existing_crawl['page_count']} old pages...")
 
@@ -1006,7 +1006,7 @@ async def ingest_url_impl(
 
                 # Delete Graph episodes first (if available)
                 if graph_store:
-                    logger.info(f"🗑️  Deleting {old_pages_deleted} Graph episodes for recrawl of {url}")
+                    logger.info(f"🗑️  Deleting {old_pages_deleted} Graph episodes for reingest of {url}")
                     for doc_id, filename in existing_docs:
                         episode_name = f"doc_{doc_id}"
                         deleted = await graph_store.delete_episode_by_name(episode_name)
@@ -1025,7 +1025,7 @@ async def ingest_url_impl(
                     # Delete source document
                     cur.execute("DELETE FROM source_documents WHERE id = %s", (doc_id,))
 
-        # Progress: Crawling
+        # Progress: Crawling web pages
         if progress_callback:
             crawl_msg = f"Crawling {url}" + (f" (max {max_pages} pages)" if follow_links else "")
             await progress_callback(10, 100, crawl_msg)
@@ -1046,9 +1046,9 @@ async def ingest_url_impl(
             result = await crawl_single_page(url, headless=True, verbose=False)
             results = [result] if result.success else []
 
-        # Progress: Crawl complete, starting ingestion
+        # Progress: Web crawl complete, starting ingestion
         if progress_callback:
-            await progress_callback(20, 100, f"Crawl complete ({len(results)} pages), starting ingestion...")
+            await progress_callback(20, 100, f"Web crawl complete ({len(results)} pages), starting ingestion...")
 
         # Ingest each page (route through unified mediator if available)
         document_ids = []
@@ -1109,7 +1109,7 @@ async def ingest_url_impl(
             },
         }
 
-        if mode == "recrawl":
+        if mode == "reingest":
             response["old_pages_deleted"] = old_pages_deleted
 
         if include_document_ids:

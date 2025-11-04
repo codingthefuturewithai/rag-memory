@@ -734,7 +734,7 @@ async def analyze_website(
 async def ingest_url(
     url: str,
     collection_name: str,
-    mode: str = "crawl",
+    mode: str = "ingest",
     follow_links: bool = False,
     max_pages: int = 10,
     analysis_token: str | None = None,
@@ -743,10 +743,10 @@ async def ingest_url(
     context: Context | None = None,
 ) -> dict:
     """
-    Crawl and ingest content from a web URL with duplicate prevention.
+    Ingest content from a web URL with duplicate prevention.
 
     **RECOMMENDED WORKFLOW (follow_links=True):**
-    For multi-page crawls, it's recommended (but not required) to first analyze the website:
+    For multi-page ingests, it's recommended (but not required) to first analyze the website:
     ```
     # Step 1: Analyze website structure (recommended)
     analysis = analyze_website("https://docs.example.com")
@@ -754,14 +754,14 @@ async def ingest_url(
 
     # Step 2: Review scope (e.g., 500 URLs across /api, /guides, /reference)
 
-    # Step 3: Multi-page crawl with link following
+    # Step 3: Multi-page ingest with link following
     ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20)
     ingest_url("https://docs.example.com/guides", follow_links=True, max_pages=20)
     ```
 
-    **SINGLE-PAGE CRAWL (follow_links=False):**
+    **SINGLE-PAGE INGEST (follow_links=False):**
     ```
-    # Crawl just one specific page (no analysis needed)
+    # Ingest just one specific page (no analysis needed)
     ingest_url("https://example.com/specific-page")
     ```
 
@@ -771,9 +771,9 @@ async def ingest_url(
     - Different content purposes (blog posts vs product pages vs support articles)
 
     ⏱️ PROCESSING TIME:
-    Processing time varies by crawl scope and page content. Examples observed:
+    Processing time varies by ingest scope and page content. Examples observed:
     - Single page (follow_links=False): ~30 seconds to several minutes
-    - Multi-page crawl (follow_links=True): several minutes or more
+    - Multi-page ingest (follow_links=True): several minutes or more
 
     ⚠️ TIMEOUT BEHAVIOR:
     If your client times out, the operation CONTINUES on the server and will
@@ -795,36 +795,36 @@ async def ingest_url(
     4. Only retry after confirming the original request completed or failed
 
     IMPORTANT DUPLICATE PREVENTION:
-    - mode="crawl": New crawl. Raises error if URL already crawled into collection.
-    - mode="recrawl": Update existing crawl. Deletes old pages and re-ingests.
+    - mode="ingest": New ingest. Raises error if URL already ingested into collection.
+    - mode="reingest": Update existing ingest. Deletes old pages and re-ingests.
 
     This prevents accidentally duplicating data, which causes outdated information
     to persist alongside new information.
 
     IMPORTANT: Collection must exist before ingesting. Use create_collection() first.
 
-    By default, returns minimal response without document_ids array (may be large for multi-page crawls).
+    By default, returns minimal response without document_ids array (may be large for multi-page ingests).
     Use include_document_ids=True to get the list of document IDs.
 
     Args:
-        url: (REQUIRED) URL to crawl and ingest (e.g., "https://docs.python.org/3/")
+        url: (REQUIRED) URL to ingest (e.g., "https://docs.python.org/3/")
         collection_name: (REQUIRED) Collection to add content to (must already exist)
-        mode: Crawl mode - "crawl" or "recrawl" (default: "crawl").
-              - "crawl": New crawl. ERROR if this exact URL already crawled into this collection.
-              - "recrawl": Update existing. Deletes old pages from this URL and re-ingests fresh content.
-        follow_links: If True, follows internal links for multi-page crawl (default: False).
-                     If False, crawls only the single specified URL.
-        max_pages: Maximum pages to crawl when follow_links=True (default: 10, max: 20).
-                  Crawl stops after this many pages even if more links discovered.
+        mode: Ingest mode - "ingest" or "reingest" (default: "ingest").
+              - "ingest": New ingest. ERROR if this exact URL already ingested into this collection.
+              - "reingest": Update existing. Deletes old pages from this URL and re-ingests fresh content.
+        follow_links: If True, follows internal links for multi-page ingest (default: False).
+                     If False, ingests only the single specified URL.
+        max_pages: Maximum pages to ingest when follow_links=True (default: 10, max: 20).
+                  Ingest stops after this many pages even if more links discovered.
         analysis_token: Optional. Deprecated parameter, no longer required. Kept for backward compatibility.
-        metadata: Custom metadata to apply to ALL crawled pages (merged with page metadata).
+        metadata: Custom metadata to apply to ALL ingested pages (merged with page metadata).
                   Must match collection's metadata_schema if defined.
         include_document_ids: If True, includes list of document IDs. Default: False (minimal response).
 
     Returns:
-        Minimal response (default, mode="crawl"):
+        Minimal response (default, mode="ingest"):
         {
-            "mode": str,  # "crawl" or "recrawl"
+            "mode": str,  # "ingest" or "reingest"
             "pages_crawled": int,
             "pages_ingested": int,  # May be less if some pages failed
             "total_chunks": int,
@@ -836,10 +836,10 @@ async def ingest_url(
             }
         }
 
-        Recrawl response (mode="recrawl"):
+        Reingest response (mode="reingest"):
         {
             ...same as above...
-            "old_pages_deleted": int  # Pages removed before re-crawling
+            "old_pages_deleted": int  # Pages removed before re-ingesting
         }
 
         Extended response (include_document_ids=True):
@@ -849,40 +849,40 @@ async def ingest_url(
         }
 
     Raises:
-        ValueError: If collection doesn't exist, or if mode="crawl" and URL already
-                   crawled into this collection. Error message suggests using
-                   mode="recrawl" to update.
+        ValueError: If collection doesn't exist, or if mode="ingest" and URL already
+                   ingested into this collection. Error message suggests using
+                   mode="reingest" to update.
 
     Example:
         # Create collection
         create_collection("example-docs", "Example.com documentation",
                          domain="Documentation", domain_scope="Official API and guide docs")
 
-        # Single page crawl
+        # Single page ingest
         result = ingest_url(
             url="https://example.com/docs/intro",
             collection_name="example-docs",
-            mode="crawl"
+            mode="ingest"
         )
 
-        # Multi-page crawl (recommended: analyze first to understand scope)
+        # Multi-page ingest (recommended: analyze first to understand scope)
         analysis = analyze_website("https://example.com/docs")
         # Review: total_urls, pattern_stats to understand site structure
 
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
-            mode="crawl",
+            mode="ingest",
             follow_links=True,
             max_pages=20,
             metadata={"source": "official", "doc_type": "api"}
         )
 
-        # Update existing crawl
+        # Update existing ingest
         result = ingest_url(
             url="https://example.com/docs",
             collection_name="example-docs",
-            mode="recrawl",
+            mode="reingest",
             follow_links=True,
             max_pages=20
         )
