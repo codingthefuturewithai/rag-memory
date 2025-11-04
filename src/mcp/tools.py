@@ -946,6 +946,54 @@ def check_existing_file(
         raise
 
 
+def check_existing_files_batch(
+    db: Database, file_paths: List[str], collection_name: str
+) -> List[Dict[str, Any]]:
+    """
+    Check if multiple file paths have already been ingested into a collection.
+
+    Args:
+        db: Database connection
+        file_paths: List of absolute file paths to check
+        collection_name: Collection name to check within
+
+    Returns:
+        List of existing documents (empty list if none found)
+    """
+    if not file_paths:
+        return []
+
+    try:
+        conn = db.connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    sd.id as doc_id,
+                    sd.filename,
+                    sd.metadata->>'file_path' as file_path
+                FROM source_documents sd
+                JOIN document_chunks dc ON dc.source_document_id = sd.id
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                JOIN collections c ON c.id = cc.collection_id
+                WHERE sd.metadata->>'file_path' = ANY(%s)
+                  AND c.name = %s
+                """,
+                (file_paths, collection_name),
+            )
+            return [
+                {
+                    "doc_id": row[0],
+                    "filename": row[1],
+                    "file_path": row[2],
+                }
+                for row in cur.fetchall()
+            ]
+    except Exception as e:
+        logger.error(f"check_existing_files_batch failed: {e}")
+        raise
+
+
 @deduplicate_request()
 async def ingest_url_impl(
     db: Database,
@@ -1315,6 +1363,7 @@ async def ingest_directory_impl(
     metadata: Optional[Dict[str, Any]] = None,
     include_document_ids: bool = False,
     progress_callback=None,
+    mode: str = "ingest",
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_directory tool.
@@ -1375,6 +1424,46 @@ async def ingest_directory_impl(
 
         # Progress: Found files
         if progress_callback:
+            await progress_callback(10, 100, f"Found {len(files)} files, checking for duplicates...")
+
+        # Check for existing files in this collection (upfront batch check)
+        file_paths_absolute = [str(f.absolute()) for f in files]
+        existing_files = check_existing_files_batch(db, file_paths_absolute, collection_name)
+
+        if mode not in ["ingest", "reingest"]:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
+
+        if mode == "ingest" and existing_files:
+            file_list = '\n  - '.join(
+                [f"'{f['filename']}' (ID={f['doc_id']})" for f in existing_files[:10]]
+            )
+            if len(existing_files) > 10:
+                file_list += f"\n  ... and {len(existing_files) - 10} more"
+
+            raise ValueError(
+                f"{len(existing_files)} file(s) from this directory have already been ingested into collection '{collection_name}':\n"
+                f"  {file_list}\n\n"
+                f"To overwrite existing files, use mode='reingest'."
+            )
+
+        # If reingest mode, delete old documents first
+        if mode == "reingest" and existing_files:
+            if progress_callback:
+                await progress_callback(5, 100, f"Deleting {len(existing_files)} old files...")
+
+            logger.info(f"Reingest mode: Deleting {len(existing_files)} old documents")
+
+            for existing_doc in existing_files:
+                # Delete graph episode
+                if graph_store:
+                    episode_name = f"doc_{existing_doc['doc_id']}"
+                    await graph_store.delete_episode_by_name(episode_name)
+
+                # Delete RAG document
+                doc_store.delete_document(existing_doc['doc_id'])
+
+        # Progress: Starting ingestion
+        if progress_callback:
             await progress_callback(10, 100, f"Found {len(files)} files, starting ingestion...")
 
         # Ingest each file through unified mediator
@@ -1408,6 +1497,7 @@ async def ingest_directory_impl(
                 file_metadata.update({
                     "file_type": file_type,
                     "file_size": file_size,
+                    "file_path": str(file_path.absolute()),  # NEW - for duplicate detection
                 })
 
                 # Note: Don't pass progress_callback here - would conflict with parent progress

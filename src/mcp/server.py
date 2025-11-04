@@ -1003,6 +1003,7 @@ async def ingest_directory(
     recursive: bool = False,
     metadata: dict | None = None,
     include_document_ids: bool = False,
+    mode: str = "ingest",
     context: Context | None = None,
 ) -> dict:
     """
@@ -1063,6 +1064,9 @@ async def ingest_directory(
         recursive: If True, searches subdirectories (default: False)
         metadata: Metadata applied to ALL files (merged with file metadata)
         include_document_ids: If True, returns document IDs (default: False)
+        mode: Ingest mode - "ingest" or "reingest" (default: "ingest").
+              - "ingest": New ingest. ERROR if any files already ingested into this collection.
+              - "reingest": Update existing. Deletes old content from matching files and re-ingests.
 
     Returns:
         {"files_found": int, "files_ingested": int, "files_failed": int, "total_chunks": int,
@@ -1090,7 +1094,8 @@ async def ingest_directory(
         recursive,
         metadata,
         include_document_ids,
-        progress_callback=progress_callback if context else None
+        progress_callback=progress_callback if context else None,
+        mode=mode
     )
 
     # Progress: Complete
