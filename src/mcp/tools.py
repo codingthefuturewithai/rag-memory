@@ -17,7 +17,7 @@ from src.core.collections import CollectionManager
 from src.retrieval.search import SimilaritySearch
 from src.ingestion.document_store import DocumentStore
 from src.ingestion.web_crawler import WebCrawler, crawl_single_page
-from src.ingestion.website_analyzer import analyze_website
+from src.ingestion.website_analyzer import analyze_website_async
 from src.unified.graph_store import GraphStore
 from src.mcp.deduplication import deduplicate_request
 
@@ -786,7 +786,7 @@ def get_collection_info_impl(
         raise
 
 
-def analyze_website_impl(
+async def analyze_website_impl(
     base_url: str,
     timeout: int = 10,
     include_url_lists: bool = False,
@@ -795,18 +795,58 @@ def analyze_website_impl(
     """
     Implementation of analyze_website tool.
 
-    Extracts raw data about website structure (sitemap parsing, URL grouping).
+    Discovers URL patterns for a website using AsyncUrlSeeder with sitemap+cc source.
+    Tries sitemap first, falls back to Common Crawl if no sitemap available.
+    Includes 50-second hard timeout with graceful error handling.
+
+    GUARANTEED to return structured response in ALL scenarios:
+    - Success: URL patterns and statistics
+    - Timeout: Informative message about site size
+    - Error: Description of what went wrong
+    - Missing AsyncUrlSeeder: Installation instructions
+
     NO recommendations or heuristics - just facts for AI agent to reason about.
 
     By default, returns only pattern_stats summary (lightweight). Agent can request
     full URL lists if needed by setting include_url_lists=True.
+
+    Args:
+        base_url: The website URL to analyze (root domain or specific path)
+        timeout: DEPRECATED - kept for backward compatibility, ignored
+                (actual timeout is 50 seconds, hard-coded for reliability)
+        include_url_lists: If True, includes full URL lists per pattern
+        max_urls_per_pattern: Max URLs per pattern when include_url_lists=True
+
+    Returns:
+        Dictionary with analysis results. ALWAYS includes:
+        - base_url: Input URL
+        - analysis_method: "asyncurlseeder", "timeout", "error", or "not_available"
+        - total_urls: Number of URLs discovered (0 on error)
+        - pattern_stats: Dictionary of URL patterns (empty on error)
+        - notes: Informative message describing results or error
+        - elapsed_seconds: Time taken for analysis
+
+        May include (on success):
+        - url_groups: Full URL lists per pattern if include_url_lists=True
+        - domains: List of domains found in results
+        - url_patterns: Number of URL pattern groups found
     """
     try:
-        result = analyze_website(base_url, timeout, include_url_lists, max_urls_per_pattern)
+        # Call the async analyzer (ignoring deprecated timeout parameter)
+        result = await analyze_website_async(base_url, include_url_lists, max_urls_per_pattern)
         return result
     except Exception as e:
-        logger.error(f"analyze_website failed: {e}")
-        raise
+        # Fallback error response (should not happen, analyzer handles all errors internally)
+        logger.error(f"Unexpected error in analyze_website_impl: {e}")
+        return {
+            "base_url": base_url,
+            "analysis_method": "error",
+            "error": "unexpected",
+            "total_urls": 0,
+            "pattern_stats": {},
+            "notes": f"Unexpected error during analysis: {str(e)}",
+            "elapsed_seconds": 0,
+        }
 
 
 def check_existing_crawl(

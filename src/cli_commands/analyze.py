@@ -1,5 +1,6 @@
 """Analysis commands."""
 
+import asyncio
 import sys
 from urllib.parse import urlparse
 
@@ -7,7 +8,7 @@ import click
 from rich.console import Console
 from rich.table import Table
 
-from src.ingestion.website_analyzer import analyze_website
+from src.ingestion.website_analyzer import analyze_website_async
 
 console = Console()
 
@@ -22,13 +23,16 @@ def analyze():
 @click.argument("url")
 @click.option("--include-urls", is_flag=True, help="Include full URL lists per pattern")
 @click.option("--max-urls", type=int, default=10, help="Max URLs per pattern when --include-urls (default: 10)")
-@click.option("--timeout", type=int, default=10, help="Request timeout in seconds (default: 10)")
+@click.option("--timeout", type=int, default=10, help="DEPRECATED: kept for backward compatibility (timeout is 50s)")
 def analyze_website_cmd(url, include_urls, max_urls, timeout):
-    """Analyze a website's structure by parsing its sitemap.
+    """Analyze a website's structure using AsyncUrlSeeder.
 
-    This command fetches and parses the sitemap.xml from a website, then groups
-    URLs by pattern (e.g., /api/*, /docs/*, /blog/*) to help you understand
-    the site structure and plan comprehensive crawls.
+    Discovers URL patterns by trying sitemap first, falls back to Common Crawl
+    if no sitemap. Groups URLs by pattern (e.g., /api/*, /docs/*, /blog/*)
+    to help understand site structure and plan comprehensive crawls.
+
+    Hard timeout: 50 seconds. If a site exceeds this, consider analyzing
+    a specific subsection (e.g., /docs, /api) or using manual crawling.
 
     Examples:
         # Quick analysis (pattern statistics only)
@@ -39,20 +43,26 @@ def analyze_website_cmd(url, include_urls, max_urls, timeout):
 
         # Show more URLs per pattern
         rag analyze website https://docs.python.org --include-urls --max-urls 20
+
+        # Analyze specific section of large site
+        rag analyze website https://docs.python.org/3.11 --include-urls
     """
     try:
         console.print(f"[bold blue]Analyzing website: {url}[/bold blue]\n")
 
-        # Perform analysis
-        result = analyze_website(url, timeout, include_urls, max_urls)
+        # Perform analysis (run async function in sync context)
+        result = asyncio.run(analyze_website_async(url, include_urls, max_urls))
 
         # Show results
         if result["total_urls"] == 0:
-            console.print(f"[yellow]⚠ {result['notes']}[/yellow]")
+            console.print(f"[yellow]⚠ {result.get('analysis_method', 'unknown').upper()}[/yellow]")
+            if "error" in result:
+                console.print(f"[yellow]Error: {result['error']}[/yellow]")
+            console.print(f"[yellow]{result['notes']}[/yellow]")
             return
 
-        console.print(f"[green]✓ Found sitemap with {result['total_urls']:,} URLs[/green]")
-        console.print(f"[dim]Method: {result['analysis_method']}[/dim]")
+        console.print(f"[green]✓ Discovered {result['total_urls']:,} URLs[/green]")
+        console.print(f"[dim]Method: {result['analysis_method']} | Time: {result.get('elapsed_seconds', 0):.2f}s[/dim]")
 
         # Show domains if multiple
         if "domains" in result and len(result["domains"]) > 1:

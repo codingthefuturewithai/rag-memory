@@ -1,176 +1,251 @@
 """
-Website analysis utilities for sitemap parsing and URL pattern detection.
+Website analysis utilities for discovering URL patterns using AsyncUrlSeeder.
 
 This module provides raw data extraction for AI agents to make informed decisions
-about website crawling. NO heuristics or recommendations - just facts.
+about website crawling. Uses Crawl4AI's AsyncUrlSeeder to discover URLs via
+sitemap (if available) or Common Crawl (fallback), with 50-second timeout and
+graceful error handling.
+
+NO heuristics or recommendations - just facts.
 """
 
-import re
-from typing import Dict, List, Optional, Set, Tuple
-from urllib.parse import urljoin, urlparse
-import xml.etree.ElementTree as ET
+import asyncio
+import logging
+import time
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 try:
-    import requests
-    REQUESTS_AVAILABLE = True
+    from crawl4ai import AsyncUrlSeeder, SeedingConfig
+    ASYNCURLSEEDER_AVAILABLE = True
 except ImportError:
-    REQUESTS_AVAILABLE = False
+    ASYNCURLSEEDER_AVAILABLE = False
+
+logger = logging.getLogger(__name__)
 
 
 class WebsiteAnalyzer:
-    """Analyzes website structure by extracting and grouping URLs."""
+    """
+    Analyzes website structure by discovering URL patterns.
 
-    def __init__(self, base_url: str, timeout: int = 10):
+    Uses AsyncUrlSeeder with source="sitemap+cc" to try sitemap first,
+    falls back to Common Crawl if no sitemap available. Includes 50-second
+    timeout with graceful error handling.
+    """
+
+    ANALYSIS_TIMEOUT = 50  # seconds - hard timeout for complete analysis
+    MAX_URLS = 150  # Maximum URLs to discover per site
+
+    def __init__(self, base_url: str):
         """
         Initialize analyzer for a website.
 
         Args:
             base_url: The base URL of the website to analyze
-            timeout: Request timeout in seconds
+                     (can be root domain or specific path)
         """
         self.base_url = base_url.rstrip('/')
-        self.timeout = timeout
         self.parsed_base = urlparse(self.base_url)
+        self.domain = self.parsed_base.netloc
+        if not self.domain:
+            raise ValueError(f"Invalid URL: {base_url}")
 
-    def fetch_sitemap(self) -> Tuple[Optional[List[str]], str, str]:
+    async def analyze_async(
+        self,
+        include_url_lists: bool = False,
+        max_urls_per_pattern: int = 10
+    ) -> Dict[str, Any]:
         """
-        Attempt to fetch and parse sitemap.xml from common locations.
+        Perform complete website analysis with AsyncUrlSeeder.
 
-        Smart discovery: If sitemap not found at provided URL, tries root domain automatically.
-
-        Returns:
-            Tuple of (list of URLs or None, method used, sitemap location found)
-            method is one of: "sitemap", "not_found", "error"
-            location indicates where sitemap was found (e.g., "provided URL", "root domain")
-        """
-        if not REQUESTS_AVAILABLE:
-            return None, "error: requests library not available", ""
-
-        # Try common sitemap locations at provided URL first
-        sitemap_urls = [
-            f"{self.base_url}/sitemap.xml",
-            f"{self.base_url}/sitemap_index.xml",
-            f"{self.base_url}/sitemap1.xml",
-        ]
-
-        for sitemap_url in sitemap_urls:
-            try:
-                response = requests.get(sitemap_url, timeout=self.timeout)
-                if response.status_code == 200:
-                    urls = self._parse_sitemap_xml(response.content)
-                    if urls:
-                        return urls, "sitemap", "provided URL"
-            except Exception:
-                continue
-
-        # Smart fallback: If not found and URL has path components, try root domain
-        parsed = urlparse(self.base_url)
-        if parsed.path and parsed.path != '/':
-            # Has path components - try root domain
-            root_url = f"{parsed.scheme}://{parsed.netloc}"
-            root_sitemap_urls = [
-                f"{root_url}/sitemap.xml",
-                f"{root_url}/sitemap_index.xml",
-                f"{root_url}/sitemap1.xml",
-            ]
-
-            for sitemap_url in root_sitemap_urls:
-                try:
-                    response = requests.get(sitemap_url, timeout=self.timeout)
-                    if response.status_code == 200:
-                        urls = self._parse_sitemap_xml(response.content)
-                        if urls:
-                            return urls, "sitemap", f"root domain ({root_url})"
-                except Exception:
-                    continue
-
-        return None, "not_found", ""
-
-    def _parse_sitemap_xml(self, xml_content: bytes) -> List[str]:
-        """
-        Parse sitemap XML and extract all URLs.
-
-        Handles both regular sitemaps and sitemap indexes (recursively).
+        Uses 50-second timeout. Returns structured response in ALL scenarios:
+        success, timeout, error, missing AsyncUrlSeeder, etc.
 
         Args:
-            xml_content: Raw XML content from sitemap
+            include_url_lists: If False (default), only returns pattern_stats summary.
+                              If True, includes full URL lists per pattern.
+            max_urls_per_pattern: Max URLs per pattern when include_url_lists=True
 
         Returns:
-            List of URLs found in sitemap
+            Dictionary with analysis results. ALWAYS includes:
+            - base_url: Input URL
+            - analysis_method: "asyncurlseeder", "timeout", "error", "not_available"
+            - total_urls: Number of URLs discovered (0 on error/timeout)
+            - pattern_stats: Dictionary of URL patterns or empty dict
+            - notes: Informative message about what happened
+
+            May include (on success):
+            - url_groups: Full URL lists if include_url_lists=True
+            - domains: List of domains found
+            - elapsed_seconds: Time taken for analysis
         """
-        urls = []
+        if not ASYNCURLSEEDER_AVAILABLE:
+            return self._error_response(
+                analysis_method="not_available",
+                error="AsyncUrlSeeder not available",
+                message=(
+                    "Crawl4AI not installed. Install with: uv add crawl4ai. "
+                    "Website analysis requires AsyncUrlSeeder for reliable URL discovery."
+                )
+            )
 
         try:
-            root = ET.fromstring(xml_content)
+            # Run analysis with 50-second hard timeout
+            result = await asyncio.wait_for(
+                self._perform_analysis(include_url_lists, max_urls_per_pattern),
+                timeout=self.ANALYSIS_TIMEOUT
+            )
+            return result
 
-            # Handle namespace (most sitemaps use http://www.sitemaps.org/schemas/sitemap/0.9)
-            namespace = {'ns': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+        except asyncio.TimeoutError:
+            # Timeout - 50+ seconds elapsed
+            return self._error_response(
+                analysis_method="timeout",
+                error="timeout",
+                message=(
+                    f"Website analysis exceeded {self.ANALYSIS_TIMEOUT}-second timeout. "
+                    "Site may be too large for automatic analysis. "
+                    "Try analyzing a specific subsection (e.g., /docs, /api) "
+                    "or use manual crawling with limited depth."
+                )
+            )
 
-            # Check if this is a sitemap index (contains <sitemap> tags)
-            sitemaps = root.findall('.//ns:sitemap/ns:loc', namespace)
-            if sitemaps:
-                # This is a sitemap index - fetch each referenced sitemap
-                for sitemap_elem in sitemaps:
-                    sitemap_url = sitemap_elem.text
-                    if sitemap_url:
-                        try:
-                            response = requests.get(sitemap_url, timeout=self.timeout)
-                            if response.status_code == 200:
-                                urls.extend(self._parse_sitemap_xml(response.content))
-                        except Exception:
-                            continue
+        except Exception as e:
+            # Any other error during analysis
+            error_type = type(e).__name__
+            error_msg = str(e)
+            logger.error(f"Website analysis error for {self.base_url}: {error_type}: {error_msg}")
 
-            # Extract URLs from <url><loc> tags
-            url_elements = root.findall('.//ns:url/ns:loc', namespace)
-            for url_elem in url_elements:
-                url = url_elem.text
-                if url:
-                    urls.append(url)
+            return self._error_response(
+                analysis_method="error",
+                error=error_type,
+                message=(
+                    f"Analysis failed ({error_type}): {error_msg}. "
+                    "Unable to discover website structure. "
+                    "Try using manual crawling with BFS strategy."
+                )
+            )
 
-            # Fallback: try without namespace (some sitemaps don't use it)
-            if not urls:
-                for loc in root.findall('.//loc'):
-                    url = loc.text
-                    if url:
-                        urls.append(url)
+    async def _perform_analysis(
+        self,
+        include_url_lists: bool,
+        max_urls_per_pattern: int
+    ) -> Dict[str, Any]:
+        """
+        Perform the actual AsyncUrlSeeder analysis.
 
-        except ET.ParseError:
-            pass
+        Separated from analyze_async to isolate timeout handling.
+        """
+        start_time = time.time()
 
-        return urls
+        # Use AsyncUrlSeeder with sitemap+cc source
+        async with AsyncUrlSeeder() as seeder:
+            config = SeedingConfig(
+                source="sitemap+cc",              # Try sitemap, fall back to Common Crawl
+                max_urls=self.MAX_URLS,           # Limit to 150 URLs
+                live_check=False,                 # Speed over verification
+                filter_nonsense_urls=True,        # Filter robots.txt, .css, etc
+                verbose=False,                    # Reduce logging
+            )
 
-    def group_urls_by_pattern(self, urls: List[str]) -> Dict[str, List[str]]:
+            # Fetch URLs from sitemap or Common Crawl
+            urls = await seeder.urls(self.domain, config)
+
+        elapsed = time.time() - start_time
+
+        if not urls:
+            # No URLs discovered
+            return self._error_response(
+                analysis_method="asyncurlseeder",
+                error="no_urls",
+                message=(
+                    f"No publicly discoverable URLs found for {self.domain}. "
+                    "This may indicate: site behind authentication, "
+                    "no sitemap and not indexed by Common Crawl, or "
+                    "robots.txt blocking. "
+                    "Try manual crawling if you have access."
+                ),
+                elapsed_seconds=round(elapsed, 2)
+            )
+
+        # Group and analyze discovered URLs
+        url_dicts = urls  # AsyncUrlSeeder returns List[Dict]
+        url_strings = [u.get('url', '') if isinstance(u, dict) else u for u in url_dicts]
+        url_strings = [u for u in url_strings if u]  # Filter empty
+
+        if not url_strings:
+            return self._error_response(
+                analysis_method="asyncurlseeder",
+                error="no_valid_urls",
+                message="URLs discovered but none were valid. This is an internal error.",
+                elapsed_seconds=round(elapsed, 2)
+            )
+
+        # Group by pattern
+        url_groups = self._group_urls_by_pattern(url_strings)
+        pattern_stats = self._get_pattern_stats(url_groups)
+
+        # Sort patterns by count
+        sorted_patterns = sorted(
+            pattern_stats.items(),
+            key=lambda x: x[1]["count"],
+            reverse=True
+        )
+
+        # Extract domains
+        domains = set()
+        for url in url_strings:
+            parsed = urlparse(url)
+            if parsed.netloc:
+                domains.add(parsed.netloc)
+
+        # Build response
+        result = {
+            "base_url": self.base_url,
+            "analysis_method": "asyncurlseeder",
+            "total_urls": len(url_strings),
+            "url_patterns": len(url_groups),
+            "elapsed_seconds": round(elapsed, 2),
+            "pattern_stats": dict(sorted_patterns),
+            "domains": sorted(list(domains)),
+            "notes": self._build_success_notes(
+                len(url_strings), len(url_groups), domains, elapsed
+            ),
+        }
+
+        # Optionally include full URL lists
+        if include_url_lists:
+            limited_url_groups = {}
+            for pattern, urls_list in url_groups.items():
+                sorted_urls = sorted(urls_list, key=lambda u: len(urlparse(u).path))
+                limited_url_groups[pattern] = sorted_urls[:max_urls_per_pattern]
+            result["url_groups"] = limited_url_groups
+            result["notes"] += f" Full URL lists included (max {max_urls_per_pattern} URLs per pattern)."
+
+        return result
+
+    def _group_urls_by_pattern(self, urls: List[str]) -> Dict[str, List[str]]:
         """
         Group URLs by path patterns (e.g., /api/*, /docs/*).
 
-        Simple path-based grouping with NO HEURISTICS. Just groups URLs
-        that share the same first path segment.
-        
-        Note: Trusts all URLs from sitemap regardless of domain (sitemaps often
-        include related domains or redirect to different domains).
+        Simple path-based grouping: groups URLs sharing the same first path segment.
 
         Args:
-            urls: List of URLs to group
+            urls: List of URL strings
 
         Returns:
             Dictionary mapping pattern to list of URLs
-            Example: {
-                "/api": ["https://example.com/api/v1", "https://example.com/api/v2"],
-                "/docs": ["https://example.com/docs/intro", "https://example.com/docs/guide"],
-                "/": ["https://example.com/", "https://example.com/about"]
-            }
+            Example: {"/api": [url1, url2], "/docs": [url3, url4]}
         """
         groups: Dict[str, List[str]] = {}
 
         for url in urls:
             parsed = urlparse(url)
-
-            # Extract first path segment
             path = parsed.path.rstrip('/')
+
             if not path or path == '/':
                 pattern = "/"
             else:
-                # Get first segment: /docs/intro -> /docs
                 segments = path.split('/')
                 pattern = f"/{segments[1]}" if len(segments) > 1 else "/"
 
@@ -180,22 +255,15 @@ class WebsiteAnalyzer:
 
         return groups
 
-    def get_pattern_stats(self, url_groups: Dict[str, List[str]]) -> Dict[str, Dict]:
+    def _get_pattern_stats(self, url_groups: Dict[str, List[str]]) -> Dict[str, Dict]:
         """
         Calculate statistics for each URL pattern group.
 
         Args:
-            url_groups: Dictionary from group_urls_by_pattern()
+            url_groups: Dictionary from _group_urls_by_pattern()
 
         Returns:
-            Dictionary with stats for each pattern:
-            {
-                "/api": {
-                    "count": 45,
-                    "avg_depth": 2.3,
-                    "example_urls": ["url1", "url2", "url3"]
-                }
-            }
+            Statistics dict with count, avg_depth, example_urls for each pattern
         """
         stats = {}
 
@@ -210,7 +278,7 @@ class WebsiteAnalyzer:
 
             avg_depth = sum(depths) / len(depths) if depths else 0
 
-            # Get up to 3 example URLs (shortest ones)
+            # Get up to 3 example URLs (shortest ones = typically most important)
             sorted_urls = sorted(urls, key=lambda u: len(urlparse(u).path))
             examples = sorted_urls[:3]
 
@@ -222,127 +290,115 @@ class WebsiteAnalyzer:
 
         return stats
 
-    def analyze(self, include_url_lists: bool = False, max_urls_per_pattern: int = 10) -> Dict:
+    def _error_response(
+        self,
+        analysis_method: str,
+        error: str,
+        message: str,
+        elapsed_seconds: float = 0
+    ) -> Dict[str, Any]:
         """
-        Perform complete website analysis.
+        Build structured error response.
 
-        Returns raw data about website structure for AI agent to process.
-        NO recommendations or heuristics - just facts.
+        Ensures agent always gets valid response even on failure.
 
         Args:
-            include_url_lists: If False (default), only returns pattern_stats summary.
-                              If True, includes full URL lists (may be large for sites with 1000s of URLs).
-            max_urls_per_pattern: Maximum URLs to return per pattern when include_url_lists=True (default: 10)
+            analysis_method: "timeout", "error", "not_available", etc
+            error: Short error code
+            message: Informative user-friendly message
+            elapsed_seconds: How long analysis took before failure
 
         Returns:
-            Dictionary with analysis results:
-            {
-                "base_url": str,
-                "analysis_method": str,  # "sitemap" or "not_found"
-                "sitemap_location": str,  # Where sitemap was found (if applicable)
-                "total_urls": int,
-                "pattern_stats": {  # Always included (lightweight summary)
-                    "/pattern": {"count": int, "avg_depth": float, "example_urls": []}
-                },
-                "url_groups": {  # Only if include_url_lists=True (full URLs)
-                    "/pattern": ["url1", "url2", ...]  # Limited to max_urls_per_pattern
-                },
-                "domains": list,  # Domains found in sitemap (if applicable)
-                "notes": str  # Important context about data quality
-            }
+            Valid response dict (same structure as success, but with error info)
         """
-        # Try to fetch sitemap
-        urls, method, location = self.fetch_sitemap()
-
-        if not urls:
-            # No sitemap found - return analysis results without sitemap data
-            parsed = urlparse(self.base_url)
-            domains = [parsed.netloc] if parsed.netloc else []
-
-            return {
-                "base_url": self.base_url,
-                "analysis_method": method,
-                "sitemap_location": location,
-                "total_urls": 0,
-                "domains": domains,
-                "pattern_stats": {},
-                "notes": (
-                    "No sitemap found at common locations (/sitemap.xml, /sitemap_index.xml). "
-                    "Agent can still crawl this domain using link-following strategy."
-                ),
-            }
-
-        # Group URLs by pattern
-        url_groups = self.group_urls_by_pattern(urls)
-
-        # Calculate stats
-        pattern_stats = self.get_pattern_stats(url_groups)
-
-        # Sort patterns by count (most URLs first)
-        sorted_patterns = sorted(
-            pattern_stats.items(),
-            key=lambda x: x[1]["count"],
-            reverse=True
-        )
-        
-        # Detect domains in sitemap
-        domains = set()
-        for url in urls:
-            parsed = urlparse(url)
-            if parsed.netloc:
-                domains.add(parsed.netloc)
-
-        # Build notes with domain info
-        notes_parts = []
-        if location:
-            notes_parts.append(f"Sitemap found at {location}.")
-        notes_parts.append(f"{len(urls)} URLs grouped into {len(url_groups)} patterns.")
-        if len(domains) > 1:
-            notes_parts.append(f"Note: Sitemap contains URLs from {len(domains)} domains ({', '.join(sorted(domains)[:3])}{'...' if len(domains) > 3 else ''}).")
-        notes_parts.append("Each pattern represents URLs sharing the same first path segment (e.g., /api/*, /docs/*).")
-        notes_parts.append("Use pattern_stats to understand site structure. Set include_url_lists=True to get full URL lists.")
-        notes = " ".join(notes_parts)
-
-        result = {
+        return {
             "base_url": self.base_url,
-            "analysis_method": method,
-            "sitemap_location": location,
-            "total_urls": len(urls),
-            "domains": sorted(list(domains)),
-            "pattern_stats": dict(sorted_patterns),
-            "notes": notes,
+            "analysis_method": analysis_method,
+            "error": error,
+            "total_urls": 0,
+            "pattern_stats": {},
+            "notes": message,
+            "elapsed_seconds": round(elapsed_seconds, 2),
         }
 
-        # Optionally include full URL lists (limited per pattern to avoid overwhelming response)
-        if include_url_lists:
-            limited_url_groups = {}
-            for pattern, urls_list in url_groups.items():
-                # Limit URLs per pattern, prioritize shortest URLs (often index pages)
-                sorted_urls = sorted(urls_list, key=lambda u: len(urlparse(u).path))
-                limited_url_groups[pattern] = sorted_urls[:max_urls_per_pattern]
-            result["url_groups"] = limited_url_groups
-            result["notes"] += f" Full URL lists included (max {max_urls_per_pattern} URLs per pattern)."
+    def _build_success_notes(
+        self,
+        total_urls: int,
+        num_patterns: int,
+        domains: set,
+        elapsed: float
+    ) -> str:
+        """
+        Build informative notes for successful analysis.
 
-        return result
+        Args:
+            total_urls: Number of URLs discovered
+            num_patterns: Number of patterns found
+            domains: Set of domains in results
+            elapsed: Seconds taken
+
+        Returns:
+            Informative notes string
+        """
+        notes_parts = [
+            f"Discovered {total_urls} URLs in {elapsed:.2f}s using AsyncUrlSeeder (sitemap+cc).",
+            f"URLs grouped into {num_patterns} patterns by first path segment.",
+        ]
+
+        if len(domains) > 1:
+            domain_list = ', '.join(sorted(list(domains))[:3])
+            if len(domains) > 3:
+                domain_list += f" (+ {len(domains) - 3} more)"
+            notes_parts.append(f"Domains: {domain_list}.")
+
+        notes_parts.append(
+            "Each pattern (e.g., /api, /docs) represents URLs sharing the same first path segment. "
+            "Use pattern statistics to understand site structure."
+        )
+
+        return " ".join(notes_parts)
 
 
-def analyze_website(
+async def analyze_website_async(
     base_url: str,
-    timeout: int = 10,
     include_url_lists: bool = False,
     max_urls_per_pattern: int = 10
-) -> Dict:
+) -> Dict[str, Any]:
     """
-    Convenience function to analyze a website.
+    Async convenience function to analyze a website.
 
     Args:
         base_url: The base URL of the website to analyze
-        timeout: Request timeout in seconds
         include_url_lists: If True, includes full URL lists (limited per pattern)
         max_urls_per_pattern: Max URLs per pattern when include_url_lists=True
 
     Returns:
-        Analysis results dictionary (see WebsiteAnalyzer.analyze())
+        Analysis results dictionary with guaranteed structure even on error.
+        See WebsiteAnalyzer.analyze_async() for details.
     """
-    analyzer = WebsiteAnalyzer(base_url, timeout)
-    return analyzer.analyze(include_url_lists, max_urls_per_pattern)
+    try:
+        analyzer = WebsiteAnalyzer(base_url)
+        return await analyzer.analyze_async(include_url_lists, max_urls_per_pattern)
+    except ValueError as e:
+        # Invalid URL
+        return {
+            "base_url": base_url,
+            "analysis_method": "error",
+            "error": "invalid_url",
+            "total_urls": 0,
+            "pattern_stats": {},
+            "notes": f"Invalid URL: {str(e)}",
+            "elapsed_seconds": 0,
+        }
+    except Exception as e:
+        # Unexpected error
+        logger.error(f"Unexpected error in analyze_website_async: {e}")
+        return {
+            "base_url": base_url,
+            "analysis_method": "error",
+            "error": "unexpected_error",
+            "total_urls": 0,
+            "pattern_stats": {},
+            "notes": f"Unexpected error: {str(e)}",
+            "elapsed_seconds": 0,
+        }
