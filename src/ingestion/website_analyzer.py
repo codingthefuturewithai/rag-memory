@@ -54,10 +54,10 @@ class WebsiteAnalyzer:
         max_urls_per_pattern: int = 10
     ) -> Dict[str, Any]:
         """
-        Perform complete website analysis with AsyncUrlSeeder.
+        Perform complete website analysis.
 
         Uses 50-second timeout. Returns structured response in ALL scenarios:
-        success, timeout, error, missing AsyncUrlSeeder, etc.
+        success, timeout, error, tool unavailable, etc.
 
         Args:
             include_url_lists: If False (default), only returns pattern_stats summary.
@@ -67,7 +67,7 @@ class WebsiteAnalyzer:
         Returns:
             Dictionary with analysis results. ALWAYS includes:
             - base_url: Input URL
-            - analysis_method: "asyncurlseeder", "timeout", "error", "not_available"
+            - analysis_method: "success", "timeout", "error", "not_available"
             - total_urls: Number of URLs discovered (0 on error/timeout)
             - pattern_stats: Dictionary of URL patterns or empty dict
             - notes: Informative message about what happened
@@ -114,13 +114,24 @@ class WebsiteAnalyzer:
             error_msg = str(e)
             logger.error(f"Website analysis error for {self.base_url}: {error_type}: {error_msg}")
 
+            # Map Python exceptions to generic error codes
+            if "URL" in error_type or "url" in str(e).lower():
+                error_code = "invalid_url"
+                user_message = f"Invalid or malformed URL. {error_msg}"
+            elif any(x in error_type for x in ["Connect", "Network", "Socket", "DNS", "Timeout"]):
+                error_code = "network_error"
+                user_message = f"Network error while analyzing site. {error_msg}"
+            else:
+                error_code = "analysis_failed"
+                user_message = f"Analysis failed: {error_msg}"
+
             return self._error_response(
                 analysis_method="error",
-                error=error_type,
+                error=error_code,
                 message=(
-                    f"Analysis failed ({error_type}): {error_msg}. "
+                    f"{user_message} "
                     "Unable to discover website structure. "
-                    "Try using manual crawling with BFS strategy."
+                    "Try using manual crawling with limited depth."
                 )
             )
 
@@ -130,7 +141,7 @@ class WebsiteAnalyzer:
         max_urls_per_pattern: int
     ) -> Dict[str, Any]:
         """
-        Perform the actual AsyncUrlSeeder analysis.
+        Perform the actual website analysis.
 
         Separated from analyze_async to isolate timeout handling.
         """

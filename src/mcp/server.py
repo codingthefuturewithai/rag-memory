@@ -682,7 +682,7 @@ async def analyze_website(
         {
             "base_url": str,
             "analysis_method": "error",
-            "error": str,  # Error code (invalid_url, ConnectionError, etc.)
+            "error": str,  # Error code: "invalid_url", "network_error", "analysis_failed", "no_urls"
             "total_urls": 0,
             "pattern_stats": {},
             "notes": str,  # Details about what went wrong
