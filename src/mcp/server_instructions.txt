@@ -62,10 +62,10 @@ list_documents(collection_name, include_details=True)
 
 ### Analyze Before Multi-Page Crawls (REQUIRED)
 ```
-# STEP 1: Analyze (REQUIRED for follow_links)
+# STEP 1: Analyze website structure
 analysis = analyze_website(url, include_url_lists=True)
-  → Returns: total_urls, pattern_stats, analysis_token
-  → Note: Smart sitemap discovery - auto-tries root domain if needed
+  → Returns: total_urls, pattern_stats, elapsed_seconds
+  → Note: Uses AsyncUrlSeeder with sitemap+cc fallback
 
 # STEP 2: Review scope and plan strategy
   → If total_urls <= 20: Single targeted crawl
@@ -76,38 +76,21 @@ analysis = analyze_website(url, include_url_lists=True)
 ingest_url(
     url=target_url,
     follow_links=True,
-    max_pages=10,  # default=10, max=20
-    analysis_token=analysis["analysis_token"]  # REQUIRED
+    max_pages=20  # default=10, max=20
 )
 ```
 
 **Why:**
-- Prevents unbounded crawls (analysis_token enforces planning)
 - Helps plan targeted crawls vs full-site ingestion
 - max_pages=20 hard limit requires multiple crawls for large sites
-- Sitemap shows minimum page count (actual crawl may find more)
+- Pattern stats show actual site structure for informed decisions
 
 **Smart Sitemap Discovery:**
-analyze_website() automatically tries root domain if sitemap not found at provided URL.
-Example: "https://docs.example.com/api" → tries /api/sitemap.xml, then falls back to https://docs.example.com/sitemap.xml
-
-**Analysis Token Behavior:**
-- Tokens are validated server-side (cannot fake)
-- REUSABLE - not consumed on use (supports multiple crawls of same site)
-- Domain-scoped - only works for domains found in the analysis
-- 4-hour lifetime (accounts for interruptions/breaks)
-- If validation fails → re-run analyze_website() for fresh token
-
-**Token Validation:**
-- Exact domain matching: ingest domain must be in analyzed domains list
-- Works for sites WITH sitemap (stores all sitemap domains)
-- Works for sites WITHOUT sitemap (stores base_url domain)
-- Prevents unbounded crawls while never blocking legitimate use cases
-
-**Common Token Errors:**
-1. "Invalid or expired analysis_token" → Token fake or expired (4 hours)
-2. "Domain mismatch" → Trying to crawl domain not in analysis
-3. Solution: Run analyze_website() for the target domain
+analyze_website() uses AsyncUrlSeeder which:
+- Tries sitemap first (if available)
+- Falls back to Common Crawl index (for sites without sitemaps)
+- Discovers 150+ URLs even for sites without traditional sitemaps
+Example: "https://docs.example.com/api" → discovers /api section structure
 
 ### Use Recrawl for Website Updates
 ```
@@ -197,29 +180,25 @@ This prevents data corruption from concurrent identical operations. **If you see
 
 **Documentation Ingestion (Single Section):**
 ```
-1. analyze_website(url) - understand scope, get analysis_token
+1. analyze_website(url) - understand scope and structure
 2. Review total_urls and pattern_stats
 3. create_collection(name, domain, description) - organize by source
-4. ingest_url(url, follow_links=True, max_pages=20, analysis_token=<token>)
+4. ingest_url(url, follow_links=True, max_pages=20)
 5. get_collection_info(name) - verify completion
 ```
 
 **Documentation Ingestion (Multiple Sections):**
 ```
-1. analyze_website("https://docs.example.com") - get overview and token
+1. analyze_website("https://docs.example.com") - understand site structure
    → Shows: /api (45 pages), /guides (30 pages), /reference (25 pages)
-   → Returns: analysis_token (reusable for 4 hours)
 2. create_collection(name, domain, description)
 
-# Use same token for multiple targeted crawls (reusable)
-3. ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20,
-              analysis_token=token)
-4. ingest_url("https://docs.example.com/guides", follow_links=True, max_pages=20,
-              analysis_token=token)  # Same token, still valid
-5. ingest_url("https://docs.example.com/reference", follow_links=True, max_pages=20,
-              analysis_token=token)  # Same token, still valid
+# Execute multiple targeted crawls based on pattern analysis
+3. ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20)
+4. ingest_url("https://docs.example.com/guides", follow_links=True, max_pages=20)
+5. ingest_url("https://docs.example.com/reference", follow_links=True, max_pages=20)
 
-# Tokens are reusable - one analysis supports multiple crawls of same site
+# Each crawl is independent - plan based on pattern_stats from analyze_website()
 ```
 
 **Research Query:**
@@ -244,10 +223,10 @@ This prevents data corruption from concurrent identical operations. **If you see
 - **MUST** use full questions for search, not keywords (see #2)
 - **MUST** check for duplicates before ingesting (see #3)
 - **MUST** run analyze_website() before multi-page crawls (see #3)
-- **UNDERSTAND** tokens are reusable (one analysis supports multiple crawls, 4-hour expiry)
-- **UNDERSTAND** single-page crawls (follow_links=False) do NOT require tokens
+- **MUST** limit max_pages to 20 per crawl for large sites
 - **SHOULD** present scope to user for large operations and get confirmation
 - **SHOULD** use recrawl mode for website updates (see #3)
 - **SHOULD** combine RAG + Graph queries for comprehensive research (see #4)
+- **SHOULD** use pattern_stats from analyze_website() to plan targeted crawls
 
 **For tool-specific details:** See individual tool docstrings.
