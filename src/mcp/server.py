@@ -612,7 +612,7 @@ def get_collection_info(collection_name: str) -> dict:
 
 
 @mcp.tool()
-def analyze_website(
+async def analyze_website(
     base_url: str,
     timeout: int = 10,
     include_url_lists: bool = False,
@@ -659,7 +659,7 @@ def analyze_website(
 
     Note: Free operation (no API calls, just HTTP request for sitemap).
     """
-    return analyze_website_impl(base_url, timeout, include_url_lists, max_urls_per_pattern)
+    return await analyze_website_impl(base_url, timeout, include_url_lists, max_urls_per_pattern)
 
 
 @mcp.tool()
