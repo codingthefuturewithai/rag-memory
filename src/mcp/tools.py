@@ -899,6 +899,53 @@ def check_existing_crawl(
         raise
 
 
+def check_existing_file(
+    db: Database, file_path: str, collection_name: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Check if a file path has already been ingested into a collection.
+
+    Args:
+        db: Database connection
+        file_path: Absolute file path to check
+        collection_name: Collection name to check within
+
+    Returns:
+        Dict with doc info if found, None otherwise
+    """
+    try:
+        conn = db.connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    sd.id as doc_id,
+                    sd.filename,
+                    sd.created_at
+                FROM source_documents sd
+                JOIN document_chunks dc ON dc.source_document_id = sd.id
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                JOIN collections c ON c.id = cc.collection_id
+                WHERE sd.metadata->>'file_path' = %s
+                  AND c.name = %s
+                LIMIT 1
+                """,
+                (file_path, collection_name),
+            )
+            row = cur.fetchone()
+
+            if row:
+                return {
+                    "doc_id": row[0],
+                    "filename": row[1],
+                    "created_at": row[2].isoformat() if row[2] else None,
+                }
+            return None
+    except Exception as e:
+        logger.error(f"check_existing_file failed: {e}")
+        raise
+
+
 @deduplicate_request()
 async def ingest_url_impl(
     db: Database,
@@ -1132,6 +1179,7 @@ async def ingest_file_impl(
     metadata: Optional[Dict[str, Any]] = None,
     include_chunk_ids: bool = False,
     progress_callback=None,
+    mode: str = "ingest",
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_file tool.
@@ -1172,6 +1220,36 @@ async def ingest_file_impl(
                 f"Create it first using create_collection('{collection_name}', 'description')."
             )
 
+        # Check for existing file in this collection
+        existing_doc = check_existing_file(db, file_path, collection_name)
+
+        if mode not in ["ingest", "reingest"]:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
+
+        if mode == "ingest" and existing_doc:
+            raise ValueError(
+                f"This file has already been ingested into collection '{collection_name}'.\n"
+                f"Existing document: ID={existing_doc['doc_id']}, "
+                f"filename='{existing_doc['filename']}', "
+                f"ingested: {existing_doc['created_at']}\n"
+                f"To overwrite existing content, use mode='reingest'."
+            )
+
+        # If reingest mode, delete old document first
+        if mode == "reingest" and existing_doc:
+            if progress_callback:
+                await progress_callback(5, 100, f"Deleting old version of {path.name}...")
+
+            logger.info(f"Reingest mode: Deleting old document ID={existing_doc['doc_id']}")
+
+            # Delete graph episode
+            if graph_store:
+                episode_name = f"doc_{existing_doc['doc_id']}"
+                await graph_store.delete_episode_by_name(episode_name)
+
+            # Delete RAG document
+            doc_store.delete_document(existing_doc['doc_id'])
+
         file_size = path.stat().st_size
         file_type = path.suffix.lstrip(".").lower() or "text"
 
@@ -1190,6 +1268,7 @@ async def ingest_file_impl(
         file_metadata.update({
             "file_type": file_type,
             "file_size": file_size,
+            "file_path": file_path,  # NEW - for duplicate detection
         })
 
         # Progress: Ingesting (pass callback to mediator)

@@ -910,6 +910,7 @@ async def ingest_file(
     collection_name: str,
     metadata: dict | None = None,
     include_chunk_ids: bool = False,
+    mode: str = "ingest",
     context: Context | None = None,
 ) -> dict:
     """
@@ -963,6 +964,9 @@ async def ingest_file(
         collection_name: Target collection (must exist)
         metadata: Optional metadata dict
         include_chunk_ids: If True, returns chunk IDs (default: False)
+        mode: Ingest mode - "ingest" or "reingest" (default: "ingest").
+              - "ingest": New ingest. ERROR if this file already ingested into this collection.
+              - "reingest": Update existing. Deletes old content from this file and re-ingests.
 
     Returns:
         {"source_document_id": int, "num_chunks": int, "filename": str, "file_type": str,
@@ -981,7 +985,7 @@ async def ingest_file(
 
     result = await ingest_file_impl(
         db, doc_store, unified_mediator, graph_store, file_path, collection_name, metadata, include_chunk_ids,
-        progress_callback=progress_callback if context else None
+        progress_callback=progress_callback if context else None, mode=mode
     )
 
     # Progress: Complete
