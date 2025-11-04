@@ -619,45 +619,127 @@ async def analyze_website(
     max_urls_per_pattern: int = 10
 ) -> dict:
     """
-    Analyze website structure to understand sitemap and URL patterns.
+    Analyze website structure to discover URL patterns using AsyncUrlSeeder.
+
+    **GUARANTEED TO RETURN STRUCTURED RESPONSE IN ALL SCENARIOS** (success, timeout, error).
 
     **Purpose:**
-    Helps AI agents make informed decisions about multi-page crawls by providing
-    data about site structure. Analyzes are FREE (no AI models, just HTTP requests).
+    Helps AI agents make informed decisions about multi-page crawls by discovering
+    URL patterns. Uses AsyncUrlSeeder to try sitemap first, falls back to Common Crawl
+    for sites without sitemaps. Analyzes are FREE (no AI models, just HTTP requests).
 
-    **Smart Sitemap Discovery:**
-    If sitemap not found at provided URL, automatically tries root domain.
-    - Provided: "https://docs.example.com/api" → tries /api/sitemap.xml first
-    - Fallback: "https://docs.example.com/sitemap.xml" (root domain)
-    - Best practice: Provide root URL for most reliable results
+    **URL Discovery Strategy:**
+    1. Tries sitemap.xml (both provided URL and root domain)
+    2. Falls back to Common Crawl index if no sitemap found
+    3. Returns up to 150 URLs grouped by path patterns
+
+    **⚠️ CRITICAL: 50-Second Hard Timeout**
+    Analysis has a hard 50-second timeout. If site exceeds this:
+    - Response: analysis_method="timeout"
+    - You must: Try analyzing a specific subsection (e.g., /docs, /api)
+    - Or: Use manual crawling with limited depth
+    - NOTE: The timeout response is still structured and informative
+
+    **Possible Response Scenarios (check analysis_method field):**
+    1. "asyncurlseeder" - Success: URLs discovered via sitemap or Common Crawl
+    2. "timeout" - Analysis exceeded 50 seconds (site too large for automatic analysis)
+    3. "error" - Analysis failed (connection error, invalid input, etc.)
+    4. "not_available" - AsyncUrlSeeder not installed (rare, see notes for fix)
+
+    **Error Cases - YOU Must Handle:**
+    When analysis_method != "asyncurlseeder", check the "notes" field for guidance.
+    You are responsible for deciding next steps:
+    - Timeout: Choose to analyze subsection, use manual crawl, or skip
+    - No URLs found: Site may be authenticated, not indexed, or robots.txt blocking
+    - Connection error: Site unreachable or network issue
 
     Args:
-        base_url: Website URL (root domain recommended, but paths supported)
+        base_url: Website URL (root domain recommended for best results)
                  e.g., "https://docs.example.com" or "https://docs.example.com/api"
-        timeout: Request timeout seconds (default: 10)
-        include_url_lists: If True, includes full URL lists (default: False, pattern stats only)
+        timeout: DEPRECATED - kept for backward compatibility, ignored
+                (actual timeout is 50 seconds, hard-coded for reliability)
+        include_url_lists: If True, includes full URL lists per pattern (default: False)
         max_urls_per_pattern: Max URLs per pattern when include_url_lists=True (default: 10)
 
-    Returns:
+    Returns (ALWAYS returns one of these structures):
+        Success (analysis_method="asyncurlseeder"):
         {
             "base_url": str,
-            "analysis_method": str,  # "sitemap" or "not_found"
-            "sitemap_location": str,  # "provided URL", "root domain", or ""
-            "total_urls": int,
-            "pattern_stats": dict,  # {"/api": {"count": 45, "avg_depth": 2.1, "example_urls": [...]}}
-            "domains": list,  # Domains found in sitemap
-            "notes": str,
+            "analysis_method": "asyncurlseeder",
+            "total_urls": int,  # URLs discovered (1-150)
+            "url_patterns": int,  # Number of pattern groups
+            "elapsed_seconds": float,
+            "pattern_stats": {
+                "/pattern": {
+                    "count": int,  # URLs in this pattern
+                    "avg_depth": float,  # Average path depth
+                    "example_urls": [str]  # Up to 3 examples
+                }
+            },
+            "domains": [str],  # Domains found
+            "notes": str,  # Summary of analysis
             "url_groups": dict  # Only if include_url_lists=True
         }
 
-    Example:
-        analysis = analyze_website("https://docs.example.com/api")
-        # Returns: total_urls=120, pattern_stats={"/api": 45, "/guides": 30}
+        Timeout (analysis_method="timeout"):
+        {
+            "base_url": str,
+            "analysis_method": "timeout",
+            "error": "timeout",
+            "total_urls": 0,
+            "pattern_stats": {},
+            "notes": "Website analysis exceeded 50-second timeout. Site may be too large...",
+            "elapsed_seconds": 50
+        }
 
-        # Use results to decide on crawl scope
-        ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20)
+        Error (analysis_method="error"):
+        {
+            "base_url": str,
+            "analysis_method": "error",
+            "error": str,  # Error code (invalid_url, ConnectionError, etc.)
+            "total_urls": 0,
+            "pattern_stats": {},
+            "notes": str,  # Details about what went wrong
+            "elapsed_seconds": float
+        }
 
-    Note: Free operation (no API calls, just HTTP request for sitemap).
+        Not Available (analysis_method="not_available"):
+        {
+            "base_url": str,
+            "analysis_method": "not_available",
+            "error": "AsyncUrlSeeder not available",
+            "total_urls": 0,
+            "pattern_stats": {},
+            "notes": "Crawl4AI not installed. Install with: uv add crawl4ai...",
+            "elapsed_seconds": 0
+        }
+
+    **Examples:**
+        # Simple analysis (pattern stats only)
+        analysis = analyze_website("https://docs.python.org")
+        if analysis["analysis_method"] == "asyncurlseeder":
+            # Success - plan crawl based on patterns
+            for pattern, stats in analysis["pattern_stats"].items():
+                print(f"{pattern}: {stats['count']} URLs")
+        elif analysis["analysis_method"] == "timeout":
+            # Too large - try subsection instead
+            analysis = analyze_website("https://docs.python.org/3.11")
+        else:
+            # Error - see notes for guidance
+            print(f"Analysis failed: {analysis['notes']}")
+
+        # Full URL lists for planning
+        analysis = analyze_website("https://docs.example.com", include_url_lists=True, max_urls_per_pattern=20)
+
+    **Usage Pattern (from server_instructions.txt):**
+        1. Call analyze_website() - understand scope
+        2. Check analysis_method (success vs timeout vs error)
+        3. If success: Review pattern_stats, plan targeted crawls
+        4. If timeout: Analyze subsection or use manual crawl
+        5. If error: See notes field, decide next approach
+        6. Execute ingest_url() with follow_links=True, max_pages=20
+
+    **Note:** Free operation (no AI models, just HTTP requests to discover URLs).
     """
     return await analyze_website_impl(base_url, timeout, include_url_lists, max_urls_per_pattern)
 
