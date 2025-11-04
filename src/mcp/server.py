@@ -605,7 +605,7 @@ async def analyze_website(
     max_urls_per_pattern: int = 10
 ) -> dict:
     """
-    Analyze website structure to discover URL patterns using AsyncUrlSeeder.
+    Analyze website structure to discover URL patterns.
 
     **GUARANTEED TO RETURN STRUCTURED RESPONSE IN ALL SCENARIOS** (success, timeout, error).
 
