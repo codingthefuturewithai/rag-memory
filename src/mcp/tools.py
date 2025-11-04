@@ -616,6 +616,7 @@ async def ingest_text_impl(
     metadata: Optional[Dict[str, Any]] = None,
     include_chunk_ids: bool = False,
     progress_callback=None,
+    mode: str = "ingest",
 ) -> Dict[str, Any]:
     """
     Implementation of ingest_text tool.
@@ -644,6 +645,35 @@ async def ingest_text_impl(
                 f"Collection '{collection_name}' does not exist. "
                 f"Create it first using create_collection('{collection_name}', 'description')."
             )
+
+        # Check for existing document with same title in this collection
+        existing_doc = check_existing_title(db, document_title, collection_name)
+
+        if mode not in ["ingest", "reingest"]:
+            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
+
+        if mode == "ingest" and existing_doc:
+            raise ValueError(
+                f"A document with title '{document_title}' has already been ingested into collection '{collection_name}'.\n"
+                f"Existing document: ID={existing_doc['doc_id']}, "
+                f"ingested: {existing_doc['created_at']}\n"
+                f"To overwrite existing content, use mode='reingest'."
+            )
+
+        # If reingest mode, delete old document first
+        if mode == "reingest" and existing_doc:
+            if progress_callback:
+                await progress_callback(5, 100, f"Deleting old version of '{document_title}'...")
+
+            logger.info(f"Reingest mode: Deleting old document ID={existing_doc['doc_id']}")
+
+            # Delete graph episode
+            if graph_store:
+                episode_name = f"doc_{existing_doc['doc_id']}"
+                await graph_store.delete_episode_by_name(episode_name)
+
+            # Delete RAG document
+            doc_store.delete_document(existing_doc['doc_id'])
 
         # Route through unified mediator (RAG + Graph) with progress callback
         logger.info("Ingesting text through unified mediator (RAG + Graph)")
@@ -991,6 +1021,53 @@ def check_existing_files_batch(
             ]
     except Exception as e:
         logger.error(f"check_existing_files_batch failed: {e}")
+        raise
+
+
+def check_existing_title(
+    db: Database, title: str, collection_name: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Check if a document title has already been ingested into a collection.
+
+    Args:
+        db: Database connection
+        title: Document title to check (stored in filename field)
+        collection_name: Collection name to check within
+
+    Returns:
+        Dict with doc info if found, None otherwise
+    """
+    try:
+        conn = db.connect()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT
+                    sd.id as doc_id,
+                    sd.filename,
+                    sd.created_at
+                FROM source_documents sd
+                JOIN document_chunks dc ON dc.source_document_id = sd.id
+                JOIN chunk_collections cc ON cc.chunk_id = dc.id
+                JOIN collections c ON c.id = cc.collection_id
+                WHERE sd.filename = %s
+                  AND c.name = %s
+                LIMIT 1
+                """,
+                (title, collection_name),
+            )
+            row = cur.fetchone()
+
+            if row:
+                return {
+                    "doc_id": row[0],
+                    "filename": row[1],
+                    "created_at": row[2].isoformat() if row[2] else None,
+                }
+            return None
+    except Exception as e:
+        logger.error(f"check_existing_title failed: {e}")
         raise
 
 

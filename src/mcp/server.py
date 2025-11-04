@@ -450,6 +450,7 @@ async def ingest_text(
     document_title: str | None = None,
     metadata: dict | None = None,
     include_chunk_ids: bool = False,
+    mode: str = "ingest",
     context: Context | None = None,
 ) -> dict:
     """
@@ -513,6 +514,9 @@ async def ingest_text(
         document_title: Optional title (auto-generated if None)
         metadata: Optional metadata dict
         include_chunk_ids: If True, returns chunk IDs (default: False for minimal response)
+        mode: Ingest mode - "ingest" or "reingest" (default: "ingest").
+              - "ingest": New ingest. ERROR if document with same title already ingested into this collection.
+              - "reingest": Update existing. Deletes old content with this title and re-ingests.
 
     Returns:
         {"source_document_id": int, "num_chunks": int, "collection_name": str,
@@ -541,6 +545,7 @@ async def ingest_text(
         metadata,
         include_chunk_ids,
         progress_callback=progress_callback if context else None,
+        mode=mode,
     )
 
     # Progress: Complete
