@@ -1537,7 +1537,7 @@ async def ingest_directory_impl(
                     await graph_store.delete_episode_by_name(episode_name)
 
                 # Delete RAG document
-                doc_store.delete_document(existing_doc['doc_id'])
+                await doc_store.delete_document(existing_doc['doc_id'])
 
         # Progress: Starting ingestion
         if progress_callback:
