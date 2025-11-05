@@ -673,7 +673,7 @@ async def ingest_text_impl(
                 await graph_store.delete_episode_by_name(episode_name)
 
             # Delete RAG document
-            doc_store.delete_document(existing_doc['doc_id'])
+            await doc_store.delete_document(existing_doc['doc_id'])
 
         # Route through unified mediator (RAG + Graph) with progress callback
         logger.info("Ingesting text through unified mediator (RAG + Graph)")
@@ -1373,7 +1373,7 @@ async def ingest_file_impl(
                 await graph_store.delete_episode_by_name(episode_name)
 
             # Delete RAG document
-            doc_store.delete_document(existing_doc['doc_id'])
+            await doc_store.delete_document(existing_doc['doc_id'])
 
         file_size = path.stat().st_size
         file_type = path.suffix.lstrip(".").lower() or "text"
