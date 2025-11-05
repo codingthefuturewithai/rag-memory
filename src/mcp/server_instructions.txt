@@ -46,18 +46,41 @@ Applies to: `search_documents`, `query_relationships`, `query_temporal`
 
 ## 3. INGESTION WORKFLOWS
 
-### Check Before Ingesting (Avoid Duplicates)
+### Duplicate Detection & Reingest
+
+**AUTOMATIC DUPLICATE DETECTION:**
+All ingest tools automatically detect duplicates when using mode='ingest' (default).
+If content already exists, you'll receive a clear error with the duplicate's ID and a suggestion to use mode='reingest'.
+
+**How It Works:**
+- **ingest_text**: Checks for existing document with same title in collection
+- **ingest_file**: Checks for existing file_path metadata in collection
+- **ingest_directory**: Checks all files' file_path metadata in collection
+- **ingest_url**: Checks for existing crawl_root_url metadata in collection
+
+**Workflow:**
 ```
-list_documents(collection_name, include_details=True)
-  → Review titles/metadata
-  → If exists unchanged: SKIP
-  → If exists but updated: update_document()
-  → If new: ingest_*()
+# STEP 1: Try ingesting (mode='ingest' is default)
+ingest_*(content, collection_name)
+
+# STEP 2: If duplicate error occurs, decide:
+  → Content unchanged? SKIP (no action needed)
+  → Content updated? Use mode='reingest' (deletes old, ingests new)
+  → Minor edit only? Use update_document() (no re-chunking)
 ```
 
-**Why:** Avoids redundant processing and maintains clean knowledge base.
+**Reingest vs Update:**
+- **mode='reingest'**: Deletes old document completely, re-ingests fresh content
+  - **When:** Content changed significantly, need fresh chunking/embeddings/graph
+  - **Result:** Complete replacement with new document ID
+  - **Tools:** ingest_text, ingest_file, ingest_directory, ingest_url
 
-### Analyze Before Multi-Page Crawls (REQUIRED)
+- **update_document()**: Updates existing document in-place
+  - **When:** Minor metadata changes, small content tweaks
+  - **Result:** Same document ID, only specified fields updated
+  - **Note:** Content updates trigger re-chunking (same cost as reingest)
+
+### Analyze Before Multi-Page Ingests (REQUIRED)
 ```
 # STEP 1: Analyze website structure
 analysis = analyze_website(url, include_url_lists=True)
@@ -65,11 +88,11 @@ analysis = analyze_website(url, include_url_lists=True)
   → Note: May take up to 50 seconds for large sites
 
 # STEP 2: Review scope and plan strategy
-  → If total_urls <= 20: Single targeted crawl
-  → If total_urls > 20: Multiple targeted crawls (max_pages=20 per crawl)
+  → If total_urls <= 20: Single targeted ingest
+  → If total_urls > 20: Multiple targeted ingests (max_pages=20 per ingest)
   → Review pattern_stats to identify sections (/api, /guides, /reference)
 
-# STEP 3: Execute crawl(s)
+# STEP 3: Execute ingest(s)
 ingest_url(
     url=target_url,
     follow_links=True,
@@ -78,8 +101,8 @@ ingest_url(
 ```
 
 **Why:**
-- Helps plan targeted crawls vs full-site ingestion
-- max_pages=20 hard limit requires multiple crawls for large sites
+- Helps plan targeted ingests vs full-site ingestion
+- max_pages=20 hard limit requires multiple ingests for large sites
 - Pattern stats show actual site structure for informed decisions
 
 **Website Analysis:**
@@ -90,10 +113,10 @@ analyze_website() discovers publicly accessible URL patterns:
 - 50-second timeout (very large sites may time out - try analyzing subsections instead)
 Example: "https://docs.example.com/api" → discovers /api section structure
 
-### Use Recrawl for Website Updates
+### Use Reingest for Website Updates
 ```
 Instead of: delete_document() + ingest_url()
-Use: ingest_url(url, mode="recrawl", ...)
+Use: ingest_url(url, mode="reingest", ...)
 ```
 
 **Why:** Safer, maintains metadata tracking, cleaner knowledge base.
@@ -169,10 +192,11 @@ This prevents data corruption from concurrent identical operations. **If you see
 - All list/view operations
 
 **Best practices for efficiency:**
-- Check for duplicates before ingesting (see #3)
-- Use `update_document()` instead of re-ingesting
-- Analyze large crawls before proceeding (see #3)
-- Use recrawl mode for website updates (see #3)
+- Let automatic duplicate detection catch duplicates (see #3)
+- Use mode='reingest' for updated content (complete replacement)
+- Use `update_document()` only for minor edits (in-place updates)
+- Analyze large ingests before proceeding (see #3)
+- Use reingest mode for website updates (see #3)
 
 ---
 
@@ -193,12 +217,12 @@ This prevents data corruption from concurrent identical operations. **If you see
    → Shows: /api (45 pages), /guides (30 pages), /reference (25 pages)
 2. create_collection(name, domain, description)
 
-# Execute multiple targeted crawls based on pattern analysis
+# Execute multiple targeted ingests based on pattern analysis
 3. ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20)
 4. ingest_url("https://docs.example.com/guides", follow_links=True, max_pages=20)
 5. ingest_url("https://docs.example.com/reference", follow_links=True, max_pages=20)
 
-# Each crawl is independent - plan based on pattern_stats from analyze_website()
+# Each ingest is independent - plan based on pattern_stats from analyze_website()
 ```
 
 **Research Query:**
@@ -211,8 +235,11 @@ This prevents data corruption from concurrent identical operations. **If you see
 **Maintenance:**
 ```
 1. list_documents(collection) - identify stale docs
-2. update_document(id) - refresh changed content
-   OR ingest_url(url, mode="recrawl") - refresh websites
+2. Refresh changed content:
+   - For websites: ingest_url(url, mode="reingest")
+   - For files: ingest_file(path, mode="reingest")
+   - For text: ingest_text(content, mode="reingest")
+   - For minor edits: update_document(id, content/metadata)
 ```
 
 ---
@@ -221,12 +248,12 @@ This prevents data corruption from concurrent identical operations. **If you see
 
 - **MUST** review collections before ingesting (see #1)
 - **MUST** use full questions for search, not keywords (see #2)
-- **MUST** check for duplicates before ingesting (see #3)
-- **MUST** run analyze_website() before multi-page crawls (see #3)
-- **MUST** limit max_pages to 20 per crawl for large sites
+- **MUST** use mode='reingest' to update existing content (automatic duplicate detection will guide you) (see #3)
+- **MUST** run analyze_website() before multi-page ingests (see #3)
+- **MUST** limit max_pages to 20 per ingest for large sites
 - **SHOULD** present scope to user for large operations and get confirmation
-- **SHOULD** use recrawl mode for website updates (see #3)
-- **SHOULD** combine RAG + Graph queries for comprehensive research (see #4)
-- **SHOULD** use pattern_stats from analyze_website() to plan targeted crawls
+- **SHOULD** use mode='reingest' for content updates instead of delete+ingest (see #3)
+- **SHOULD** combine semantic + relationship queries for comprehensive research (see #4)
+- **SHOULD** use pattern_stats from analyze_website() to plan targeted ingests
 
 **For tool-specific details:** See individual tool docstrings.

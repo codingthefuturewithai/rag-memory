@@ -117,6 +117,8 @@
 
 ## Issue 8: Submit Crawl4AI bug fixes upstream
 
+**Status:** OUTSTANDING - Not urgent (hygiene issue)
+
 **Context:** Forked Crawl4AI repo to fix bugs that were blocking RAG Memory development
 
 **Current state:** Maintaining our own fork with patches for known bugs
@@ -131,208 +133,49 @@
 
 ---
 
-## Issue 9: CRITICAL - Knowledge Graph Extraction Only Returns Document-to-Document Links
+## Issue 9: Knowledge Graph Extraction - Needs Testing to Confirm Fix
 
-**Severity:** CRITICAL - Knowledge graph queries are completely useless as currently implemented
+**Status:** LIKELY FIXED - Needs verification testing
 
-**Problem:** Graphiti entity extraction is only capturing document-level relationships, not semantic entities within documents
+**Original Problem:** Graphiti entity extraction was only capturing document-level relationships, not semantic entities within documents
 
-**Current behavior:**
-- Relationship queries return: "Document A links to Document B"
-- Temporal queries return: "Document X was updated at time Y"
-- No extraction of actual semantic entities (Python, setup, API, library, etc.)
-- No extraction of actual relationships between concepts (Python USES standard_library, REQUIRES setup, etc.)
+**Suspected Fix:** Content filtering implemented in Issue 10 likely resolved this by removing navigation noise that was biasing LLM extraction
 
-**What should happen:**
-- Extract semantic entities from document content (nouns, concepts, topics)
-- Build relationships between those entities across all documents in collection
-- Support queries like: "What does Python require?" or "What libraries are part of Python?"
-- Timeline should track entity evolution, not document updates
+**Required Action:**
+- Test with multiple documentation sites to verify semantic entity extraction is working correctly
+- Verify relationship queries return entity-to-entity relationships (e.g., "Python USES standard_library")
+- Verify temporal queries track entity evolution, not just document timestamps
+- Compare results before/after content filtering to confirm improvement
 
-**Test evidence:** (2025-11-02 13:21:19)
-- Crawled 5 pages about Python documentation
-- Ingested 3 documents with 23 chunks
-- Relationship query for "How does Python documentation relate to Python programming?" returned only document link relationships
-- Temporal query returned document timestamps, not entity evolution
-
-**Root cause:** Graphiti's extraction logic (in UnifiedIngestionMediator) is not properly configured to extract semantic entities from ingested documents
-
-**Investigation needed:**
-- How is Graphiti configured for entity extraction?
-- What prompt/instructions are given to LLM for entity identification?
-- Are entities being extracted but then filtered out?
-- Is the issue in extraction or in query execution?
-
-**Impact:** Knowledge graph feature is non-functional for actual use cases - clients cannot query relationships between entities/concepts, only between documents
-
-**Fix priority:** HIGH - This is a core feature that's broken
+**Success Criteria:**
+- Relationship queries return semantic entities and their relationships
+- Temporal queries show entity evolution over time
+- Document-to-document relationships should be minimal or relevant only
 
 ---
 
 ## Issue 10: Web Page Content Filtering to Reduce Navigation Noise in Knowledge Graph
 
-**Severity:** HIGH - Knowledge graph quality degradation for web crawls
+**Status:** ✅ COMPLETE - Tested and working to satisfaction
 
-**Problem:** Web pages ingested via crawlers produce excessive document-to-document relationships instead of semantic entity relationships. Navigation bars, sidebars, headers, and footers appear on every page, creating artificial link graphs where every page connects to the same navigation targets.
+**Implementation Summary:**
+- PruningContentFilter enabled by default in `web_crawler.py` (threshold=0.40, fixed mode)
+- Aggressive excluded_tags configured (nav, footer, header, aside, etc.)
+- Using `fit_markdown` for filtered content with fallback to `markdown_with_citations`
+- All MCP tool documentation finalized and working as expected
 
-**Evidence:**
-- Tested: 5 Python documentation pages
-- Result: Relationship queries returned only "Document A links to Document B" patterns
-- Compared: Same knowledge graph extraction on local project documentation files works correctly, returns semantic entities and relationships
+**Note:** The `analyze_website` MCP tool is complete and working to satisfaction. MCP tool implementation, documentation, and client guidance are all finalized. No further changes needed.
 
-**Root Cause:** Crawl4AI converts web pages to markdown that includes navigation elements (links, breadcrumbs, sidebars). When passed to Graphiti's LLM extraction, these structural elements bias the LLM toward extracting document relationships instead of semantic content.
-
-**Tested Solutions:**
-
-### Available in Crawl4AI (Our Fork)
-
-1. **PruningContentFilter**
-   - Algorithm: Text density + link density scoring with tag importance weights
-   - Cost: FREE (no API calls)
-   - Quality: High (~80-85% noise reduction)
-   - Robustness: Production-proven, works across 95%+ of websites
-   - Implementation: `from crawl4ai.content_filter_strategy import PruningContentFilter`
-
-2. **BM25ContentFilter**
-   - Algorithm: BM25 ranking (used by Elasticsearch) with stemming and priority tag weights
-   - Cost: FREE (no API calls)
-   - Quality: High (slightly better than pruning, semantic ranking)
-   - Robustness: Production-proven, works across 95%+ of websites
-   - Implementation: `from crawl4ai.content_filter_strategy import BM25ContentFilter`
-
-3. **LLMContentFilter**
-   - Algorithm: LLM passes each HTML chunk through instruction to generate clean markdown
-   - Cost: PAID (~$0.01-0.05 per page with gpt-4o-mini)
-   - Quality: Very High (~95%+ noise reduction, semantic understanding)
-   - Robustness: Most robust across diverse website structures
-   - Implementation: `from crawl4ai.content_filter_strategy import LLMContentFilter`
-   - Caching: Uses `~/.cache/llm_cache/content_filter/` to avoid re-processing
-   - **IMPORTANT:** User-configurable only (optional flag)
-
-### NOT Recommended
-
-- **Excluding "Document" entity type from Graphiti:** Unreliable - webpages legitimately discuss documents (PDFs, specs, etc.), would lose real semantic content. Parameter exists but extraction behavior not verified.
+**Remaining Task:** Test CLI command for `analyze_website` to verify output format
 
 ---
 
-## RECOMMENDED IMPLEMENTATION (Rank-Ordered)
+## Issue 11: Test analyze_website CLI Command
 
-### Phase 1 (Immediate - Breaking Change OK, No Users Yet)
+**Status:** NEW - Low priority
 
-1. **Enable PruningContentFilter by default in web_crawler.py**
-   ```python
-   from crawl4ai.content_filter_strategy import PruningContentFilter
+**Task:** Verify the CLI command `rag analyze <url>` returns proper output format
 
-   # In WebCrawler.__init__:
-   self.content_filter = PruningContentFilter(
-       threshold_type="dynamic",
-       threshold=0.48
-   )
+**Reason:** MCP tool has been tested and works. CLI wrapper hasn't been tested yet.
 
-   # In crawl_page():
-   result = await crawler.arun(
-       url=url,
-       config=self.crawler_config,
-       content_filter=self.content_filter  # NEW
-   )
-   ```
-
-2. **Change markdown source from raw_markdown to cleaned markdown**
-   - Current: `content = result.markdown.raw_markdown`
-   - Proposed: `content = result.markdown.markdown_with_citations` (filtered output)
-
-3. **Add aggressive excluded_tags**
-   ```python
-   excluded_tags=[
-       "nav", "footer", "header", "aside",
-       "form", "iframe", "script", "style",
-       "noscript", "meta", "link"
-   ]
-   ```
-
-4. **Mark web crawl episodes with metadata**
-   - Add `"filtered": True` to metadata sent to Graphiti
-   - Add `"content_type": "article_body"` to distinguish from document structure
-
-**Expected result:** ~80-85% reduction in spurious document-to-document relationships
-
-### Phase 2 (Optional Enhancement - User-Configurable)
-
-1. **Add LLMContentFilter as optional feature**
-   ```python
-   crawl_config = CrawlerRunConfig(
-       use_llm_content_filter=False,  # Default: off to avoid API costs
-       llm_provider="openai",
-       llm_model="gpt-4o-mini"
-   )
-   ```
-
-2. **Document API cost implications**
-   - Estimate: ~$0.01-0.05 per page
-   - Users must opt-in explicitly
-
-3. **Implement with caching**
-   - Graphiti's LLMContentFilter already has caching built-in
-   - Repeated crawls of same URL use cached result
-
----
-
-## Implementation Files to Modify
-
-1. `/src/ingestion/web_crawler.py`
-   - Import PruningContentFilter
-   - Initialize in __init__()
-   - Pass to crawler.arun()
-   - Change markdown source
-
-2. `/src/unified/mediator.py`
-   - Add metadata marking for web crawls (filtered=True)
-
-3. Documentation/README
-   - Explain content filtering behavior
-   - Document API cost implications if LLMContentFilter enabled
-
----
-
-## Testing Plan
-
-After implementation:
-
-1. **Re-run crawl test with Python documentation**
-   - Verify relationship queries return semantic entities, not document links
-   - Expected: "User Service USES_DATABASE PostgreSQL" pattern (like project docs)
-   - Not: "Document A LINKS_TO Document B" pattern
-
-2. **Verify no breaking changes**
-   - Ensure document-level chunks still stored correctly
-   - Verify similarity search still works
-   - Confirm RAG retrieval unaffected
-
-3. **Quality metrics**
-   - Entity-to-entity relationship ratio vs document-to-document
-   - Count average relationships per extracted entity (should increase)
-   - Knowledge graph clustering coefficient (should improve)
-
----
-
-## Timeline & Risk
-
-**Risk Level:** MEDIUM
-- Breaking change but no users affected
-- PruningContentFilter is production-proven
-- Can roll back by removing filter if needed
-
-**Timeline:**
-- Phase 1 implementation: 1-2 hours
-- Testing and validation: 1 hour
-- Phase 2 (optional): 1-2 hours (much later)
-
----
-
-## References
-
-- Crawl4AI fork location: `/crawl4ai-fork/crawl4ai/content_filter_strategy.py` (775 lines)
-- Research findings: Web scraping content filtering is well-solved problem
-- Production examples: Elasticsearch (BM25), Readability.js (Arc90 algorithm)
-- Graphiti: Production-ready, supports all filtering approaches
-- Cost estimate: gpt-4o-mini = $0.15 per 1M input tokens (~$0.01-0.05 per page)
+**Action:** Run a quick test with sample URL to verify CLI output is user-friendly
