@@ -57,7 +57,7 @@ list_documents(collection_name, include_details=True)
 
 **Why:** Avoids redundant processing and maintains clean knowledge base.
 
-### Analyze Before Multi-Page Crawls (REQUIRED)
+### Analyze Before Multi-Page Ingests (REQUIRED)
 ```
 # STEP 1: Analyze website structure
 analysis = analyze_website(url, include_url_lists=True)
@@ -65,11 +65,11 @@ analysis = analyze_website(url, include_url_lists=True)
   → Note: May take up to 50 seconds for large sites
 
 # STEP 2: Review scope and plan strategy
-  → If total_urls <= 20: Single targeted crawl
-  → If total_urls > 20: Multiple targeted crawls (max_pages=20 per crawl)
+  → If total_urls <= 20: Single targeted ingest
+  → If total_urls > 20: Multiple targeted ingests (max_pages=20 per ingest)
   → Review pattern_stats to identify sections (/api, /guides, /reference)
 
-# STEP 3: Execute crawl(s)
+# STEP 3: Execute ingest(s)
 ingest_url(
     url=target_url,
     follow_links=True,
@@ -78,8 +78,8 @@ ingest_url(
 ```
 
 **Why:**
-- Helps plan targeted crawls vs full-site ingestion
-- max_pages=20 hard limit requires multiple crawls for large sites
+- Helps plan targeted ingests vs full-site ingestion
+- max_pages=20 hard limit requires multiple ingests for large sites
 - Pattern stats show actual site structure for informed decisions
 
 **Website Analysis:**
@@ -90,10 +90,10 @@ analyze_website() discovers publicly accessible URL patterns:
 - 50-second timeout (very large sites may time out - try analyzing subsections instead)
 Example: "https://docs.example.com/api" → discovers /api section structure
 
-### Use Recrawl for Website Updates
+### Use Reingest for Website Updates
 ```
 Instead of: delete_document() + ingest_url()
-Use: ingest_url(url, mode="recrawl", ...)
+Use: ingest_url(url, mode="reingest", ...)
 ```
 
 **Why:** Safer, maintains metadata tracking, cleaner knowledge base.
@@ -171,8 +171,8 @@ This prevents data corruption from concurrent identical operations. **If you see
 **Best practices for efficiency:**
 - Check for duplicates before ingesting (see #3)
 - Use `update_document()` instead of re-ingesting
-- Analyze large crawls before proceeding (see #3)
-- Use recrawl mode for website updates (see #3)
+- Analyze large ingests before proceeding (see #3)
+- Use reingest mode for website updates (see #3)
 
 ---
 
@@ -193,12 +193,12 @@ This prevents data corruption from concurrent identical operations. **If you see
    → Shows: /api (45 pages), /guides (30 pages), /reference (25 pages)
 2. create_collection(name, domain, description)
 
-# Execute multiple targeted crawls based on pattern analysis
+# Execute multiple targeted ingests based on pattern analysis
 3. ingest_url("https://docs.example.com/api", follow_links=True, max_pages=20)
 4. ingest_url("https://docs.example.com/guides", follow_links=True, max_pages=20)
 5. ingest_url("https://docs.example.com/reference", follow_links=True, max_pages=20)
 
-# Each crawl is independent - plan based on pattern_stats from analyze_website()
+# Each ingest is independent - plan based on pattern_stats from analyze_website()
 ```
 
 **Research Query:**
@@ -212,7 +212,7 @@ This prevents data corruption from concurrent identical operations. **If you see
 ```
 1. list_documents(collection) - identify stale docs
 2. update_document(id) - refresh changed content
-   OR ingest_url(url, mode="recrawl") - refresh websites
+   OR ingest_url(url, mode="reingest") - refresh websites
 ```
 
 ---
@@ -222,11 +222,11 @@ This prevents data corruption from concurrent identical operations. **If you see
 - **MUST** review collections before ingesting (see #1)
 - **MUST** use full questions for search, not keywords (see #2)
 - **MUST** check for duplicates before ingesting (see #3)
-- **MUST** run analyze_website() before multi-page crawls (see #3)
-- **MUST** limit max_pages to 20 per crawl for large sites
+- **MUST** run analyze_website() before multi-page ingests (see #3)
+- **MUST** limit max_pages to 20 per ingest for large sites
 - **SHOULD** present scope to user for large operations and get confirmation
-- **SHOULD** use recrawl mode for website updates (see #3)
-- **SHOULD** combine RAG + Graph queries for comprehensive research (see #4)
-- **SHOULD** use pattern_stats from analyze_website() to plan targeted crawls
+- **SHOULD** use reingest mode for website updates (see #3)
+- **SHOULD** combine semantic + relationship queries for comprehensive research (see #4)
+- **SHOULD** use pattern_stats from analyze_website() to plan targeted ingests
 
 **For tool-specific details:** See individual tool docstrings.

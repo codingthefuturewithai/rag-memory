@@ -454,7 +454,7 @@ async def ingest_text(
     context: Context | None = None,
 ) -> dict:
     """
-    Ingest text content into both vector store and knowledge graph with automatic chunking.
+    Ingest text content for semantic search and relationship analysis with automatic chunking.
 
     **IMPORTANT:** Collection must exist. Use create_collection() first.
 
@@ -527,7 +527,7 @@ async def ingest_text(
     - Use meaningful document titles for search results
     - Add metadata to enable filtered searches
 
-    Note: Uses AI models, has cost (embeddings + graph extraction).
+    Note: Uses AI models, has cost (semantic analysis and relationship extraction).
     """
     # Create progress callback wrapper if context available
     async def progress_callback(progress: float, total: float, message: str) -> None:
@@ -981,7 +981,7 @@ async def ingest_file(
     - Supports: .txt, .md, code files, .json, .yaml, .html, etc. (UTF-8 text)
     - NOT supported: PDF, Office docs, images, archives
 
-    Note: Uses AI models, has cost (embeddings + graph extraction).
+    Note: Uses AI models, has cost (semantic analysis and relationship extraction).
     """
     # Create progress callback wrapper if context available
     async def progress_callback(progress: float, total: float, message: str) -> None:
@@ -1081,7 +1081,7 @@ async def ingest_directory(
     - Assess domain consistency before batch ingesting
     - Use analyze_website() equivalent for directories to estimate scope
 
-    Note: Uses AI models, has cost (embeddings + graph extraction per file).
+    Note: Uses AI models, has cost (semantic analysis and relationship extraction per file).
     """
     # Create progress callback wrapper if context available
     async def progress_callback(progress: float, total: float, message: str) -> None:
