@@ -667,13 +667,13 @@ async def ingest_text_impl(
 
             logger.info(f"Reingest mode: Deleting old document ID={existing_doc['doc_id']}")
 
-            # Delete graph episode
-            if graph_store:
-                episode_name = f"doc_{existing_doc['doc_id']}"
-                await graph_store.delete_episode_by_name(episode_name)
-
-            # Delete RAG document
-            await doc_store.delete_document(existing_doc['doc_id'])
+            # Use centralized deletion with error handling
+            await delete_document_for_reingest(
+                doc_id=existing_doc['doc_id'],
+                doc_store=doc_store,
+                graph_store=graph_store,
+                filename=document_title
+            )
 
         # Route through unified mediator (RAG + Graph) with progress callback
         logger.info("Ingesting text through unified mediator (RAG + Graph)")
@@ -1071,6 +1071,77 @@ def check_existing_title(
         raise
 
 
+async def delete_document_for_reingest(
+    doc_id: int,
+    doc_store: DocumentStore,
+    graph_store: Optional[GraphStore],
+    filename: str = "",
+) -> None:
+    """
+    Centralized deletion logic for reingest operations across ALL ingest tools.
+
+    Deletes document from both Knowledge Graph and RAG store with proper error handling.
+    If ANY deletion step fails, raises exception to abort reingest.
+
+    This function ensures:
+    1. Graph episode is deleted (all entities, relationships, edges)
+    2. RAG document is deleted (all chunks, embeddings, metadata, collection links via CASCADE)
+    3. Deletion is verified before proceeding
+    4. Any failure aborts reingest to prevent data corruption
+
+    Args:
+        doc_id: Document ID to delete
+        doc_store: DocumentStore instance
+        graph_store: GraphStore instance (required for deletion)
+        filename: Document filename (for logging)
+
+    Raises:
+        Exception: If graph deletion fails, RAG deletion fails, or verification fails
+    """
+    try:
+        # STEP 1: Delete from Knowledge Graph
+        if graph_store:
+            episode_name = f"doc_{doc_id}"
+            logger.info(f"🗑️  Deleting Graph episode '{episode_name}' for document {doc_id} ({filename})")
+
+            deleted = await graph_store.delete_episode_by_name(episode_name)
+            if not deleted:
+                logger.warning(f"⚠️  Graph episode '{episode_name}' not found (may not have been indexed)")
+                # Don't fail if episode doesn't exist - document may not have been graphed yet
+            else:
+                logger.info(f"✅ Graph episode '{episode_name}' deleted successfully")
+        else:
+            logger.warning(f"⚠️  No graph_store provided - skipping graph deletion for doc {doc_id}")
+
+        # STEP 2: Delete from RAG store (includes chunks, embeddings, metadata, collection links)
+        logger.info(f"🗑️  Deleting RAG document {doc_id} ({filename})")
+
+        delete_result = await doc_store.delete_document(doc_id, graph_store=None)  # Graph already deleted above
+
+        logger.info(
+            f"✅ Deleted document {doc_id}: "
+            f"{delete_result['chunks_deleted']} chunks, "
+            f"collections: {delete_result['collections_affected']}"
+        )
+
+        # STEP 3: Verify deletion succeeded
+        verify_doc = doc_store.get_source_document(doc_id)
+        if verify_doc is not None:
+            raise Exception(
+                f"CRITICAL: Document {doc_id} still exists after deletion! "
+                f"Aborting reingest to prevent corruption."
+            )
+
+        logger.info(f"✅ Verified document {doc_id} completely removed")
+
+    except Exception as e:
+        logger.error(
+            f"❌ DELETION FAILED for document {doc_id} ({filename}): {e}\n"
+            f"ABORTING REINGEST to prevent data corruption."
+        )
+        raise  # Re-raise to abort reingest operation
+
+
 @deduplicate_request()
 async def ingest_url_impl(
     db: Database,
@@ -1176,26 +1247,15 @@ async def ingest_url_impl(
 
                 old_pages_deleted = len(existing_docs)
 
-                # Delete Graph episodes first (if available)
-                if graph_store:
-                    logger.info(f"🗑️  Deleting {old_pages_deleted} Graph episodes for reingest of {url}")
-                    for doc_id, filename in existing_docs:
-                        episode_name = f"doc_{doc_id}"
-                        deleted = await graph_store.delete_episode_by_name(episode_name)
-                        if deleted:
-                            logger.info(f"✅ Deleted Graph episode '{episode_name}' for {filename}")
-                        else:
-                            logger.warning(f"⚠️  Graph episode '{episode_name}' not found (may not have been indexed)")
-
-                # Delete old RAG documents and chunks
+                # Delete all old documents using centralized deletion with error handling
+                logger.info(f"🗑️  Deleting {old_pages_deleted} old documents for reingest of {url}")
                 for doc_id, filename in existing_docs:
-                    # Delete chunks
-                    cur.execute(
-                        "DELETE FROM document_chunks WHERE source_document_id = %s",
-                        (doc_id,),
+                    await delete_document_for_reingest(
+                        doc_id=doc_id,
+                        doc_store=doc_store,
+                        graph_store=graph_store,
+                        filename=filename
                     )
-                    # Delete source document
-                    cur.execute("DELETE FROM source_documents WHERE id = %s", (doc_id,))
 
         # Progress: Crawling web pages
         if progress_callback:
@@ -1367,13 +1427,13 @@ async def ingest_file_impl(
 
             logger.info(f"Reingest mode: Deleting old document ID={existing_doc['doc_id']}")
 
-            # Delete graph episode
-            if graph_store:
-                episode_name = f"doc_{existing_doc['doc_id']}"
-                await graph_store.delete_episode_by_name(episode_name)
-
-            # Delete RAG document
-            await doc_store.delete_document(existing_doc['doc_id'])
+            # Use centralized deletion with error handling
+            await delete_document_for_reingest(
+                doc_id=existing_doc['doc_id'],
+                doc_store=doc_store,
+                graph_store=graph_store,
+                filename=existing_doc['filename']
+            )
 
         file_size = path.stat().st_size
         file_type = path.suffix.lstrip(".").lower() or "text"
@@ -1531,13 +1591,13 @@ async def ingest_directory_impl(
             logger.info(f"Reingest mode: Deleting {len(existing_files)} old documents")
 
             for existing_doc in existing_files:
-                # Delete graph episode
-                if graph_store:
-                    episode_name = f"doc_{existing_doc['doc_id']}"
-                    await graph_store.delete_episode_by_name(episode_name)
-
-                # Delete RAG document
-                await doc_store.delete_document(existing_doc['doc_id'])
+                # Use centralized deletion with error handling
+                await delete_document_for_reingest(
+                    doc_id=existing_doc['doc_id'],
+                    doc_store=doc_store,
+                    graph_store=graph_store,
+                    filename=existing_doc['filename']
+                )
 
         # Progress: Starting ingestion
         if progress_callback:
