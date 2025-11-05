@@ -46,16 +46,39 @@ Applies to: `search_documents`, `query_relationships`, `query_temporal`
 
 ## 3. INGESTION WORKFLOWS
 
-### Check Before Ingesting (Avoid Duplicates)
+### Duplicate Detection & Reingest
+
+**AUTOMATIC DUPLICATE DETECTION:**
+All ingest tools automatically detect duplicates when using mode='ingest' (default).
+If content already exists, you'll receive a clear error with the duplicate's ID and a suggestion to use mode='reingest'.
+
+**How It Works:**
+- **ingest_text**: Checks for existing document with same title in collection
+- **ingest_file**: Checks for existing file_path metadata in collection
+- **ingest_directory**: Checks all files' file_path metadata in collection
+- **ingest_url**: Checks for existing crawl_root_url metadata in collection
+
+**Workflow:**
 ```
-list_documents(collection_name, include_details=True)
-  → Review titles/metadata
-  → If exists unchanged: SKIP
-  → If exists but updated: update_document()
-  → If new: ingest_*()
+# STEP 1: Try ingesting (mode='ingest' is default)
+ingest_*(content, collection_name)
+
+# STEP 2: If duplicate error occurs, decide:
+  → Content unchanged? SKIP (no action needed)
+  → Content updated? Use mode='reingest' (deletes old, ingests new)
+  → Minor edit only? Use update_document() (no re-chunking)
 ```
 
-**Why:** Avoids redundant processing and maintains clean knowledge base.
+**Reingest vs Update:**
+- **mode='reingest'**: Deletes old document completely, re-ingests fresh content
+  - **When:** Content changed significantly, need fresh chunking/embeddings/graph
+  - **Result:** Complete replacement with new document ID
+  - **Tools:** ingest_text, ingest_file, ingest_directory, ingest_url
+
+- **update_document()**: Updates existing document in-place
+  - **When:** Minor metadata changes, small content tweaks
+  - **Result:** Same document ID, only specified fields updated
+  - **Note:** Content updates trigger re-chunking (same cost as reingest)
 
 ### Analyze Before Multi-Page Ingests (REQUIRED)
 ```
@@ -169,8 +192,9 @@ This prevents data corruption from concurrent identical operations. **If you see
 - All list/view operations
 
 **Best practices for efficiency:**
-- Check for duplicates before ingesting (see #3)
-- Use `update_document()` instead of re-ingesting
+- Let automatic duplicate detection catch duplicates (see #3)
+- Use mode='reingest' for updated content (complete replacement)
+- Use `update_document()` only for minor edits (in-place updates)
 - Analyze large ingests before proceeding (see #3)
 - Use reingest mode for website updates (see #3)
 
@@ -211,8 +235,11 @@ This prevents data corruption from concurrent identical operations. **If you see
 **Maintenance:**
 ```
 1. list_documents(collection) - identify stale docs
-2. update_document(id) - refresh changed content
-   OR ingest_url(url, mode="reingest") - refresh websites
+2. Refresh changed content:
+   - For websites: ingest_url(url, mode="reingest")
+   - For files: ingest_file(path, mode="reingest")
+   - For text: ingest_text(content, mode="reingest")
+   - For minor edits: update_document(id, content/metadata)
 ```
 
 ---
@@ -221,11 +248,11 @@ This prevents data corruption from concurrent identical operations. **If you see
 
 - **MUST** review collections before ingesting (see #1)
 - **MUST** use full questions for search, not keywords (see #2)
-- **MUST** check for duplicates before ingesting (see #3)
+- **MUST** use mode='reingest' to update existing content (automatic duplicate detection will guide you) (see #3)
 - **MUST** run analyze_website() before multi-page ingests (see #3)
 - **MUST** limit max_pages to 20 per ingest for large sites
 - **SHOULD** present scope to user for large operations and get confirmation
-- **SHOULD** use reingest mode for website updates (see #3)
+- **SHOULD** use mode='reingest' for content updates instead of delete+ingest (see #3)
 - **SHOULD** combine semantic + relationship queries for comprehensive research (see #4)
 - **SHOULD** use pattern_stats from analyze_website() to plan targeted ingests
 
