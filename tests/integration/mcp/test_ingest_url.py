@@ -30,7 +30,7 @@ class TestIngestUrl:
             "collection_name": collection_name,
             "follow_links": False,
             "max_depth": 1,
-            "mode": "crawl",
+            "mode": "ingest",
             "include_document_ids": True
         })
 
@@ -45,7 +45,7 @@ class TestIngestUrl:
         # Verify response structure
         assert isinstance(response, dict), "Response should be a dict"
         assert "mode" in response, "Response should include mode"
-        assert response["mode"] in ("crawl", "recrawl"), "Mode should be crawl or recrawl"
+        assert response["mode"] in ("ingest", "reingest"), "Mode should be ingest or reingest"
         assert "pages_crawled" in response, "Should report pages_crawled"
         assert response["pages_crawled"] >= 1, "Should crawl at least one page"
         assert "pages_ingested" in response, "Should report pages_ingested"
@@ -71,7 +71,7 @@ class TestIngestUrl:
             "collection_name": collection_name,
             "follow_links": False,
             "max_depth": 1,
-            "mode": "crawl",
+            "mode": "ingest",
             "include_document_ids": True
         })
 
@@ -102,7 +102,7 @@ class TestIngestUrl:
             "collection_name": "nonexistent-collection-xyz",
             "follow_links": False,
             "max_depth": 1,
-            "mode": "crawl"
+            "mode": "ingest"
         })
 
         # Should have error
@@ -128,30 +128,31 @@ class TestIngestUrl:
             "collection_name": collection_name,
             "follow_links": False,
             "max_depth": 1,
-            "mode": "crawl"
+            "mode": "ingest"
         })
 
         assert not result1.isError, "First crawl should succeed"
 
-        # Second crawl with mode='crawl' should fail
+        # Second crawl with mode='ingest' should fail
         result2 = await session.call_tool("ingest_url", {
             "url": "https://example.com",
             "collection_name": collection_name,
             "follow_links": False,
             "max_depth": 1,
-            "mode": "crawl"
+            "mode": "ingest"
         })
 
-        assert result2.isError, "Second crawl with mode='crawl' should fail (already exists)"
+        assert result2.isError, "Second crawl with mode='ingest' should fail (already exists)"
 
         error_text = extract_text_content(result2)
-        assert "already been crawled" in error_text or "already exists" in error_text.lower(), \
+        assert "already been ingested" in error_text.lower() or "already exists" in error_text.lower(), \
             f"Error should mention duplicate crawl: {error_text}"
 
     async def test_ingest_url_recrawl_mode(self, mcp_session, setup_test_collection):
-        """Test ingest_url with mode='recrawl' updates existing crawl.
+        """Test ingest_url with mode='reingest' updates existing crawl.
 
-        Verifies that recrawl mode succeeds and returns updated data.
+        Verifies that reingest mode succeeds and returns updated data.
+        Also verifies that old documents are completely deleted and new documents exist.
         """
         session, transport = mcp_session
         collection_name = setup_test_collection
@@ -162,36 +163,62 @@ class TestIngestUrl:
             "collection_name": collection_name,
             "follow_links": False,
             "max_depth": 1,
-            "mode": "crawl"
+            "mode": "ingest",
+            "include_document_ids": True  # NEW: Request document IDs
         })
 
         assert not result1.isError, "First crawl should succeed"
 
         response1 = json.loads(extract_text_content(result1))
         first_chunk_count = response1.get("total_chunks", 0)
+        first_doc_ids = response1.get("document_ids", [])  # NEW: Capture old doc IDs
         assert first_chunk_count >= 1, "First crawl should create chunks"
+        assert len(first_doc_ids) >= 1, "First crawl should return document IDs"
 
-        # Recrawl with mode='recrawl' should succeed
+        # Reingest with mode='reingest' should succeed
         result2 = await session.call_tool("ingest_url", {
             "url": "https://example.com",
             "collection_name": collection_name,
             "follow_links": False,
             "max_depth": 1,
-            "mode": "recrawl"
+            "mode": "reingest",
+            "include_document_ids": True  # NEW: Request document IDs
         })
 
-        assert not result2.isError, "Recrawl with mode='recrawl' should succeed"
+        assert not result2.isError, "Reingest with mode='reingest' should succeed"
 
         response2 = json.loads(extract_text_content(result2))
+        second_doc_ids = response2.get("document_ids", [])  # NEW: Capture new doc IDs
 
-        # Verify recrawl response structure
-        assert response2["mode"] == "recrawl", "Response mode should be 'recrawl'"
-        assert response2.get("total_chunks", 0) >= 1, "Recrawl should create chunks"
+        # Verify reingest response structure
+        assert response2["mode"] == "reingest", "Response mode should be 'reingest'"
+        assert response2.get("total_chunks", 0) >= 1, "Reingest should create chunks"
         assert response2["collection_name"] == collection_name, "Should maintain collection name"
 
-        # Recrawl should indicate pages were handled
-        assert "pages_crawled" in response2, "Recrawl response should include pages_crawled"
-        assert response2["pages_crawled"] >= 1, "Recrawl should indicate pages were processed"
+        # Reingest should indicate pages were handled
+        assert "pages_crawled" in response2, "Reingest response should include pages_crawled"
+        assert response2["pages_crawled"] >= 1, "Reingest should indicate pages were processed"
+
+        # NEW: Verify old documents are completely deleted
+        for old_doc_id in first_doc_ids:
+            verify_result = await session.call_tool("get_document_by_id", {
+                "document_id": old_doc_id
+            })
+            assert verify_result.isError, \
+                f"Old document {old_doc_id} should be deleted after reingest"
+
+        # NEW: Verify new documents exist
+        assert len(second_doc_ids) >= 1, "Reingest should return new document IDs"
+        for new_doc_id in second_doc_ids:
+            verify_result = await session.call_tool("get_document_by_id", {
+                "document_id": new_doc_id
+            })
+            assert not verify_result.isError, \
+                f"New document {new_doc_id} should exist after reingest"
+
+        # NEW: Verify no overlap between old and new document IDs
+        assert not any(doc_id in second_doc_ids for doc_id in first_doc_ids), \
+            "Old and new document IDs should not overlap (reingest should create new documents)"
 
     async def test_ingest_url_response_structure(self, mcp_session, setup_test_collection):
         """Test that ingest_url returns properly structured response.
@@ -206,7 +233,7 @@ class TestIngestUrl:
             "collection_name": collection_name,
             "follow_links": False,
             "max_depth": 1,
-            "mode": "crawl"
+            "mode": "ingest"
         })
 
         assert not result.isError, "ingest_url should succeed"
@@ -252,7 +279,7 @@ class TestIngestUrl:
             "collection_name": collection_name,
             "follow_links": True,
             "max_pages": 5,
-            "mode": "crawl",
+            "mode": "ingest",
             "include_document_ids": True
         })
 
