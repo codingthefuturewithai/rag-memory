@@ -1476,8 +1476,8 @@ async def ingest_file_impl(
         # Validate mode (centralized)
         validate_mode(mode)
 
-        # Check for existing file in this collection
-        existing_doc = check_existing_file(db, file_path, collection_name)
+        # Check for existing file in this collection (use absolute path for consistency)
+        existing_doc = check_existing_file(db, str(path.absolute()), collection_name)
 
         if mode == "ingest" and existing_doc:
             raise ValueError(
