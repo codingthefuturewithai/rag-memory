@@ -99,6 +99,93 @@ async def ensure_databases_healthy(
     return None  # All checks passed, operation can proceed
 
 
+# ============================================================================
+# Centralized Validation Functions (Single Source of Truth)
+# ============================================================================
+# These functions provide consistent validation across all ingest tools.
+# Centralizing these patterns ensures that when we modify validation logic
+# (e.g., add a new mode, change collection checks), we update ONE place
+# instead of 4 separate tool implementations.
+
+
+def validate_mode(mode: str) -> None:
+    """
+    Validate ingest mode parameter.
+
+    Centralized validation ensures all 4 ingest tools accept the same modes.
+    When we add a new mode (e.g., "update", "merge"), we update this ONE function.
+
+    Args:
+        mode: The mode string to validate
+
+    Raises:
+        ValueError: If mode is not valid
+    """
+    if mode not in ["ingest", "reingest"]:
+        raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
+
+
+def validate_collection_exists(doc_store: DocumentStore, collection_name: str) -> None:
+    """
+    Validate that collection exists before ingestion.
+
+    Centralized validation ensures all 4 ingest tools check collections identically.
+    When we add collection-level features (quotas, permissions), we update this ONE function.
+
+    Args:
+        doc_store: Document store instance
+        collection_name: Collection name to validate
+
+    Raises:
+        ValueError: If collection doesn't exist
+    """
+    collection = doc_store.collection_mgr.get_collection(collection_name)
+    if not collection:
+        raise ValueError(
+            f"Collection '{collection_name}' does not exist. "
+            f"Create it first using create_collection('{collection_name}', 'description')."
+        )
+
+
+def read_file_with_metadata(
+    file_path: Path, user_metadata: Optional[Dict[str, Any]] = None
+) -> Tuple[str, Dict[str, Any]]:
+    """
+    Read file and prepare metadata for ingestion.
+
+    Centralized file reading ensures ingest_file and ingest_directory handle files identically.
+    When we add file-level features (encoding detection, MIME types, file hashes),
+    we update this ONE function.
+
+    Args:
+        file_path: Path to file to read
+        user_metadata: Optional user-provided metadata to merge
+
+    Returns:
+        Tuple of (file_content, merged_metadata)
+
+    Raises:
+        FileNotFoundError: If file doesn't exist
+        IOError: If file can't be read
+    """
+    file_size = file_path.stat().st_size
+    file_type = file_path.suffix.lstrip(".").lower() or "text"
+
+    # Read file content
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+
+    # Merge user metadata with file metadata
+    metadata = user_metadata.copy() if user_metadata else {}
+    metadata.update({
+        "file_type": file_type,
+        "file_size": file_size,
+        "file_path": str(file_path.absolute()),
+    })
+
+    return content, metadata
+
+
 def search_documents_impl(
     searcher: SimilaritySearch,
     query: str,
@@ -637,20 +724,14 @@ async def ingest_text_impl(
         if not document_title:
             document_title = f"Agent-Text-{datetime.now().isoformat()}"
 
-        # Check if collection exists
-        collection = doc_store.collection_mgr.get_collection(collection_name)
+        # Validate collection exists (centralized)
+        validate_collection_exists(doc_store, collection_name)
 
-        if not collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist. "
-                f"Create it first using create_collection('{collection_name}', 'description')."
-            )
+        # Validate mode (centralized)
+        validate_mode(mode)
 
         # Check for existing document with same title in this collection
         existing_doc = check_existing_title(db, document_title, collection_name)
-
-        if mode not in ["ingest", "reingest"]:
-            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
 
         if mode == "ingest" and existing_doc:
             raise ValueError(
@@ -1197,18 +1278,11 @@ async def ingest_url_impl(
         if health_error:
             return health_error
 
-        # Validate mode
-        if mode not in ["ingest", "reingest"]:
-            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
+        # Validate mode (centralized) - ingest_url validates mode before collection
+        validate_mode(mode)
 
-        # Check collection exists
-        collection = doc_store.collection_mgr.get_collection(collection_name)
-
-        if not collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist. "
-                f"Create it first using create_collection('{collection_name}', 'description')."
-            )
+        # Validate collection exists (centralized)
+        validate_collection_exists(doc_store, collection_name)
 
         # Check for existing crawl
         existing_crawl = check_existing_crawl(db, url, collection_name)
@@ -1396,20 +1470,14 @@ async def ingest_file_impl(
         if not path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        # Check collection exists
-        collection = doc_store.collection_mgr.get_collection(collection_name)
+        # Validate collection exists (centralized)
+        validate_collection_exists(doc_store, collection_name)
 
-        if not collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist. "
-                f"Create it first using create_collection('{collection_name}', 'description')."
-            )
+        # Validate mode (centralized)
+        validate_mode(mode)
 
         # Check for existing file in this collection
         existing_doc = check_existing_file(db, file_path, collection_name)
-
-        if mode not in ["ingest", "reingest"]:
-            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
 
         if mode == "ingest" and existing_doc:
             raise ValueError(
@@ -1435,26 +1503,14 @@ async def ingest_file_impl(
                 filename=existing_doc['filename']
             )
 
-        file_size = path.stat().st_size
-        file_type = path.suffix.lstrip(".").lower() or "text"
-
         # Progress: Reading file
         if progress_callback:
             await progress_callback(5, 100, f"Reading file {path.name}...")
 
         logger.info(f"Ingesting file through unified mediator: {path.name}")
 
-        # Read file content
-        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-            content = f.read()
-
-        # Merge file metadata with user metadata
-        file_metadata = metadata.copy() if metadata else {}
-        file_metadata.update({
-            "file_type": file_type,
-            "file_size": file_size,
-            "file_path": file_path,  # NEW - for duplicate detection
-        })
+        # Read file and prepare metadata (centralized)
+        content, file_metadata = read_file_with_metadata(path, metadata)
 
         # Progress: Ingesting (pass callback to mediator)
         if progress_callback:
@@ -1473,8 +1529,8 @@ async def ingest_file_impl(
             "num_chunks": ingest_result["num_chunks"],
             "entities_extracted": ingest_result.get("entities_extracted", 0),
             "filename": path.name,
-            "file_type": file_type,
-            "file_size": file_size,
+            "file_type": file_metadata["file_type"],
+            "file_size": file_metadata["file_size"],
             "collection_name": collection_name,
         }
 
@@ -1532,14 +1588,11 @@ async def ingest_directory_impl(
         if not path.exists() or not path.is_dir():
             raise ValueError(f"Directory not found: {directory_path}")
 
-        # Check collection exists
-        collection = doc_store.collection_mgr.get_collection(collection_name)
+        # Validate collection exists (centralized)
+        validate_collection_exists(doc_store, collection_name)
 
-        if not collection:
-            raise ValueError(
-                f"Collection '{collection_name}' does not exist. "
-                f"Create it first using create_collection('{collection_name}', 'description')."
-            )
+        # Validate mode (centralized)
+        validate_mode(mode)
 
         # Default extensions
         if not file_extensions:
@@ -1566,9 +1619,6 @@ async def ingest_directory_impl(
         # Check for existing files in this collection (upfront batch check)
         file_paths_absolute = [str(f.absolute()) for f in files]
         existing_files = check_existing_files_batch(db, file_paths_absolute, collection_name)
-
-        if mode not in ["ingest", "reingest"]:
-            raise ValueError(f"Invalid mode '{mode}'. Must be 'ingest' or 'reingest'")
 
         if mode == "ingest" and existing_files:
             file_list = '\n  - '.join(
@@ -1620,22 +1670,10 @@ async def ingest_directory_impl(
                 )
 
             try:
-                file_size = file_path.stat().st_size
-                file_type = file_path.suffix.lstrip(".").lower() or "text"
-
                 logger.info(f"Ingesting file through unified mediator: {file_path.name}")
 
-                # Read file content
-                with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-
-                # Build metadata: merge user metadata with file metadata
-                file_metadata = metadata.copy() if metadata else {}
-                file_metadata.update({
-                    "file_type": file_type,
-                    "file_size": file_size,
-                    "file_path": str(file_path.absolute()),  # NEW - for duplicate detection
-                })
+                # Read file and prepare metadata (centralized)
+                content, file_metadata = read_file_with_metadata(file_path, metadata)
 
                 # Note: Don't pass progress_callback here - would conflict with parent progress
                 ingest_result = await unified_mediator.ingest_text(
