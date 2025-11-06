@@ -2,64 +2,52 @@
 
 ## Issue 1: Re-examine ingest MCP tool deduplication approach
 
-**Current assumption:** Deduplication checks are necessary to prevent duplicate documents
+**Status:** ✅ COMPLETE (merged 2025-11-06)
 
-**Question to reflect on:** Is deduplication the right approach at all?
+**Solution Implemented:**
+- Automatic duplicate detection with clear error messages across all 4 ingest tools
+- mode='ingest' (default): Error if duplicate exists, suggests mode='reingest'
+- mode='reingest': Deletes old content completely, re-ingests fresh
+- Centralized deletion logic with complete cleanup (graph + RAG)
+- 24 comprehensive integration tests covering all duplicate/reingest scenarios
+- 100% accurate documentation (server instructions + tool docstrings synchronized)
 
-**Key insight:** Re-ingesting a document with the same title/URL but different content is actually a different document, not a duplicate
-
-**Available safeguards already in place:**
-- Tools exist for clients to discover documents in a collection (list_documents, search_documents)
-- Documentation and guidance available to clients
-- Warnings about long ingest times and retry behavior
-
-**Proposed direction:** Instead of trying to prevent duplicates for clients, provide clear guidance and let them manage it:
-- Document the ingest behavior clearly in MCP server instructions and tool docstrings
-- Warn clients: "Ingests take a long time - don't retry the same call for several minutes"
-- Trust clients to use available tools and guidance to check for existing documents before ingesting
-- Accept that if they re-ingest with same metadata but different content, it's actually a new version of the document
+**Key Achievement:** Clients get helpful errors guiding them to the right solution, rather than silent failures or confusing behavior
 
 ---
 
 ## Issue 2: Standardize document handling across all ingest tools
 
-**Problem:** Ingest tool flows are inconsistent - different tools have different logic paths and handling
+**Status:** ✅ COMPLETE (merged 2025-11-06)
 
-**Example:** One ingest tool has deduplication logic while others don't (or they do it differently)
+**Solution Implemented:**
+- Centralized validate_mode() - single source of truth for mode validation (used by 4 tools)
+- Centralized validate_collection_exists() - single source of truth for collection checks (used by 4 tools)
+- Centralized read_file_with_metadata() - single source of truth for file reading (used by 2 tools)
+- All 4 tools route through unified_mediator.ingest_text() for document processing
+- Centralized delete_document_for_reingest() for complete cleanup
+- Fixed absolute path handling for consistent duplicate detection
 
-**Current state:** Document handling varies depending on the source (URL, text, file)
+**Key Achievement:** Single source of truth for validation patterns - when we add features (mode='update', collection quotas, file encoding detection), we change ONE function instead of 4 separate implementations, eliminating risk of inconsistent updates
 
-**Required approach:**
-- Centralize all source-specific logic (URL fetching, file reading, text parsing)
-- Once a document is obtained (regardless of source), it enters a single, unified code path
-- All documents follow identical logic: same rules, same validation, same processing
-- Philosophy: "A document is a document is a document" - source doesn't matter once content is available
-- Any shared logic (deduplication, chunking, embedding, storage) must be identical across all sources
-
-**Goal:** Single source of truth for document processing logic, no exceptions
-
-**Testing benefit:** Centralizing logic also simplifies and strengthens testing - can test/isolate ingest logic in one place with confidence instead of running the same logic tests across multiple ingest tool permutations
-
-**Documentation update:** After implementation, carefully update MCP server instructions and docstrings for all affected ingest tools to reflect new unified behavior
+**Maintenance Benefit:** Reduced from 4 duplicate implementations to 1 centralized function per pattern
 
 ---
 
 ## Issue 3: Improve test coverage for critical ingest and search logic
 
-**Problem:** Despite having hundreds of tests, coverage of critical ingest/search logic is extremely poor
+**Status:** ✅ SIGNIFICANTLY IMPROVED for ingest tools (2025-11-06)
 
-**Discovery:** Many bugs and inconsistencies found only after implementation, not caught by existing tests
-- Example: One ingest tool had deduplication logic while others didn't (discovered during implementation, not testing)
+**Coverage Added:**
+- 16 new comprehensive reingest tests (test_reingest_modes.py)
+  - 4 tests per tool × 4 tools (ingest_text, ingest_file, ingest_directory, ingest_url)
+  - Each tool tested for: duplicate detection, complete deletion, isolation, tool-specific scenarios
+- 8 enhanced URL tests with complete deletion verification
+- Total: 24 integration tests covering critical ingest/reingest flows
 
-**Root cause:** Tests don't cover critical flows, rules, and behavior - they exist but don't validate what matters
+**Key Achievement:** Critical ingest patterns now have solid regression protection - duplicate detection bugs and centralization changes caught by automated tests before deployment
 
-**Required approach:**
-- Tool-by-tool analysis: Carefully examine each ingest tool's critical flows, critical rules, critical behaviors
-- For each tool, identify: What must work correctly? What are the edge cases? What are the invariants?
-- Build solid automated test coverage: Ensure all critical paths are tested, not just happy paths
-- Same rigor for: Ingest tools, search logic, and other complex features
-
-**Goal:** Catch bugs and inconsistencies during testing, not during implementation
+**Remaining Work:** Search logic, graph queries, and other complex features still need similar comprehensive coverage
 
 ---
 
