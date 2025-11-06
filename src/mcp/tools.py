@@ -943,7 +943,11 @@ async def analyze_website_impl(
     """
     try:
         # Call the async analyzer (ignoring deprecated timeout parameter)
-        result = await analyze_website_async(base_url, include_url_lists, max_urls_per_pattern)
+        result = await analyze_website_async(
+            base_url=base_url,
+            include_url_lists=include_url_lists,
+            max_urls_per_pattern=max_urls_per_pattern
+        )
         return result
     except Exception as e:
         # Fallback error response (should not happen, analyzer handles all errors internally)
