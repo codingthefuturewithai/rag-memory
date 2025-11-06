@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import MagicMock, patch, Mock
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from src.ingestion.website_analyzer import WebsiteAnalyzer, analyze_website
+from src.ingestion.website_analyzer import WebsiteAnalyzer, analyze_website_async
 
 
 class TestWebsiteAnalyzer:
@@ -262,9 +262,10 @@ class TestWebsiteAnalyzer:
 class TestAnalyzeWebsiteFunction:
     """Tests for the analyze_website convenience function."""
 
+    @pytest.mark.asyncio
     @patch('requests.get')
-    def test_analyze_website_function(self, mock_get):
-        """Test the standalone analyze_website function."""
+    async def test_analyze_website_function(self, mock_get):
+        """Test the standalone analyze_website_async function."""
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.content = b'''<?xml version="1.0" encoding="UTF-8"?>
@@ -273,26 +274,28 @@ class TestAnalyzeWebsiteFunction:
         </urlset>'''
         mock_get.return_value = mock_response
 
-        result = analyze_website("https://example.com", timeout=15, include_url_lists=True)
+        result = await analyze_website_async(base_url="https://example.com", include_url_lists=True)
 
         assert result["base_url"] == "https://example.com"
         assert result["total_urls"] == 1
-        assert result["analysis_method"] == "sitemap"
+        assert result["status"] == "success"
 
+    @pytest.mark.asyncio
     @patch('requests.get')
-    def test_analyze_website_connection_error(self, mock_get):
-        """Test analyze_website with connection error."""
+    async def test_analyze_website_connection_error(self, mock_get):
+        """Test analyze_website_async with connection error."""
         import requests
         mock_get.side_effect = requests.ConnectionError("Connection failed")
 
-        result = analyze_website("https://example.com")
+        result = await analyze_website_async(base_url="https://example.com")
 
-        assert result["analysis_method"] == "not_found"
+        assert result["status"] == "error"
         assert result["total_urls"] == 0
 
+    @pytest.mark.asyncio
     @patch('requests.get')
-    def test_analyze_website_max_urls(self, mock_get):
-        """Test analyze_website respects max_urls_per_pattern."""
+    async def test_analyze_website_max_urls(self, mock_get):
+        """Test analyze_website_async respects max_urls_per_pattern."""
         # Create sitemap with many URLs
         urls = ''.join([f'<url><loc>https://example.com/blog/post{i}</loc></url>'
                        for i in range(20)])
@@ -304,7 +307,11 @@ class TestAnalyzeWebsiteFunction:
         </urlset>'''.encode()
         mock_get.return_value = mock_response
 
-        result = analyze_website("https://example.com", include_url_lists=True, max_urls_per_pattern=5)
+        result = await analyze_website_async(
+            base_url="https://example.com",
+            include_url_lists=True,
+            max_urls_per_pattern=5
+        )
 
         # Pattern is "/blog" NOT "/blog/*"
         assert result["pattern_stats"]["/blog"]["count"] == 20

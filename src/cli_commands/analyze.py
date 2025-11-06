@@ -51,7 +51,11 @@ def analyze_website_cmd(url, include_urls, max_urls, timeout):
         console.print(f"[bold blue]Analyzing website: {url}[/bold blue]\n")
 
         # Perform analysis (run async function in sync context)
-        result = asyncio.run(analyze_website_async(url, include_urls, max_urls))
+        result = asyncio.run(analyze_website_async(
+            base_url=url,
+            include_url_lists=include_urls,
+            max_urls_per_pattern=max_urls
+        ))
 
         # Show results
         if result["total_urls"] == 0:
