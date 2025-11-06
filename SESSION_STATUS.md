@@ -57,12 +57,17 @@ No uncommitted changes
 - 8 enhanced URL tests with deletion verification
 - Critical ingest flows now have regression protection
 
+### Issue 4: Clean up codebase artifacts ✅
+- Deleted crawl4ai-local/ directory (no longer needed)
+- Project now uses crawl4ai-ctf>=0.7.6.post3 from PyPI
+- Removed crawl4ai-local/ entry from .gitignore
+- Clean, minimal repository
+
 ---
 
 ## 📋 Outstanding Tasks (from TASKS_AND_ISSUES.md)
 
-### Quick Wins (10-20 minutes total)
-- **Issue 4:** Clean up codebase artifacts (delete crawl4ai-local, clean .gitignore)
+### Quick Wins (5-15 minutes total)
 - **Issue 11:** Test analyze_website CLI command
 - **Issue 6:** Spin down cloud deployment (cost savings)
 
@@ -78,17 +83,17 @@ No uncommitted changes
 
 ## 🎯 Recommended Next Task
 
-**Issue 4: Clean up codebase artifacts**
+**Issue 11: Test analyze_website CLI command**
 - **Time:** 5-10 minutes
 - **Risk:** Very low
-- **Value:** Clean repository, accurate .gitignore
+- **Value:** Verify CLI wrapper works properly
 
 **Actions:**
-1. Delete `crawl4ai-local/` directory (confirmed safe - using PyPI package)
-2. Remove entries from .gitignore for deleted artifacts
-3. Keep .gitignore focused on actual project needs
+1. Run `rag analyze <url>` with sample URL
+2. Verify output format is user-friendly
+3. Document any issues found
 
-**Branch name:** `cleanup/remove-crawl4ai-fork`
+**Branch name:** `test/analyze-website-cli`
 
 ---
 
