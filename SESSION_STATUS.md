@@ -88,12 +88,20 @@ No uncommitted changes
 - **Risk:** Very low
 - **Value:** Verify CLI wrapper works properly
 
-**Actions:**
-1. Run `rag analyze <url>` with sample URL
-2. Verify output format is user-friendly
-3. Document any issues found
+**Quick Start:**
+```bash
+# 1. Ensure Docker is running
+docker-compose ps
 
-**Branch name:** `test/analyze-website-cli`
+# 2. Run test command
+rag analyze https://docs.python.org/3/library/
+
+# 3. Verify output is user-friendly (see Issue 11 in TASKS_AND_ISSUES.md for acceptance criteria)
+```
+
+**Branch needed:** Only if bugs are found (use `fix/analyze-website-cli-output`)
+
+**Full details:** See Issue 11 in TASKS_AND_ISSUES.md for complete test plan and acceptance criteria
 
 ---
 
