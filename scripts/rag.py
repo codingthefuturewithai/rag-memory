@@ -2,20 +2,27 @@
 """
 RAG Memory environment wrapper - cross-platform (Windows, Mac, Linux)
 
-Handles dev/test/prod environments with intelligent container management.
+Developer tool for managing dev/test/staging environments within the repository.
 Container commands (status, logs, start, stop, restart) are intercepted and
 handled based on what's actually deployed in each environment.
 
+IMPORTANT: This script is for DEVELOPMENT ONLY. For production, use the
+system-installed CLI (installed via setup).
+
 Usage:
-    python scripts/rag.py cli [--env dev|test|prod] <command> [options]
-    python scripts/rag.py mcp [--env dev|test|prod]
+    python scripts/rag.py cli --env <environment> <command> [options]
+    python scripts/rag.py mcp --env <environment>
 
 Examples:
-    python scripts/rag.py cli search "query"                     # CLI with dev
-    python scripts/rag.py cli --env test ingest-text "content"  # CLI with test
-    python scripts/rag.py cli status                             # Dev status (2 containers)
+    python scripts/rag.py cli --env dev status                   # Dev status
+    python scripts/rag.py cli --env test ingest-text "content"   # CLI with test
     python scripts/rag.py cli --env dev logs --service postgres  # Dev logs
-    python scripts/rag.py mcp --env dev                         # MCP server with dev
+    python scripts/rag.py mcp --env dev                          # MCP server with dev
+
+Supported environments are auto-discovered based on these files:
+    - config/config.{env}.yaml
+    - .env.{env}
+    - deploy/docker/compose/docker-compose.{env}.yml
 """
 
 import os
@@ -28,22 +35,53 @@ from pathlib import Path
 CONTAINER_COMMANDS = {'status', 'logs', 'start', 'stop', 'restart'}
 
 
+def validate_environment(env):
+    """
+    Validate environment by checking required files exist.
+
+    Required files for an environment:
+    - config/config.{env}.yaml
+    - .env.{env}
+    - deploy/docker/compose/docker-compose.{env}.yml
+
+    Returns:
+        (bool, list): (is_valid, missing_files)
+    """
+    script_dir = Path(__file__).parent
+    repo_root = script_dir.parent
+
+    required_files = [
+        repo_root / "config" / f"config.{env}.yaml",
+        repo_root / f".env.{env}",
+        repo_root / "deploy/docker/compose" / f"docker-compose.{env}.yml"
+    ]
+
+    missing = [str(f.relative_to(repo_root)) for f in required_files if not f.exists()]
+
+    return len(missing) == 0, missing
+
+
 def load_env_vars(env):
     """Load environment variables from .env.{env} and return env dict."""
     script_dir = Path(__file__).parent
     repo_root = script_dir.parent
 
-    # Check that required files exist
+    # Validate environment first
+    is_valid, missing_files = validate_environment(env)
+    if not is_valid:
+        print(f"Error: Environment '{env}' not supported")
+        print(f"Missing required files:")
+        for file in missing_files:
+            print(f"  - {file}")
+        print(f"\nSupported environments have these files:")
+        print(f"  - config/config.{{env}}.yaml")
+        print(f"  - .env.{{env}}")
+        print(f"  - deploy/docker/compose/docker-compose.{{env}}.yml")
+        sys.exit(1)
+
+    # Load environment variables from .env.{env}
     env_file = repo_root / f".env.{env}"
     config_file = repo_root / "config" / f"config.{env}.yaml"
-
-    if not env_file.exists():
-        print(f"Error: {env_file} not found")
-        sys.exit(1)
-
-    if not config_file.exists():
-        print(f"Error: {config_file} not found")
-        sys.exit(1)
 
     # Load environment variables from .env.{env}
     env_vars = os.environ.copy()
@@ -78,9 +116,11 @@ def get_environment_context(env):
     """
     Get environment-specific context by reading compose file.
 
+    Uses convention: deploy/docker/compose/docker-compose.{env}.yml
+
     Returns:
         {
-            'env': 'dev' | 'test' | 'prod',
+            'env': str (e.g., 'dev', 'test', 'staging'),
             'compose_file': Path,
             'services': ['postgres-dev', 'neo4j-dev', ...],
             'containers': {'postgres': 'rag-memory-postgres-dev', ...}
@@ -88,17 +128,12 @@ def get_environment_context(env):
     """
     repo_root = Path(__file__).parent.parent
 
-    # Map env to compose file
-    compose_files = {
-        'dev': repo_root / 'deploy/docker/compose/docker-compose.dev.yml',
-        'test': repo_root / 'deploy/docker/compose/docker-compose.test.yml',
-        'prod': repo_root / 'deploy/docker/compose/docker-compose.yml'
-    }
+    # Use convention: docker-compose.{env}.yml
+    compose_file = repo_root / 'deploy/docker/compose' / f'docker-compose.{env}.yml'
 
-    compose_file = compose_files.get(env)
-    if not compose_file or not compose_file.exists():
+    if not compose_file.exists():
         print(f"Error: Compose file not found for environment '{env}'")
-        print(f"Expected: {compose_file}")
+        print(f"Expected: {compose_file.relative_to(repo_root)}")
         sys.exit(1)
 
     # Parse compose file to discover services
@@ -324,19 +359,20 @@ def handle_service_command(env_context, args):
 
 def run_cli(args):
     """Run CLI command with environment awareness."""
-    env = "dev"
-
-    # Parse --env flag if present
-    if args and args[0] == "--env":
-        if len(args) < 2:
-            print("Error: --env requires an argument (dev, test, prod)")
-            sys.exit(1)
-        env = args[1]
-        args = args[2:]
-
-    if env not in ("dev", "test", "prod"):
-        print(f"Error: Invalid environment '{env}'. Must be dev, test, or prod")
+    # Parse --env flag (required)
+    if not args or args[0] != "--env":
+        print("Error: --env flag is required")
+        print("Usage: python scripts/rag.py cli --env <environment> <command> [options]")
+        print("Example: python scripts/rag.py cli --env dev status")
         sys.exit(1)
+
+    if len(args) < 2:
+        print("Error: --env requires an environment name")
+        print("Example: python scripts/rag.py cli --env dev status")
+        sys.exit(1)
+
+    env = args[1]
+    args = args[2:]
 
     # Get environment context
     env_context = get_environment_context(env)
@@ -380,19 +416,20 @@ def run_cli(args):
 
 def run_mcp(args):
     """Run MCP server."""
-    env = "dev"
-
-    # Parse --env flag if present
-    if args and args[0] == "--env":
-        if len(args) < 2:
-            print("Error: --env requires an argument (dev, test, prod)")
-            sys.exit(1)
-        env = args[1]
-        args = args[2:]
-
-    if env not in ("dev", "test", "prod"):
-        print(f"Error: Invalid environment '{env}'. Must be dev, test, or prod")
+    # Parse --env flag (required)
+    if not args or args[0] != "--env":
+        print("Error: --env flag is required")
+        print("Usage: python scripts/rag.py mcp --env <environment>")
+        print("Example: python scripts/rag.py mcp --env dev")
         sys.exit(1)
+
+    if len(args) < 2:
+        print("Error: --env requires an environment name")
+        print("Example: python scripts/rag.py mcp --env dev")
+        sys.exit(1)
+
+    env = args[1]
+    args = args[2:]
 
     env_vars, repo_root = load_env_vars(env)
 
@@ -414,13 +451,14 @@ def main():
     args = sys.argv[1:]
 
     if not args:
-        print("Usage: python scripts/rag.py cli|mcp [--env dev|test|prod] [options]")
-        print("Examples:")
-        print("  python scripts/rag.py cli search 'query'")
-        print("  python scripts/rag.py cli --env test ingest-text 'content'")
-        print("  python scripts/rag.py cli status")
-        print("  python scripts/rag.py cli logs --service postgres")
+        print("Usage: python scripts/rag.py cli|mcp --env <environment> [options]")
+        print("\nExamples:")
+        print("  python scripts/rag.py cli --env dev status")
+        print("  python scripts/rag.py cli --env test search 'query'")
+        print("  python scripts/rag.py cli --env dev logs --service postgres")
         print("  python scripts/rag.py mcp --env dev")
+        print("\nNote: --env flag is required. This script is for development only.")
+        print("      For production, use the system-installed 'rag' CLI.")
         sys.exit(1)
 
     command = args[0]
