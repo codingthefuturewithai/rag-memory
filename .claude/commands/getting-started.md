@@ -53,10 +53,11 @@ Type 1, 2, or 3"
 
 **Required reading before EVERY response:**
 1. `.reference/OVERVIEW.md` - System architecture, features, examples
-2. `.reference/MCP_QUICK_START.md` - MCP tools and setup
-3. `.reference/SEARCH_OPTIMIZATION.md` - Search behavior and examples
-4. `.reference/KNOWLEDGE_GRAPH.md` - Graph capabilities and queries
-5. `.reference/PRICING.md` - Cost breakdown
+2. `.reference/CLI_REFERENCE.md` - Complete CLI command reference
+3. `.reference/MCP_QUICK_START.md` - MCP tools and setup
+4. `.reference/SEARCH_OPTIMIZATION.md` - Search behavior and examples
+5. `.reference/KNOWLEDGE_GRAPH.md` - Graph capabilities and queries
+6. `.reference/PRICING.md` - Cost breakdown
 
 **Workflow for EVERY answer:**
 1. User picks path
@@ -283,12 +284,13 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 **Step 5: Verify Installation**
 - **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
 - Tell user: "Open a NEW terminal window (important for PATH)"
-- Tell user: "Run: `rag status`"
-- Explain expected output:
-  - ✅ PostgreSQL connected
-  - ✅ Neo4j connected
-  - ✅ Database schemas initialized
-- Ask: "Did `rag status` show all green checkmarks? (Type 'yes' or paste the output)"
+- Read `.reference/CLI_REFERENCE.md` Service Management section (rag status)
+- Tell user to run the status command (from docs)
+- Explain expected output (from docs):
+  - Each service shows health status with indicators
+  - Healthy services show green checkmarks
+  - Health checks verify actual service functionality, not just connectivity
+- Ask: "Did status show all services healthy? (Type 'yes' or paste the output)"
 - [WAIT FOR USER RESPONSE]
 
 **Step 6: First Collection**
@@ -345,13 +347,33 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - Ask: "Clear on when to use RAG vs Graph vs both together?"
 - [WAIT FOR USER RESPONSE]
 
-**Optional Step 11: Clean Up**
+**Step 11: Exercise CLI Management Commands**
+- **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
+- Tell user: "Now let's try some CLI commands to get familiar with managing your system."
+- Read `.reference/CLI_REFERENCE.md` sections: Service Management, Collection Management, Document Management
+- Guide them to exercise these capabilities (read exact commands and options from CLI_REFERENCE.md):
+  - Check service health and status
+  - View service logs (including recent entries)
+  - List all collections
+  - List documents in their collection
+  - View detailed collection information
+- For each capability:
+  - Read the relevant section from CLI_REFERENCE.md
+  - Present the command to run (from docs)
+  - Explain what it does (from docs)
+  - Show what output to expect (from docs)
+- Tell them: "For complete CLI reference with all options and examples, see `.reference/CLI_REFERENCE.md`"
+- Ask: "Tried these commands? Got a feel for managing the system? (Type 'yes' when ready to continue)"
+- [WAIT FOR USER RESPONSE]
+
+**Optional Step 12: Clean Up**
 - Offer to delete test collection
+- Read `.reference/CLI_REFERENCE.md` collection delete section
 - Show command from docs
 - Ask if they want to keep or delete
 - [WAIT FOR USER RESPONSE]
 
-**Step 12: MCP Server Setup (Optional)**
+**Step 13: MCP Server Setup (Optional)**
 - Read `.reference/MCP_QUICK_START.md` configuration section
 - Guide them to find setup.py output with connection commands
 - Show how to connect Claude Code (from docs)
@@ -361,18 +383,18 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 **You're All Set!**
 - Summarize what they have (from setup)
 - Offer next steps:
-  - "Learn more commands?" → Read and present CLI section from `.reference/OVERVIEW.md`
+  - "Learn more commands?" → Read and present `.reference/CLI_REFERENCE.md`
   - "Understand search better?" → Read and present `.reference/SEARCH_OPTIMIZATION.md`
   - "See all MCP tools?" → Read and present `.reference/MCP_QUICK_START.md`
   - "Ingest real documents?" → Guide through file/URL ingestion using docs
 
 #### Path 4: Show Me the Commands
 
-**Read `.reference/OVERVIEW.md` CLI command section**
-- Present the complete command reference exactly as documented
-- Include all examples from the docs
-- Show the sections on collections, ingestion, search, management
-- Emphasize key points from the docs (questions not keywords, costs, etc.)
+**Read `.reference/CLI_REFERENCE.md` for complete command reference**
+- Present the command reference exactly as documented
+- Include sections on: service management, collections, ingestion, search, document management, analysis, knowledge graph
+- Show key examples from the docs
+- Emphasize important concepts from the docs (questions not keywords, health checks, logs export, costs, etc.)
 
 **After commands:** Offer:
 - "Want detailed explanations?" → Read relevant `.reference/` sections
