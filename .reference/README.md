@@ -31,6 +31,9 @@ For detailed CLI commands: [OVERVIEW.md](OVERVIEW.md)
 
 ### 🔍 Looking for Something Specific?
 
+**"What CLI commands are available?"**
+→ [CLI_REFERENCE.md](CLI_REFERENCE.md) - Complete command reference
+
 **"How do I deploy to the cloud?"**
 → [CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md) - Complete reference guide
 
@@ -60,11 +63,13 @@ For detailed CLI commands: [OVERVIEW.md](OVERVIEW.md)
 
 | File | Purpose | When to Read |
 |------|---------|--------------|
+| **CLI_REFERENCE.md** | Complete CLI command reference | When using the `rag` command-line tool |
 | **OVERVIEW.md** | Comprehensive guide to everything | When first learning, or need complete reference |
 | **MCP_QUICK_START.md** | Setup & tool reference for AI agents | When configuring Claude Desktop/Code/Cursor |
 | **SEARCH_OPTIMIZATION.md** | Search quality & optimization | When tuning search quality or understanding performance |
 | **KNOWLEDGE_GRAPH.md** | Entity relationships & temporal tracking | When exploring knowledge graph features |
 | **PRICING.md** | Cost analysis & budgets | When estimating costs or budgeting |
+| **CLOUD_DEPLOYMENT.md** | Cloud deployment guide | When deploying to Supabase + Fly.io |
 | **DOCUMENTATION_UPDATE_SUMMARY.md** | What's new in documentation (this session) | When reviewing changes made 2025-10-20 |
 
 ### Related Files (Project Root)
@@ -249,14 +254,16 @@ See [OVERVIEW.md](OVERVIEW.md) - "What's Included & What's Not"
 
 | Document | Size | Read Time |
 |----------|------|-----------|
+| CLI_REFERENCE.md | 35 KB | 25-30 min |
 | OVERVIEW.md | 19 KB | 15-20 min |
 | MCP_QUICK_START.md | 14 KB | 10-15 min |
 | SEARCH_OPTIMIZATION.md | 14 KB | 12-18 min |
 | KNOWLEDGE_GRAPH.md | 21 KB | 15-20 min |
 | PRICING.md | 6.5 KB | 5-8 min |
+| CLOUD_DEPLOYMENT.md | 25 KB | 20-25 min |
 | DOCUMENTATION_UPDATE_SUMMARY.md | 17 KB | 10-12 min |
 | This README | 4 KB | 5 min |
-| **Total** | **~95 KB** | **~90 min** |
+| **Total** | **~155 KB** | **~140 min** |
 
 **Pro tip:** Start with OVERVIEW.md, then reference specific docs as needed.
 

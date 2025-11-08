@@ -146,7 +146,7 @@ uv run pytest                         # Run all tests
 uv run python -m src.mcp.server      # Start MCP server (localhost:8000)
 ```
 
-**See:** `.reference/OVERVIEW.md` for complete CLI reference.
+**See:** `.reference/CLI_REFERENCE.md` for complete CLI command reference.
 
 ---
 
@@ -216,7 +216,8 @@ PostgreSQL: **54320** (not 5432 or 5433, to avoid conflicts with local PostgreSQ
 
 | Need | See |
 |------|-----|
-| Complete CLI commands | `.reference/OVERVIEW.md` |
+| Complete CLI commands | `.reference/CLI_REFERENCE.md` |
+| System overview | `.reference/OVERVIEW.md` |
 | MCP tools & usage | `.reference/MCP_QUICK_START.md` |
 | Cloud deployment guide | `.reference/CLOUD_DEPLOYMENT.md` |
 | Search optimization results | `.reference/SEARCH_OPTIMIZATION.md` |
