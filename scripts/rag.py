@@ -374,9 +374,11 @@ def run_cli(args):
     env = args[1]
     args = args[2:]
 
-    # Get environment context
-    env_context = get_environment_context(env)
+    # Validate environment and load config first (validates all required files)
     env_vars, repo_root = load_env_vars(env)
+
+    # Get environment context (reads compose file to discover containers)
+    env_context = get_environment_context(env)
 
     # Intercept container management commands
     if args and args[0] in CONTAINER_COMMANDS:
