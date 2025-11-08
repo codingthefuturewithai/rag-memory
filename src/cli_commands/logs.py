@@ -2,6 +2,10 @@
 
 import subprocess
 import sys
+import tarfile
+import tempfile
+from datetime import datetime
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -45,24 +49,132 @@ def check_container_exists(container_name: str) -> bool:
         return False
 
 
+def get_rag_version() -> str:
+    """Get RAG Memory version."""
+    try:
+        from importlib.metadata import version
+        return version("rag-memory")
+    except Exception:
+        return "unknown"
+
+
+def export_logs_to_file(containers, tail, export_path):
+    """Export logs from specified containers to a single file."""
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    version = get_rag_version()
+
+    with open(export_path, 'w') as f:
+        f.write(f"RAG Memory Log Export\n")
+        f.write(f"Generated: {timestamp}\n")
+        f.write(f"Version: {version}\n")
+        f.write(f"{'='*80}\n\n")
+
+        for service_name, container_name in containers:
+            # Get logs for this container
+            result = subprocess.run(
+                ["docker", "logs", "--tail", str(tail), container_name],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+
+            f.write(f"\n{'='*80}\n")
+            f.write(f"{service_name.upper()} ({container_name})\n")
+            f.write(f"{'='*80}\n\n")
+
+            if result.returncode == 0:
+                f.write(result.stdout)
+                if result.stderr:
+                    f.write("\n--- STDERR ---\n")
+                    f.write(result.stderr)
+            else:
+                f.write(f"Error: Failed to get logs (exit code {result.returncode})\n")
+                f.write(result.stderr)
+
+            f.write("\n")
+
+
+def export_all_to_archive(containers, tail, archive_path):
+    """Export all logs + system info to tar.gz archive."""
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    version = get_rag_version()
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmppath = Path(tmpdir)
+
+        # Create system info file
+        with open(tmppath / "system_info.txt", 'w') as f:
+            f.write(f"RAG Memory System Report\n")
+            f.write(f"Generated: {timestamp}\n")
+            f.write(f"Version: {version}\n")
+            f.write(f"{'='*80}\n\n")
+
+            # Docker version
+            result = subprocess.run(["docker", "version"], capture_output=True, text=True, check=False)
+            f.write("DOCKER VERSION\n")
+            f.write("-"*80 + "\n")
+            f.write(result.stdout)
+            f.write("\n\n")
+
+            # Docker ps
+            result = subprocess.run(["docker", "ps", "-a"], capture_output=True, text=True, check=False)
+            f.write("DOCKER CONTAINERS\n")
+            f.write("-"*80 + "\n")
+            f.write(result.stdout)
+            f.write("\n\n")
+
+        # Export logs for each container
+        for service_name, container_name in containers:
+            result = subprocess.run(
+                ["docker", "logs", "--tail", str(tail), container_name],
+                capture_output=True,
+                text=True,
+                check=False
+            )
+
+            log_file = tmppath / f"{service_name}_logs.txt"
+            with open(log_file, 'w') as f:
+                f.write(f"{service_name.upper()} Logs\n")
+                f.write(f"Container: {container_name}\n")
+                f.write(f"{'='*80}\n\n")
+
+                if result.returncode == 0:
+                    f.write(result.stdout)
+                    if result.stderr:
+                        f.write("\n--- STDERR ---\n")
+                        f.write(result.stderr)
+                else:
+                    f.write(f"Error: Failed to get logs (exit code {result.returncode})\n")
+                    f.write(result.stderr)
+
+        # Create tar.gz archive
+        with tarfile.open(archive_path, "w:gz") as tar:
+            for file in tmppath.glob("*"):
+                tar.add(file, arcname=file.name)
+
+
 @click.command(name='logs')
 @click.option('--service', help='Specific service (mcp, postgres, neo4j, backup)')
 @click.option('--tail', type=int, default=50, help='Number of lines to show')
 @click.option('--follow', '-f', is_flag=True, help='Follow log output')
-def logs(service, tail, follow):
+@click.option('--export', type=click.Path(), help='Export logs to file')
+@click.option('--export-all', type=click.Path(), help='Export all logs + system info to archive')
+def logs(service, tail, follow, export, export_all):
     """View Docker container logs.
 
     Shows logs from RAG Memory Docker containers. By default, shows logs
     from all containers. Use --service to filter by specific container.
-    Use --follow to stream logs in real-time.
+    Use --follow to stream logs in real-time (requires --service).
 
     Examples:
-        rag logs                      # Show all logs (last 50 lines each)
-        rag logs --service mcp        # Show MCP server logs
-        rag logs --service postgres   # Show PostgreSQL logs
-        rag logs --tail 100           # Show last 100 lines
-        rag logs --follow             # Follow all logs
-        rag logs --service mcp -f     # Follow MCP logs only
+        rag logs                              # Show all logs (last 50 lines each)
+        rag logs --service mcp                # Show MCP server logs
+        rag logs --service postgres           # Show PostgreSQL logs
+        rag logs --tail 100                   # Show last 100 lines
+        rag logs --service mcp -f             # Follow MCP logs only
+        rag logs --export bug-report.txt      # Export all logs to file
+        rag logs --service mcp --export mcp.txt  # Export MCP logs only
+        rag logs --export-all report.tar.gz   # Export logs + system info
     """
     try:
         # Check Docker is running
@@ -83,6 +195,19 @@ def logs(service, tail, follow):
         else:
             # Show all containers
             containers = list(SERVICE_CONTAINERS.items())
+
+        # Handle export options
+        if export_all:
+            console.print(f"[cyan]Exporting all logs + system info to {export_all}...[/cyan]")
+            export_all_to_archive(containers, tail, export_all)
+            console.print(f"[green]✓ Export complete: {export_all}[/green]")
+            return
+
+        if export:
+            console.print(f"[cyan]Exporting logs to {export}...[/cyan]")
+            export_logs_to_file(containers, tail, export)
+            console.print(f"[green]✓ Export complete: {export}[/green]")
+            return
 
         # If following logs, only one container is allowed for clean output
         if follow and len(containers) > 1:

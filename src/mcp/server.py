@@ -199,6 +199,39 @@ _server_instructions = _instructions_path.read_text() if _instructions_path.exis
 mcp = FastMCP("rag-memory", instructions=_server_instructions, lifespan=lifespan)
 
 
+# Add health check endpoint for Docker healthcheck
+@mcp.get("/health")
+async def health_check():
+    """
+    Health check endpoint for Docker container healthchecks.
+
+    Verifies both PostgreSQL and Neo4j connectivity to ensure
+    the MCP server is fully operational.
+
+    Returns:
+        {"status": "healthy"} - Both databases operational
+        503 error - One or both databases unavailable
+    """
+    try:
+        # Check PostgreSQL connection
+        pg_healthy = db and db.health_check()
+
+        # Check Neo4j connection
+        neo4j_healthy = graph_store and graph_store.health_check()
+
+        if pg_healthy and neo4j_healthy:
+            return {"status": "healthy", "postgres": "ok", "neo4j": "ok"}
+        else:
+            return {
+                "status": "unhealthy",
+                "postgres": "ok" if pg_healthy else "unavailable",
+                "neo4j": "ok" if neo4j_healthy else "unavailable"
+            }, 503
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        return {"status": "unhealthy", "error": str(e)}, 503
+
+
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)
 
 

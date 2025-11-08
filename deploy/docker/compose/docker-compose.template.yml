@@ -34,7 +34,7 @@ services:
       - postgres_data_local:/var/lib/postgresql/data
       - ../init.sql:/docker-entrypoint-initdb.d/01-init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser} && psql -U ${POSTGRES_USER:-raguser} -d rag_memory -tc 'SELECT 1' > /dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -90,6 +90,12 @@ services:
       # Config includes server settings and directory mount specifications
       - ${RAG_CONFIG_DIR}:/root/.config/rag-memory:ro
       # USER_MOUNTS_PLACEHOLDER - Setup script will insert user directory mounts here
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 3
+      start_period: 45s
     ports:
       - "${MCP_SSE_PORT:-8000}:8000"
     depends_on:
@@ -125,6 +131,12 @@ services:
       BACKUP_LATEST_SYMLINK: "backup-latest.tar.gz"
       BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-14}"
       BACKUP_PRUNING_PREFIX: "backup-"
+    healthcheck:
+      test: ["CMD-SHELL", "find /archive -name 'backup-*.tar.gz' -mtime -1 | grep -q . || exit 1"]
+      interval: 3600s
+      timeout: 10s
+      retries: 2
+      start_period: 7200s
     labels:
       description: "RAG Memory - Automated Daily Backups"
       backup_location: "Configured in system config"
