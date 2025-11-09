@@ -11,15 +11,14 @@ Complete command-line interface reference for RAG Memory.
 
 1. [Overview](#overview)
 2. [Service Management](#service-management)
-3. [Initialization](#initialization)
-4. [Collection Management](#collection-management)
-5. [Document Ingestion](#document-ingestion)
-6. [Search & Retrieval](#search--retrieval)
-7. [Document Management](#document-management)
-8. [Analysis Tools](#analysis-tools)
-9. [Knowledge Graph](#knowledge-graph)
-10. [Configuration](#configuration)
-11. [Common Workflows](#common-workflows)
+3. [Collection Management](#collection-management)
+4. [Document Ingestion](#document-ingestion)
+5. [Search & Retrieval](#search--retrieval)
+6. [Document Management](#document-management)
+7. [Analysis Tools](#analysis-tools)
+8. [Knowledge Graph](#knowledge-graph)
+9. [Configuration](#configuration)
+10. [Common Workflows](#common-workflows)
 
 ---
 
@@ -183,35 +182,6 @@ rag logs --service mcp --export mcp-logs.txt
 - Investigating errors
 - Creating bug reports
 - Monitoring service behavior
-
----
-
-## Initialization
-
-### `rag init`
-
-Initialize database schemas for PostgreSQL and Neo4j.
-
-**Usage:**
-```bash
-rag init
-```
-
-**What it does:**
-- Verifies PostgreSQL schema exists (usually auto-created by Docker)
-- Creates necessary tables if missing
-- Initializes Neo4j indices and constraints via Graphiti
-- Sets up vector indices for embeddings
-
-**When to run:**
-- After first installation
-- After upgrading Graphiti version
-- If database schemas become corrupted
-
-**Notes:**
-- Idempotent - safe to run multiple times
-- No data loss - only adds missing schemas
-- Automatically called by `setup.py`
 
 ---
 
@@ -1063,21 +1033,18 @@ rag start
 # 2. Verify everything is running
 rag status
 
-# 3. Initialize databases
-rag init
-
-# 4. Create first collection
+# 3. Create first collection
 rag collection create tech-docs \
   --description "Technical documentation" \
   --domain "Engineering" \
   --domain-scope "Public APIs and guides"
 
-# 5. Ingest some content
+# 4. Ingest some content
 rag ingest url https://docs.example.com \
   --collection tech-docs \
   --follow-links
 
-# 6. Search it
+# 5. Search it
 rag search "How do I authenticate?"
 ```
 

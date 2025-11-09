@@ -113,8 +113,7 @@ Review each file for accuracy against current codebase:
 2. **Verify it covers:**
    - ✅ Installation: `uv tool install rag-memory` or local setup
    - ✅ Configuration: `.env` file setup, `config.yaml`
-   - ✅ Docker setup: `docker-compose up -d`
-   - ✅ Database initialization: `rag init`
+   - ✅ Docker setup: `docker-compose up -d` (auto-initializes databases)
    - ✅ Verification: `rag status`
    - ✅ First ingest: Example command
 

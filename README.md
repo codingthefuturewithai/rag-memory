@@ -76,9 +76,7 @@ uv run rag status
 
 ### Database & Status
 ```bash
-rag init                      # Initialize database schema
 rag status                    # Check database connection and stats
-rag migrate                   # Run database migrations (Alembic)
 ```
 
 ### Collection Management

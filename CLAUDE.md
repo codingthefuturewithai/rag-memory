@@ -132,11 +132,8 @@ uv sync
 cp .env.example .env
 # Add OPENAI_API_KEY to .env
 
-# Start databases
+# Start databases (schema auto-initialized via init.sql)
 docker-compose up -d
-
-# Initialize schema
-uv run rag init
 ```
 
 **Common Commands:**

@@ -26,7 +26,6 @@ from src.cli_commands.graph import graph
 from src.cli_commands.analyze import analyze
 from src.cli_commands.config import config
 from src.cli_commands.logs import logs
-from src.cli_commands.init import init_command
 
 
 def get_version():
@@ -42,9 +41,6 @@ def get_version():
 @click.version_option(version=get_version(), prog_name="rag")
 def main():
     """RAG Memory - AI knowledge base management system.
-
-    Setup:
-      rag init                # Initialize database schemas (PostgreSQL + Neo4j)
 
     Service Management:
       rag start/stop/restart  # Manage services
@@ -86,7 +82,6 @@ main.add_command(config)         # rag config show/edit/set
 # Register standalone commands
 main.add_command(search)         # rag search
 main.add_command(logs)           # rag logs
-main.add_command(init_command)   # rag init
 
 # Register service shortcuts as top-level commands
 main.add_command(start, name='start')      # rag start

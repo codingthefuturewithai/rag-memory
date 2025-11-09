@@ -51,18 +51,15 @@ Type 1, 2, or 3"
 
 **ABSOLUTE RULE:** Every answer MUST come from reading `.reference/` files. NO hardcoded examples. NO paraphrasing. NO "improving" the docs.
 
-**Required reading before EVERY response:**
-1. `.reference/OVERVIEW.md` - System architecture, features, examples
-2. `.reference/CLI_REFERENCE.md` - Complete CLI command reference
-3. `.reference/MCP_QUICK_START.md` - MCP tools and setup
-4. `.reference/SEARCH_OPTIMIZATION.md` - Search behavior and examples
-5. `.reference/KNOWLEDGE_GRAPH.md` - Graph capabilities and queries
-6. `.reference/PRICING.md` - Cost breakdown
+**CRITICAL FIRST STEP - Read the directory map:**
+1. Read `.reference/README.md` FIRST to discover available documentation files
+2. The README shows which files exist and what each contains
+3. Use the README to find the right file for each topic
 
 **Workflow for EVERY answer:**
-1. User picks path
-2. Read relevant `.reference/` section(s)
-3. Extract exact examples, quotes, and explanations
+1. Read `.reference/README.md` to find relevant documentation file
+2. Read the specific file(s) mentioned in README for the topic
+3. Extract exact examples, quotes, and explanations from those files
 4. Present what you read (don't invent or paraphrase)
 5. Wait for user response
 6. Repeat
@@ -74,7 +71,7 @@ Type 1, 2, or 3"
 - ❌ Assume you know the content (READ IT FRESH)
 
 **CRITICAL - SEMANTIC SEARCH EXAMPLES:**
-When showing search examples, READ from `.reference/OVERVIEW.md` or `.reference/MCP_QUICK_START.md` to get the EXACT examples they provide. These will be FULL QUESTIONS, not keywords. Never show keyword examples like "authentication setup" or "error handling".
+When showing search examples, READ from `.reference/README.md` to find which files cover search, then read those files to get EXACT examples. These will be FULL QUESTIONS, not keywords. Never show keyword examples like "authentication setup" or "error handling".
 
 **CRITICAL - CONFIG FILE PATHS (OS-SPECIFIC):**
 NEVER hardcode config file paths as `~/.config/rag-memory/` - this is LINUX ONLY and will mislead macOS/Windows users.
@@ -99,7 +96,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 #### Path 1: Understand the Concepts
 
 **Step 1: The Problem RAG Solves**
-- Read `.reference/OVERVIEW.md` introduction section
+- Read `.reference/README.md` to find which file covers "What RAG Memory is"
+- Read that file's introduction section
 - Present the problem traditional search has (keyword matching limitations)
 - Explain how RAG Memory solves it (semantic understanding)
 - Show performance data from docs (recall rates, accuracy)
@@ -107,7 +105,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - [WAIT FOR USER RESPONSE]
 
 **Step 2: What is Semantic Search?**
-- Read `.reference/SEARCH_OPTIMIZATION.md` - look for semantic search explanation
+- Read `.reference/README.md` to find which file covers semantic search
+- Read that file - look for semantic search explanation
 - Explain how it works (vectors, meaning-based matching)
 - Show examples from docs of semantic vs keyword search
 - Present technical details (embeddings, similarity scores)
@@ -115,7 +114,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - [WAIT FOR USER RESPONSE]
 
 **Step 3: What is RAG?**
-- Read `.reference/OVERVIEW.md` "What Is RAG Memory?" section
+- Read `.reference/README.md` to find which file covers RAG concepts
+- Read that file's "What Is RAG Memory?" section
 - Define RAG = Retrieval-Augmented Generation
 - Explain the three steps (retrieve, augment, generate)
 - Show the workflow and examples from the docs
@@ -123,7 +123,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - [WAIT FOR USER RESPONSE]
 
 **Step 4: Why Two Databases?**
-- Read `.reference/OVERVIEW.md` architecture section
+- Read `.reference/README.md` to find which file covers architecture
+- Read that file's architecture section
 - Explain PostgreSQL + pgvector for semantic search
 - Explain Neo4j for knowledge graph relationships
 - Show examples from the docs of when to use each
@@ -132,7 +133,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - [WAIT FOR USER RESPONSE]
 
 **Step 5: How It Actually Works**
-- Read `.reference/OVERVIEW.md` "Data Flow" section
+- Read `.reference/README.md` to find which file covers data flow
+- Read that file's "Data Flow" section
 - Explain ingestion workflow: text → chunks → vectors → storage
 - Explain search workflow: question → vector → similarity → results
 - Show performance numbers from docs (speed, cost, accuracy)
@@ -154,8 +156,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 #### Path 2: Learn the Capabilities
 
 **Step 1: Semantic Search is the Core Feature**
-- Read `.reference/OVERVIEW.md` "Key Features" section
-- Read `.reference/SEARCH_OPTIMIZATION.md` for search examples
+- Read `.reference/README.md` to find which files cover search capabilities
+- Read those files for search examples and key features
 - Extract EXACT search query examples from the docs (they will be full questions)
 - Explain similarity scores and what they mean (get ranges from docs)
 - Show example queries and expected results
@@ -164,16 +166,18 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - [WAIT FOR USER RESPONSE]
 
 **Step 2: MCP Tools for AI Agents**
-- Read `.reference/MCP_QUICK_START.md` "Available Tools" section
+- Read `.reference/README.md` to find which file covers MCP server setup
+- Read that file's "Available Tools" section
 - Explain the two modes: CLI tool vs MCP server
-- List the 17 available tools from the docs
+- List the available tools from the docs
 - Show examples from the docs of how AI agents use these tools
 - Present use cases for each mode
 - Ask: "Clear on CLI vs MCP modes? Want more details or ready to move on?"
 - [WAIT FOR USER RESPONSE]
 
 **Step 3: Document Ingestion**
-- Read `.reference/OVERVIEW.md` ingestion sections
+- Read `.reference/README.md` to find which files cover ingestion
+- Read those files' ingestion sections
 - List all ingestion methods: text, files, directories, URLs
 - Show command examples from the docs for each method
 - Explain web crawling capabilities (follow_links, max_depth)
@@ -182,7 +186,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - [WAIT FOR USER RESPONSE]
 
 **Step 4: Collections**
-- Read `.reference/OVERVIEW.md` "Collections" section
+- Read `.reference/README.md` to find which file covers collections
+- Read that file's "Collections" section
 - Explain what collections are and why they matter (from docs)
 - Show collection examples and naming patterns from docs
 - Explain scoping searches to specific collections
@@ -191,7 +196,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - [WAIT FOR USER RESPONSE]
 
 **Step 5: Knowledge Graph Queries**
-- Read `.reference/KNOWLEDGE_GRAPH.md` "Use Cases" section
+- Read `.reference/README.md` to find which file covers knowledge graphs
+- Read that file's "Use Cases" section
 - Extract exact query examples from docs
 - Explain when to use graph queries vs RAG search (from docs)
 - Show relationship query examples from docs
@@ -199,13 +205,12 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 - Ask: "Clear on knowledge graph capabilities? Ready to move on?"
 - [WAIT FOR USER RESPONSE]
 
-**Step 6: Cost Structure**
-- Read `.reference/PRICING.md` "Key Points" section
-- Present embedding costs with exact numbers from docs
-- Present graph extraction costs with exact numbers from docs
-- Show example cost calculations from docs
-- Emphasize that searches are FREE after ingestion (from docs)
-- Present total cost estimates for typical use cases
+**Step 6: Cost Structure (if pricing info exists)**
+- Read `.reference/README.md` to check if pricing documentation exists
+- If exists: Read that file's cost information
+- If exists: Present embedding costs, graph extraction costs, and example calculations
+- If exists: Emphasize that searches are FREE after ingestion
+- If not exists: Note that costs are based on OpenAI API pricing (see OpenAI docs)
 - Ask: "Clear on pricing? Any concerns or ready to continue?"
 - [WAIT FOR USER RESPONSE]
 
@@ -295,7 +300,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 
 **Step 6: First Collection**
 - **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
-- Read `.reference/OVERVIEW.md` for collection create example
+- Read `.reference/README.md` to find which file has collection create examples
+- Read that file for collection create example
 - Tell user the exact command to run (from docs)
 - Explain what it does
 - Ask: "Have you created the collection? (Type 'yes' or paste output)"
@@ -303,7 +309,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 
 **Step 7: First Document**
 - **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
-- Read `.reference/OVERVIEW.md` or `.reference/MCP_QUICK_START.md` for ingest example
+- Read `.reference/README.md` to find which file has ingestion examples
+- Read that file for ingest example
 - Tell user the exact command to run (from docs)
 - **CRITICAL:** Explain BOTH processes that happen:
   1. RAG ingestion: chunking → embeddings → vector storage
@@ -315,7 +322,8 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 
 **Step 8: First RAG Search (Vector Similarity)**
 - **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
-- Read `.reference/OVERVIEW.md` or `.reference/SEARCH_OPTIMIZATION.md` for search example
+- Read `.reference/README.md` to find which file has search examples
+- Read that file for search example
 - Tell user the EXACT search query to run from docs (will be a full question, not keywords)
 - Explain what RAG search does: finds semantically similar content
 - Show expected output (similarity scores, chunks, source IDs)
@@ -325,18 +333,20 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 
 **Step 9: First Graph Query (Entity Relationships) - EQUAL IMPORTANCE**
 - **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
-- Read `.reference/KNOWLEDGE_GRAPH.md` for relationship query example
+- Read `.reference/README.md` to find which file covers knowledge graph queries
+- Read that file for relationship query example
 - Tell user the exact graph query command to run from docs (query_relationships)
 - Explain what graph queries do: finds entity relationships, connections, dependencies
 - Show expected output (entities, relationships, facts, timestamps)
 - Present what graph gives you that RAG doesn't (relationship mapping, multi-hop reasoning)
 - Note about threshold tuning (from docs)
-- **Emphasize:** This is why you paid the $0.01/doc extraction cost - to get relationship intelligence
+- **Emphasize:** This is why you paid the extraction cost - to get relationship intelligence
 - Ask: "Did the graph query work? See the relationships? (Type 'yes' or paste results)"
 - [WAIT FOR USER RESPONSE]
 
 **Step 10: Compare RAG vs Graph**
-- Read `.reference/KNOWLEDGE_GRAPH.md` "RAG vs Graph" comparison section
+- Read `.reference/README.md` to find which file has RAG vs Graph comparison
+- Read that file's comparison section
 - Show side-by-side examples from docs:
   - Same question answered with RAG search → returns content chunks
   - Same question answered with graph query → returns entity relationships
@@ -350,31 +360,33 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 **Step 11: Exercise CLI Management Commands**
 - **DO NOT RUN COMMANDS - ONLY PROVIDE INSTRUCTIONS**
 - Tell user: "Now let's try some CLI commands to get familiar with managing your system."
-- Read `.reference/CLI_REFERENCE.md` sections: Service Management, Collection Management, Document Management
-- Guide them to exercise these capabilities (read exact commands and options from CLI_REFERENCE.md):
+- Read `.reference/README.md` to find which file has CLI command reference
+- Read that file's sections: Service Management, Collection Management, Document Management
+- Guide them to exercise these capabilities (read exact commands and options from that file):
   - Check service health and status
   - View service logs (including recent entries)
   - List all collections
   - List documents in their collection
   - View detailed collection information
 - For each capability:
-  - Read the relevant section from CLI_REFERENCE.md
+  - Read the relevant section from the CLI reference file
   - Present the command to run (from docs)
   - Explain what it does (from docs)
   - Show what output to expect (from docs)
-- Tell them: "For complete CLI reference with all options and examples, see `.reference/CLI_REFERENCE.md`"
+- Tell them: "For complete CLI reference with all options and examples, check the README"
 - Ask: "Tried these commands? Got a feel for managing the system? (Type 'yes' when ready to continue)"
 - [WAIT FOR USER RESPONSE]
 
 **Optional Step 12: Clean Up**
 - Offer to delete test collection
-- Read `.reference/CLI_REFERENCE.md` collection delete section
+- Read the CLI reference file's collection delete section
 - Show command from docs
 - Ask if they want to keep or delete
 - [WAIT FOR USER RESPONSE]
 
 **Step 13: MCP Server Setup (Optional)**
-- Read `.reference/MCP_QUICK_START.md` configuration section
+- Read `.reference/README.md` to find which file covers MCP server setup
+- Read that file's configuration section
 - Guide them to find setup.py output with connection commands
 - Show how to connect Claude Code (from docs)
 - Ask: "Want to set this up now or skip?"
@@ -382,24 +394,89 @@ Based on user's choice (1, 2, 3, or 4), follow the appropriate path:
 
 **You're All Set!**
 - Summarize what they have (from setup)
-- Offer next steps:
-  - "Learn more commands?" → Read and present `.reference/CLI_REFERENCE.md`
-  - "Understand search better?" → Read and present `.reference/SEARCH_OPTIMIZATION.md`
-  - "See all MCP tools?" → Read and present `.reference/MCP_QUICK_START.md`
+- Offer next steps based on what's available in `.reference/README.md`:
+  - "Learn more commands?" → Point to CLI reference
+  - "Understand search better?" → Point to search documentation
+  - "See all MCP tools?" → Point to MCP guide
   - "Ingest real documents?" → Guide through file/URL ingestion using docs
 
 #### Path 4: Show Me the Commands
 
-**Read `.reference/CLI_REFERENCE.md` for complete command reference**
-- Present the command reference exactly as documented
-- Include sections on: service management, collections, ingestion, search, document management, analysis, knowledge graph
-- Show key examples from the docs
-- Emphasize important concepts from the docs (questions not keywords, health checks, logs export, costs, etc.)
+**Step 1: Service Management**
+- Read `.reference/README.md` to find which file has CLI command reference
+- Read that file's "Service Management" section
+- Present the commands (status, start, stop, restart, logs)
+- Show examples and options from docs
+- Explain what each command does (from docs)
+- Ask: "Clear on managing services? Ready for next section?"
+- [WAIT FOR USER RESPONSE]
 
-**After commands:** Offer:
-- "Want detailed explanations?" → Read relevant `.reference/` sections
-- "Ready to start using it?" → Path 3 if not set up
-- "Need examples?" → Read and present use cases from `.reference/OVERVIEW.md`
+**Step 2: Initialization & Setup**
+- Read the CLI reference file's "Initialization" section
+- Present the init command
+- Explain when to use it (from docs)
+- Ask: "Understand initialization? Ready to continue?"
+- [WAIT FOR USER RESPONSE]
+
+**Step 3: Collection Management**
+- Read the CLI reference file's "Collection Management" section
+- Present collection commands (create, list, info, schema, update, delete)
+- Show examples from docs
+- Explain organization strategies (from docs)
+- Ask: "Clear on collections? Ready for ingestion commands?"
+- [WAIT FOR USER RESPONSE]
+
+**Step 4: Document Ingestion**
+- Read the CLI reference file's "Document Ingestion" section
+- Present ingestion methods (text, file, directory, url)
+- Show examples and options from docs
+- Explain crawling capabilities (from docs)
+- Ask: "Understand ingestion options? Ready for search?"
+- [WAIT FOR USER RESPONSE]
+
+**Step 5: Search & Retrieval**
+- Read the CLI reference file's "Search & Retrieval" section
+- Present search command and options
+- Show examples from docs (FULL QUESTIONS, not keywords)
+- Explain similarity scores and thresholds (from docs)
+- Ask: "Clear on search? Ready for document management?"
+- [WAIT FOR USER RESPONSE]
+
+**Step 6: Document Management**
+- Read the CLI reference file's "Document Management" section
+- Present document commands (list, view, update, delete)
+- Show examples from docs
+- Explain cost implications (from docs)
+- Ask: "Understand document management? Ready for advanced features?"
+- [WAIT FOR USER RESPONSE]
+
+**Step 7: Analysis & Knowledge Graph**
+- Read the CLI reference file's "Analysis Tools" section
+- Read the CLI reference file's "Knowledge Graph" section
+- Present analysis commands (website analysis)
+- Present graph commands (relationships, temporal, communities)
+- Show examples from docs
+- Explain when to use each (from docs)
+- Ask: "Clear on analysis and graph features? Want to see workflows or done?"
+- [WAIT FOR USER RESPONSE]
+
+**Step 8: Common Workflows (Optional)**
+- Read the CLI reference file's "Common Workflows" section
+- Present workflow examples from docs (initial setup, comprehensive crawl, updates, troubleshooting)
+- Show real-world usage patterns
+- Ask: "Helpful? Want more details on anything?"
+- [WAIT FOR USER RESPONSE]
+
+**After completing Path 4 commands:**
+- Present menu:
+  1. Install It Now → Path 3
+  2. Learn the Concepts → Path 1
+  3. See What It Can Do → Path 2
+  4. I'm Good → End
+- If user chooses Path 3: IMMEDIATELY jump to Path 3, Step 1 (installation)
+- If user chooses Path 1: IMMEDIATELY jump to Path 1, Step 1
+- If user chooses Path 2: IMMEDIATELY jump to Path 2, Step 1
+- DO NOT continue with more commands after they make a choice
 
 ### AFTER ANY PATH
 
@@ -408,9 +485,10 @@ Always offer contextual next steps based on what was just covered. Every answer 
 ### TROUBLESHOOTING
 
 If user reports issues:
-1. Read the relevant `.reference/` file's troubleshooting section
-2. Present the solution exactly as documented
-3. Don't invent solutions - use what's in the docs
+1. Read `.reference/README.md` to find which file has troubleshooting information
+2. Read that file's troubleshooting section for the specific issue
+3. Present the solution exactly as documented
+4. Don't invent solutions - use what's in the docs
 
 **Never assume you know the answer. Always read from `.reference/` first.**
 

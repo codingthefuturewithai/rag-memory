@@ -193,7 +193,7 @@ except Exception as e:
 **Missing tables:**
 ```
 FATAL: PostgreSQL schema validation failed
-  - Missing required tables: source_documents, document_chunks. Run 'uv run rag init' to initialize the database.
+  - Missing required tables: source_documents, document_chunks. Database schema not initialized.
 ```
 
 **pgvector not found:**
@@ -205,13 +205,13 @@ FATAL: PostgreSQL schema validation failed
 **HNSW indexes missing:**
 ```
 FATAL: PostgreSQL schema validation failed
-  - HNSW indexes not found (expected 2, found 0). Run 'uv run rag init' to create indexes.
+  - HNSW indexes not found (expected 2, found 0). Database indexes not created.
 ```
 
 **Resolution steps:**
-1. `docker-compose -f docker-compose.graphiti.yml up -d` - Start Docker containers
-2. `uv run rag init` - Initialize PostgreSQL schema and indexes
-3. Restart the MCP server
+1. Stop containers: `docker-compose down`
+2. Re-run setup: `python scripts/setup.py` (initializes databases automatically)
+3. Verify: `rag status`
 
 ### Neo4j Errors
 
@@ -269,11 +269,8 @@ Output shows latency, status, and validation details.
 
 The full server startup validates everything:
 ```bash
-# Start databases
+# Start databases (auto-initializes schemas via init.sql)
 docker-compose -f docker-compose.graphiti.yml up -d
-
-# Run rag init if needed
-uv run rag init
 
 # Start MCP server
 uv run python -m src.mcp.server
