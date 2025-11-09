@@ -251,7 +251,6 @@ async def test_mcp_tool():
 - All ingestion goes through `UnifiedIngestionMediator`
 - Graph extraction happens automatically after RAG ingestion
 - Use `graph_store.validate_schema()` to check Neo4j health
-- See `docs/IMPLEMENTATION_GAPS_AND_ROADMAP.md` for Gap 2.1 details
 
 ## Debugging Tips
 
