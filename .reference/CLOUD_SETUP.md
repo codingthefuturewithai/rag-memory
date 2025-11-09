@@ -581,7 +581,7 @@ A: Yes. Export local PostgreSQL dump, import to Supabase. See DATABASE_MIGRATION
 A: Yes, but latency will be higher. Recommended: US East region for all (iad on Fly, us-east-1 on Supabase/Aura).
 
 **Q: What if a service goes down?**
-A: MCP server gracefully degrades. Neo4j down = RAG-only mode (no graphs). PostgreSQL down = server fails (critical).
+A: MCP server requires both databases ("All or Nothing" architecture). If either Neo4j or PostgreSQL is unavailable, the server refuses to start. There is no graceful degradation or RAG-only fallback mode.
 
 **Q: Can I scale to multiple Fly.io machines?**
 A: Yes. Fly.io handles load balancing automatically. Update fly.toml `min_machines_running`.
@@ -604,6 +604,5 @@ A: `fly deploy` automatically restarts. Downtime: 30-60 seconds.
 
 ---
 
-**Last Updated:** 2025-10-24
-**Status:** Production Ready
+**Last Updated:** 2025-11-08
 **Version:** 0.13.0

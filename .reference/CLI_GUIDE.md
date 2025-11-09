@@ -1,4 +1,4 @@
-# RAG Memory CLI Reference
+# CLI Guide
 
 Complete command-line interface reference for RAG Memory.
 

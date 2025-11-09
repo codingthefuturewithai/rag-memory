@@ -1,311 +1,221 @@
 # RAG Memory Reference Documentation
 
-Welcome! This directory contains all the reference documentation for RAG Memory.
-
----
-
-## 🚀 Quick Start: Choose Your Path
-
-### Are you setting up locally or in the cloud?
-
-**👨‍💻 LOCAL SETUP (Docker on your machine)**
-- Best for: Development, testing, learning
-- Time: 30 minutes
-- Command: `/getting-started`
-- Read next: [OVERVIEW.md](OVERVIEW.md)
-
-**☁️ CLOUD DEPLOYMENT (Supabase + Aura + Fly.io)**
-- Best for: Production, team access, cloud AI agents
-- Time: 1 hour
-- Command: `/cloud-setup`
-- Read next: [CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md)
-
----
+Complete reference documentation for RAG Memory - a PostgreSQL-based semantic search system with knowledge graph capabilities.
 
 ## Quick Navigation
 
-### 🎯 Starting Out?
-**Choose above, then come back here for reference.**
+**New to RAG Memory?**
+→ Start with [WHAT_IS_IT.md](WHAT_IS_IT.md) - Conceptual overview
 
-For detailed CLI commands: [OVERVIEW.md](OVERVIEW.md)
+**Setting up locally?**
+→ See [INSTALLATION.md](INSTALLATION.md) - Docker setup and verification
 
-### 🔍 Looking for Something Specific?
+**Need CLI commands?**
+→ See [CLI_GUIDE.md](CLI_GUIDE.md) - Complete command reference
 
-**"What CLI commands are available?"**
-→ [CLI_REFERENCE.md](CLI_REFERENCE.md) - Complete command reference
+**Configuring AI agents?**
+→ See [MCP_GUIDE.md](MCP_GUIDE.md) - MCP server setup
 
-**"How do I deploy to the cloud?"**
-→ [CLOUD_DEPLOYMENT.md](CLOUD_DEPLOYMENT.md) - Complete reference guide
+**Deploying to cloud?**
+→ See [CLOUD_SETUP.md](CLOUD_SETUP.md) - Supabase + Fly.io deployment
 
-**"How do I set up an MCP server?"**
-→ [MCP_QUICK_START.md](MCP_QUICK_START.md)
+## Documentation Files
 
-**"What are the 17 MCP tools and how do I use them?"**
-→ [MCP_QUICK_START.md](MCP_QUICK_START.md) - "Available Tools (17 Total)"
+### Core Guides
 
-**"How does the search work? Is it good?"**
-→ [SEARCH_OPTIMIZATION.md](SEARCH_OPTIMIZATION.md)
+**[WHAT_IS_IT.md](WHAT_IS_IT.md)** - Conceptual Overview
+- What RAG Memory is and how it works
+- Core capabilities and architecture
+- Use cases and when to use it
+- Read time: 5 minutes
 
-**"What's this Knowledge Graph thing?"**
-→ [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md)
+**[INSTALLATION.md](INSTALLATION.md)** - Local Setup
+- Docker installation and configuration
+- Database initialization
+- Verification steps
+- Read time: 10 minutes
 
-**"How much will this cost me (OpenAI)?"**
-→ [PRICING.md](PRICING.md)
+**[CLI_GUIDE.md](CLI_GUIDE.md)** - Command Reference
+- All CLI commands with examples
+- Service management (start/stop/status)
+- Collection and document operations
+- Search and ingestion commands
+- Read time: 20 minutes
 
-**"Tell me everything about RAG Memory"**
-→ [OVERVIEW.md](OVERVIEW.md)
+**[MCP_GUIDE.md](MCP_GUIDE.md)** - MCP Server Setup
+- Configure Claude Desktop/Code/Cursor
+- 18 available MCP tools
+- Testing and troubleshooting
+- Read time: 10 minutes
 
----
+### Technical Details
 
-## 📚 Complete File Reference
+**[VECTOR_SEARCH.md](VECTOR_SEARCH.md)** - Semantic Search
+- How semantic search works
+- Embedding model and dimensions
+- Document chunking strategy
+- Similarity scores and thresholds
+- Query best practices
+- Read time: 15 minutes
 
-### Core Documentation
+**[KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md)** - Entity Extraction
+- What knowledge graphs provide
+- Dual storage (RAG + Graph)
+- Entity and relationship queries
+- Temporal reasoning
+- Configuration options
+- Read time: 15 minutes
 
-| File | Purpose | When to Read |
-|------|---------|--------------|
-| **CLI_REFERENCE.md** | Complete CLI command reference | When using the `rag` command-line tool |
-| **OVERVIEW.md** | Comprehensive guide to everything | When first learning, or need complete reference |
-| **MCP_QUICK_START.md** | Setup & tool reference for AI agents | When configuring Claude Desktop/Code/Cursor |
-| **SEARCH_OPTIMIZATION.md** | Search quality & optimization | When tuning search quality or understanding performance |
-| **KNOWLEDGE_GRAPH.md** | Entity relationships & temporal tracking | When exploring knowledge graph features |
-| **PRICING.md** | Cost analysis & budgets | When estimating costs or budgeting |
-| **CLOUD_DEPLOYMENT.md** | Cloud deployment guide | When deploying to Supabase + Fly.io |
-| **DOCUMENTATION_UPDATE_SUMMARY.md** | What's new in documentation (this session) | When reviewing changes made 2025-10-20 |
+**[CONFIGURATION.md](CONFIGURATION.md)** - Settings
+- Config file location and format
+- Environment variables
+- Database connection strings
+- Security best practices
+- Read time: 10 minutes
 
-### Related Files (Project Root)
+**[TROUBLESHOOTING.md](TROUBLESHOOTING.md)** - Common Issues
+- Database connection errors
+- Docker problems
+- Ingestion issues
+- Search problems
+- Debugging commands
+- Read time: 10 minutes
 
-- **CLAUDE.md** - Complete CLI commands reference
-- **README.md** - Project overview
+### Deployment
 
----
+**[CLOUD_SETUP.md](CLOUD_SETUP.md)** - Cloud Deployment
+- Supabase PostgreSQL setup
+- Neo4j Aura configuration
+- Fly.io MCP server deployment
+- Production considerations
+- Read time: 20 minutes
 
-## 🚀 Common Workflows
+## Quick Reference
 
-### Setup & First Run
-1. Read: [OVERVIEW.md](OVERVIEW.md) - "What Is RAG Memory?" section
-2. Read: [OVERVIEW.md](OVERVIEW.md) - "Two Ways to Use RAG Memory" section
-3. Do: `/getting-started` command in Claude Code
-4. Read: [MCP_QUICK_START.md](MCP_QUICK_START.md) for agent configuration
+### Key Facts (Verified)
 
-### Building Knowledge Base
-1. Read: [OVERVIEW.md](OVERVIEW.md) - "Web Crawling & Link Following"
-2. Read: [OVERVIEW.md](OVERVIEW.md) - "Re-Crawl for Updates"
-3. Reference: CLAUDE.md - CLI ingestion commands
-4. Use: `rag ingest url`, `rag ingest file`, `rag ingest directory`
+- **18 MCP tools** available for AI agents
+- **text-embedding-3-small** model (1536 dimensions)
+- **1000 character** chunks with **200 character** overlap
+- **Port 54320** for PostgreSQL (local Docker)
+- **Both PostgreSQL and Neo4j required** (no fallback)
+- **Automatic synchronization** between RAG and Graph stores
 
-### Optimizing Search
-1. Read: [SEARCH_OPTIMIZATION.md](SEARCH_OPTIMIZATION.md) - "Baseline Search (RECOMMENDED)"
-2. Read: [SEARCH_OPTIMIZATION.md](SEARCH_OPTIMIZATION.md) - "Threshold Tuning Guide"
-3. Use: `rag search "query" --threshold 0.7` (or 0.5, 0.3)
+### Common Commands
 
-### Exploring Knowledge Graphs
-1. Read: [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md) - "Overview"
-2. Read: [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md) - "Setup & Prerequisites"
-3. Understand: Experimental status (Phase 4 in progress)
-4. Use: `query_relationships()` and `query_temporal()` tools
+```bash
+# Setup and status
+rag status                    # Check all services
+rag start                     # Start databases
+rag stop                      # Stop databases
 
-### Budgeting Costs
-1. Read: [PRICING.md](PRICING.md) - "Typical Costs"
-2. Reference: [OVERVIEW.md](OVERVIEW.md) - "Costs & Budgets"
-3. Calculate: tokens × $0.02 per 1M tokens
+# Collections
+rag collection create <name> --description "..." --domain "..." --domain-scope "..."
+rag collection list
+rag collection info <name>
 
-### Deploying to Production
-1. Read: [OVERVIEW.md](OVERVIEW.md) - "Deployment Options"
-2. Reference: scripts/deploy.sh for Fly.io
-3. Choose: Local, Fly.io, or Hybrid approach
-4. Setup: Database + MCP server + Environment variables
+# Ingestion
+rag ingest text "content" --collection <name>
+rag ingest file <path> --collection <name>
+rag ingest url <url> --collection <name> --follow-links
 
----
+# Search
+rag search "query" --collection <name>
+rag search "query" --threshold 0.7 --limit 10
 
-## 🔧 Reference Tables
+# Knowledge graph
+rag graph query-relationships "query"
+rag graph query-temporal "how has X changed?"
+```
 
-### Similarity Score Interpretation
+### Similarity Score Ranges
 
-| Score Range | Meaning | Use Case |
-|-------------|---------|----------|
-| 0.90-1.00 | Near-identical | Exact match or close rephrasing |
-| 0.70-0.89 | Highly relevant | What you're looking for |
-| 0.50-0.69 | Related | Relevant but less direct |
-| 0.30-0.49 | Somewhat related | Might be useful, requires review |
-| 0.00-0.29 | Loosely related | Noise, usually ignore |
+- **0.90-1.00** - Near-identical (exact match)
+- **0.70-0.89** - Highly relevant (what you're looking for)
+- **0.50-0.69** - Related (relevant but less direct)
+- **0.30-0.49** - Somewhat related (might be useful)
+- **0.00-0.29** - Loosely related (usually noise)
 
 ### Recommended Thresholds
 
-| Threshold | Use Case | Example |
-|-----------|----------|---------|
-| 0.70 | Strict/Production | Customer support Q&A - only high confidence |
-| 0.50 | Balanced/Default | General search - good mix of precision+recall |
-| 0.30 | Exploratory/Research | Discovery mode - cast wide net |
-| None | Top-N Results | Return top 10 regardless of score |
+- **0.7** - Production/strict (high confidence only)
+- **0.5** - Balanced (default, good mix)
+- **0.3** - Exploratory (cast wide net)
+- **None** - Top-N results regardless of score
 
-### What's Included vs Not
+## Learning Paths
 
-**✅ Production Ready:**
-- PostgreSQL + pgvector
-- Vector normalization
-- Document chunking
-- Collections
-- Web crawling & re-crawl
-- 17 MCP tools
-- 25+ CLI commands
+### Quick Start (30 minutes)
+1. Read [WHAT_IS_IT.md](WHAT_IS_IT.md)
+2. Follow [INSTALLATION.md](INSTALLATION.md)
+3. Test basic commands from [CLI_GUIDE.md](CLI_GUIDE.md)
 
-**⚠️ Experimental (Phase 3 complete, Phase 4 pending):**
-- Knowledge graph (entity extraction, relationships, temporal)
+### Complete Setup (2 hours)
+1. Quick Start (above)
+2. Configure MCP server via [MCP_GUIDE.md](MCP_GUIDE.md)
+3. Read [VECTOR_SEARCH.md](VECTOR_SEARCH.md)
+4. Review [CONFIGURATION.md](CONFIGURATION.md)
 
-**❌ Analyzed but Not Recommended:**
-- Hybrid search (vector + keyword)
-- Multi-query retrieval
-- Re-ranking with cross-encoders
+### Deep Dive (1 day)
+1. Complete Setup (above)
+2. Study [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md)
+3. Explore [CLI_GUIDE.md](CLI_GUIDE.md) workflows
+4. Review [TROUBLESHOOTING.md](TROUBLESHOOTING.md)
+5. Plan [CLOUD_SETUP.md](CLOUD_SETUP.md) deployment
 
----
+## What's Not Here
 
-## 📊 Feature Status
+This directory contains **user-facing documentation only**. You will not find:
 
-### By Category
+- Development status updates
+- Implementation details (see source code)
+- Performance benchmarks (vary by deployment)
+- Pricing calculations (see OpenAI pricing docs)
+- Third-party API details (see vendor docs)
 
-**Vector Search (RAG) - PRODUCTION READY ✅**
-- Baseline vector-only: Optimal performance (81% recall@5)
-- Chunking: 1000 chars, 200 overlap
-- Similarity: 0.7-0.95 for good matches
-- Speed: 413ms average latency
+## File Sizes
 
-**Web Crawling - PRODUCTION READY ✅**
-- Single page ingestion
-- Multi-page link following (BFS)
-- Metadata tracking (crawl_root_url, session_id, depth)
-- Re-crawl for updates (safe, targeted)
+| File | Size | Read Time |
+|------|------|-----------|
+| WHAT_IS_IT.md | ~5 KB | 5 min |
+| INSTALLATION.md | ~6 KB | 10 min |
+| CLI_GUIDE.md | ~30 KB | 20 min |
+| MCP_GUIDE.md | ~9 KB | 10 min |
+| VECTOR_SEARCH.md | ~10 KB | 15 min |
+| KNOWLEDGE_GRAPH.md | ~10 KB | 15 min |
+| CONFIGURATION.md | ~9 KB | 10 min |
+| TROUBLESHOOTING.md | ~11 KB | 10 min |
+| CLOUD_SETUP.md | ~16 KB | 20 min |
+| **Total** | **~106 KB** | **~115 min** |
 
-**Collections - PRODUCTION READY ✅**
-- Many-to-many relationships
-- Flexible organization
-- No duplication needed
+## External Resources
 
-**MCP Server - PRODUCTION READY ✅**
-- 17 tools available
-- Multiple transports (stdio, SSE, HTTP)
-- Graceful degradation if graph unavailable
+**Neo4j:**
+- Documentation: https://neo4j.com/docs/
+- Cypher: https://neo4j.com/docs/cypher-manual/
 
-**Knowledge Graph - EXPERIMENTAL ⚠️**
-- Phase 3 complete: Ingestion works
-- Phase 4 pending: Cleanup not implemented
-- Issue: Graph not updated on document edit/delete
-- Issue: Graph orphans accumulate on recrawl
-- Recommendation: Use for research only, not production
+**Graphiti:**
+- Documentation: https://docs.graphiti.ai/
+- GitHub: https://github.com/getzep/graphiti
 
----
+**OpenAI:**
+- Pricing: https://openai.com/api/pricing/
+- Embeddings: https://platform.openai.com/docs/guides/embeddings
 
-## 🎓 Learning Paths
-
-### Path 1: Quick Start (30 minutes)
-1. `/getting-started` command
-2. Run sample ingestion
-3. Try first search
-4. Done! Ready to explore
-
-### Path 2: Thorough Understanding (2-3 hours)
-1. [OVERVIEW.md](OVERVIEW.md) - Read completely
-2. [MCP_QUICK_START.md](MCP_QUICK_START.md) - Read tools section
-3. [SEARCH_OPTIMIZATION.md](SEARCH_OPTIMIZATION.md) - Read baseline section
-4. Try: Ingest real documents, tune search
-5. Reference: CLAUDE.md for CLI when needed
-
-### Path 3: Complete Deep Dive (Full day)
-1. All Path 2 materials
-2. [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md) - Entire doc
-3. [PRICING.md](PRICING.md) - Complete cost analysis
-4. [SEARCH_OPTIMIZATION.md](SEARCH_OPTIMIZATION.md) - All optimization details
-5. Project files: CLAUDE.md, README.md
-6. Try: Setup local instance, experiment with all features
-
----
-
-## 🐛 Troubleshooting
-
-### I can't find the answer to my question
-
-1. Try searching [OVERVIEW.md](OVERVIEW.md)
-2. Check [MCP_QUICK_START.md](MCP_QUICK_START.md) - Troubleshooting section
-3. Reference [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md) - FAQ section
-4. Search CLAUDE.md for CLI-specific issues
-
-### My search results aren't good
-
-Read: [SEARCH_OPTIMIZATION.md](SEARCH_OPTIMIZATION.md) - "Threshold Tuning Guide"
-
-### What's this graph error about?
-
-Read: [KNOWLEDGE_GRAPH.md](KNOWLEDGE_GRAPH.md) - "Known Issues & Debugging"
-
-### How much will this cost?
-
-Read: [PRICING.md](PRICING.md) then [OVERVIEW.md](OVERVIEW.md) - "Costs & Budgets"
-
-### Is this ready for production?
-
-See [OVERVIEW.md](OVERVIEW.md) - "What's Included & What's Not"
-- RAG (vector search): ✅ Yes
-- Web crawling: ✅ Yes
-- MCP Server: ✅ Yes
-- Knowledge graph: ⚠️ No (Phase 4 pending)
-
----
-
-## 📖 Document Sizes & Read Time
-
-| Document | Size | Read Time |
-|----------|------|-----------|
-| CLI_REFERENCE.md | 35 KB | 25-30 min |
-| OVERVIEW.md | 19 KB | 15-20 min |
-| MCP_QUICK_START.md | 14 KB | 10-15 min |
-| SEARCH_OPTIMIZATION.md | 14 KB | 12-18 min |
-| KNOWLEDGE_GRAPH.md | 21 KB | 15-20 min |
-| PRICING.md | 6.5 KB | 5-8 min |
-| CLOUD_DEPLOYMENT.md | 25 KB | 20-25 min |
-| DOCUMENTATION_UPDATE_SUMMARY.md | 17 KB | 10-12 min |
-| This README | 4 KB | 5 min |
-| **Total** | **~155 KB** | **~140 min** |
-
-**Pro tip:** Start with OVERVIEW.md, then reference specific docs as needed.
-
----
-
-## 🔗 Important Links
-
-**In This Repository:**
-- [CLAUDE.md](../CLAUDE.md) - CLI reference
-- [README.md](../README.md) - Project overview
-- [scripts/deploy.sh](../scripts/deploy.sh) - Fly.io deployment
-
-**External:**
-- PostgreSQL: https://www.postgresql.org/
+**PostgreSQL:**
+- Documentation: https://www.postgresql.org/docs/
 - pgvector: https://github.com/pgvector/pgvector
-- Neo4j: https://neo4j.com/
-- Graphiti: https://docs.graphiti.ai/
-- OpenAI Pricing: https://openai.com/api/pricing/
 
----
+## Contributing
 
-## 📝 Last Updated
+Found an error? Documentation unclear?
 
-- **Documentation Date:** 2025-10-20
-- **RAG Memory Version:** 0.13.0
-- **Status:** Production Ready (except graph - Phase 4 pending)
-- **Next Review:** When Phase 4 (Graph Cleanup) completes
+1. Check source code to verify facts
+2. Update documentation with corrections
+3. Remove any pollution (status declarations, benchmarks, etc.)
+4. Keep it user-facing and verifiable
 
----
+## Version
 
-## 💡 Pro Tips
-
-1. **Bookmark this README** - It's your navigation hub
-2. **Use Ctrl+F** - Search within each doc for keywords
-3. **Start with OVERVIEW** - It's the most comprehensive
-4. **Reference specific docs** - Don't read everything sequentially
-5. **Check section titles** - Quick way to find what you need
-6. **Read warnings (⚠️)** - Important limitations and gotchas
-7. **Try examples** - Most docs include runnable code samples
-
----
-
-**Happy learning! 🚀**
-
-Questions? Check the relevant doc above, or run `/getting-started` for guided setup.
+**Last Updated:** 2025-11-08
+**Architecture:** Dual-store (PostgreSQL + Neo4j) with automatic synchronization
