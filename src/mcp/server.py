@@ -10,6 +10,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from mcp.server.fastmcp import FastMCP, Context
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from src.core.database import get_database
 from src.core.embeddings import get_embedding_generator
@@ -200,8 +202,8 @@ mcp = FastMCP("rag-memory", instructions=_server_instructions, lifespan=lifespan
 
 
 # Add health check endpoint for Docker healthcheck
-@mcp.get("/health")
-async def health_check():
+@mcp.custom_route("/health", methods=["GET"])
+async def health_check(request: Request) -> Response:
     """
     Health check endpoint for Docker container healthchecks.
 
@@ -220,16 +222,19 @@ async def health_check():
         neo4j_healthy = graph_store and graph_store.health_check()
 
         if pg_healthy and neo4j_healthy:
-            return {"status": "healthy", "postgres": "ok", "neo4j": "ok"}
+            return JSONResponse({"status": "healthy", "postgres": "ok", "neo4j": "ok"})
         else:
-            return {
-                "status": "unhealthy",
-                "postgres": "ok" if pg_healthy else "unavailable",
-                "neo4j": "ok" if neo4j_healthy else "unavailable"
-            }, 503
+            return JSONResponse(
+                {
+                    "status": "unhealthy",
+                    "postgres": "ok" if pg_healthy else "unavailable",
+                    "neo4j": "ok" if neo4j_healthy else "unavailable"
+                },
+                status_code=503
+            )
     except Exception as e:
         logger.error(f"Health check failed: {e}")
-        return {"status": "unhealthy", "error": str(e)}, 503
+        return JSONResponse({"status": "unhealthy", "error": str(e)}, status_code=503)
 
 
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)
