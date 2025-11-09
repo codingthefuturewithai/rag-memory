@@ -31,7 +31,7 @@ class TestCollectionLifecycle:
 
     def test_collection_lifecycle(self, cli_runner, setup_test_db):
         """Test creating, listing, getting info, and deleting a collection."""
-        test_collection_name = "cli-test-collection"
+        test_collection_name = "cli-test-coll"
 
         # 1. Create a collection
         result = cli_runner.invoke(

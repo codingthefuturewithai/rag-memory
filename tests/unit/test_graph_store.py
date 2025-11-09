@@ -99,9 +99,14 @@ class TestGraphStore:
     async def test_validate_schema_success(self, graph_store, mock_graphiti):
         """Test successful schema validation."""
         # Mock successful queries
-        # Mock indexes query
+        # Mock indexes query - must match the 4 required Graphiti indexes
         mock_indexes = MagicMock()
-        mock_indexes.records = [{"name": "index1"}, {"name": "index2"}]
+        mock_indexes.records = [
+            {"name": "node_name_and_summary"},
+            {"name": "edge_name_and_fact"},
+            {"name": "episode_content"},
+            {"name": "community_name"}
+        ]
 
         # Mock nodes query
         mock_nodes = MagicMock()
@@ -112,7 +117,7 @@ class TestGraphStore:
         result = await graph_store.validate_schema()
 
         assert result["status"] == "valid"
-        assert result["indexes_found"] == 2
+        assert result["indexes_found"] == 4
         assert result["can_query_nodes"] is True
         assert result["errors"] == []
 
