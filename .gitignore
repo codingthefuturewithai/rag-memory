@@ -55,9 +55,6 @@ deploy/docker/compose/docker-compose.yml
 *.sqlite
 *.sqlite3
 
-# Docker
-docker-compose.override.yml
-
 # Testing
 .pytest_cache/
 .coverage
@@ -87,7 +84,6 @@ data/
 backups/
 
 # Owner-specific working documents (keep locally, don't commit)
-CLAUDE.md
 
 # Claude Code local settings (user-specific overrides)
 .claude/settings.local.json

@@ -1,376 +1,326 @@
-# CLAUDE.md - RAG Memory Project Memory
+# CLAUDE.md
 
-**For complete details, see `.reference/` files. This file documents critical project memories only.**
-
----
-
-## WE DO NOT DO KEYWORD SEARCHES
-
-**CRITICAL - READ THIS FIRST:**
-
-THIS SYSTEM USES SEMANTIC SIMILARITY SEARCH, NOT KEYWORD SEARCH.
-
-ALL SEARCH QUERIES (RAG, DOCUMENT, GRAPH) MUST BE:
-- ✓ FULL QUESTIONS: "How do I authenticate users in the system?"
-- ✓ ENGLISH STATEMENTS: "I need to troubleshoot database connection issues"
-- ✓ COMPLETE SENTENCES: "What are the security best practices for user management?"
-
-NEVER USE KEYWORD SEARCHES:
-- ✗ "user authentication"
-- ✗ "database connection troubleshooting"
-- ✗ "API endpoints security"
-
-This is SEMANTIC search. It matches MEANING, not keywords. Keyword searches produce poor results.
-
----
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-RAG Memory is a **PostgreSQL pgvector + Neo4j + MCP server** system for managing AI agent knowledge bases.
+RAG Memory is a production-ready knowledge management system combining PostgreSQL+pgvector (semantic search) with Neo4j (knowledge graphs). It operates as both an MCP server for AI agents and a standalone CLI tool.
 
-- **Purpose:** Replace ChromaDB with pgvector for better similarity accuracy (0.7-0.95 vs ChromaDB's 0.3)
-- **Architecture:** Dual storage (RAG + Knowledge Graph)
-- **Distribution:** Published to PyPI (via `uv publish`), users install with `uv tool install rag-memory`
+**Key Architecture:**
+- **Dual Storage:** Vector embeddings in PostgreSQL (RAG layer) + Entity relationships in Neo4j (Knowledge Graph layer)
+- **Unified Ingestion:** `UnifiedIngestionMediator` (src/unified/mediator.py) orchestrates sequential writes to both stores
+- **MCP Server:** Exposes 17 tools via FastMCP for AI agent integration
+- **CLI Tool:** Direct command-line access for testing and automation
 
-**Key Achievement:** Proper vector normalization + HNSW indexing achieves 0.73 similarity for near-identical content.
+## Development Commands
 
----
-
-## Deployment Strategy (CRITICAL DECISION)
-
-**Distribution:** Published to PyPI. Users install with `uv tool install rag-memory`.
-
-**Three Supported Scenarios:**
-
-1. **System CLI Tool:** User installs `uv tool install rag-memory`, runs commands daily
-   - Config stored at OS-specific location (system-level, persistent)
-     - macOS: `~/Library/Application Support/rag-memory/`
-     - Linux: `~/.config/rag-memory/`
-     - Windows: `%APPDATA%\rag-memory\`
-   - Can delete repo anytime - config remains
-   - Connects to LOCAL or CLOUD databases (user chooses one)
-
-2. **Local Development (repo cloned):** Developer `git clone` for local customization/testing
-   - Config stored at: `config/config.dev.yaml` + `.env` (repo-local, temporary)
-   - Uses local Docker Compose (PostgreSQL + Neo4j)
-   - Can delete repo safely - temporary configs
-
-3. **Automated Tests (repo cloned):** Testing suite in the repo
-   - Config stored at: `config/config.test.yaml` + `.env` (repo-local, isolated)
-   - Uses test Docker Compose with ephemeral databases
-   - Can delete repo safely - test configs
-
-**Key Principle:** ONE environment at a time. System config is permanent, repo configs are temporary.
-
----
-
-## Database Connectivity (MANDATORY - Both Required)
-
-**Architecture Decision:** Knowledge Graph is mandatory ("All or Nothing").
-
-- Both PostgreSQL and Neo4j MUST be operational at all times
-- Server refuses to start if either database is unavailable
-- No graceful degradation or RAG-only fallback modes
-- All write operations require health checks on both databases
-
-**Health Checks:**
-- Database.health_check() - PostgreSQL liveness check (~5-20ms)
-- GraphStore.health_check() - Neo4j liveness check (~5-20ms)
-
-**Startup Validation:**
-- PostgreSQL validates: tables exist, pgvector loaded, HNSW indexes present
-- Neo4j validates: Graphiti schema initialized, graph queryable
-- Server won't start if either validation fails
-
-**See:** `docs/STARTUP_VALIDATION_IMPLEMENTATION.md` for implementation details.
-
----
-
-## Critical Implementation Details
-
-### 1. Vector Normalization (THE KEY)
-```python
-# src/embeddings.py:33-46
-def normalize_embedding(embedding: list[float]) -> list[float]:
-    arr = np.array(embedding)
-    norm = np.linalg.norm(arr)
-    return (arr / norm).tolist() if norm > 0 else arr.tolist()
-```
-- **Always normalize** vectors before storage and queries
-- Without this: ChromaDB's 0.3 scores (broken)
-- With this: Proper 0.7-0.95 scores ✓
-
-### 2. psycopg3 + JSONB Handling
-- **Must wrap dicts with `Jsonb(metadata)`** when inserting/comparing JSONB columns
-- Retrieved metadata comes as dict (no parsing needed)
-
-### 3. pgvector Integration
-- Convert query embeddings: `np.array(embedding_list)`
-- pgvector `<=>` operator returns cosine DISTANCE (0-2), not similarity (0-1)
-- Convert: `similarity = 1.0 - distance`
-
-### 4. Document Chunking (Recommended for Large Documents)
-- Hierarchical splitting: headers → paragraphs → sentences → words
-- Target: ~1000 chars per chunk with 200 char overlap
-- Stores: full source_document + searchable document_chunks
-- Each chunk independently embedded and searchable
-
-**See:** `.reference/OVERVIEW.md` for complete architecture and implementation details.
-
----
-
-## Development Setup
-
+### Environment Setup
 ```bash
-# Install uv
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Clone and setup
-git clone <repo>
-cd rag-memory
+# Install dependencies (uses uv package manager)
 uv sync
+
+# Copy and configure environment
 cp .env.example .env
-# Add OPENAI_API_KEY to .env
-
-# Start databases (schema auto-initialized via init.sql)
-docker-compose up -d
+# Edit .env with your OPENAI_API_KEY and database URLs
 ```
 
-**Common Commands:**
+### Database Management
 ```bash
-uv run rag status                    # Check database connection
-uv run pytest                         # Run all tests
-uv run python -m src.mcp.server      # Start MCP server (localhost:8000)
+# Start services (PostgreSQL + Neo4j in Docker)
+uv run rag start
+
+# Check system status
+uv run rag status
+
+# View service logs
+uv run rag logs [postgres|neo4j|mcp]
+
+# Stop services
+uv run rag stop
 ```
 
-**See:** `.reference/CLI_REFERENCE.md` for complete CLI command reference.
-
----
-
-## MCP Server
-
-**Location:** `src/mcp/server.py` (FastMCP-based)
-**Tools:** 17 total (search, collections, ingestion, document management, graph queries)
-**Status:** ✅ Fully implemented and tested
-
-**Local setup:**
+### Testing
 ```bash
-uv run python -m src.mcp.server    # Runs on localhost:8000
+# Run all tests
+uv run pytest
+
+# Run specific test file
+uv run pytest tests/unit/test_embeddings.py
+
+# Run with coverage
+uv run pytest --cov=src --cov-report=html
+
+# Run integration tests only
+uv run pytest tests/integration/
+
+# Run unit tests only
+uv run pytest tests/unit/
 ```
 
-**Cloud deployment:** Fly.io at `https://rag-memory-mcp.fly.dev/sse`
+### Code Quality
+```bash
+# Format code
+uv run black src/ tests/
 
-**See:** `.reference/MCP_QUICK_START.md` for complete tool documentation.
+# Lint code
+uv run ruff check src/ tests/
 
----
+# Type checking (if configured)
+uv run mypy src/
+```
 
-## Port Configuration
+### MCP Server Development
+```bash
+# Run MCP server in stdio mode (for Claude Desktop/Cursor)
+uv run rag-mcp-stdio
 
-PostgreSQL: **54320** (not 5432 or 5433, to avoid conflicts with local PostgreSQL)
+# Run MCP server in SSE mode (for debugging/testing)
+uv run rag-mcp-sse
 
----
+# Test MCP server with MCP Inspector
+uv run rag-mcp-sse  # Terminal 1
+# Then open http://localhost:3001 in MCP Inspector
+```
 
-## Common Errors & Fixes
+## Architecture & Code Organization
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| "cannot adapt type 'dict'" | Metadata not wrapped | Use `Jsonb(metadata)` |
-| "operator does not exist: vector <=> double" | Embedding not numpy | Use `np.array(embedding)` |
-| Low similarity scores | Missing normalization | Check `normalize_embedding()` is enabled |
-| Connection refused on 54320 | Docker not running | `docker-compose up -d` |
-| Server won't start | Neo4j or PostgreSQL unhealthy | Check Docker containers, run validation test |
-| Neo4j warnings about missing properties | Missing vector indices | Run setup.py or manually create vector indices |
+### Configuration System (Three-Tier Priority)
+1. **Environment variables** (highest priority) - Set in shell
+2. **Project .env file** (development) - Current directory only
+3. **System config** (lowest priority) - OS-standard locations via platformdirs
+   - macOS: `~/Library/Application Support/rag-memory/config.yaml`
+   - Linux: `~/.config/rag-memory/config.yaml`
+   - Windows: `%LOCALAPPDATA%\rag-memory\config.yaml`
 
-**Neo4j Vector Indices (2025-10-31):**
-- **Required for Performance:** Graphiti's `build_indices_and_constraints()` creates range/fulltext indices but NOT vector indices
-- **Vector Indices Needed:**
-  - `Entity.name_embedding` (1024 dimensions, cosine similarity)
-  - `RELATES_TO.fact_embedding` (1024 dimensions, cosine similarity)
-- **Created by:** `setup.py` in STEP 14.5 (after Graphiti indices)
-- **Why:** Without vector indices, Neo4j logs warnings during ingestion about missing properties. System works but performance is degraded.
+**Key module:** `src/core/config_loader.py`
 
----
+### Dual Storage Architecture
 
-## What NOT to Do
+**RAG Store (PostgreSQL + pgvector):**
+- Tables: `source_documents`, `document_chunks`, `collections`, `chunk_collections`
+- HNSW index on embeddings for fast vector search
+- Managed by: `src/ingestion/document_store.py`, `src/retrieval/search.py`
 
-❌ **Do NOT make deployment decisions without asking first**
-- No automatic CI/CD deployments
-- No assumptions about use cases (personal, team, organizational)
-- No cloud vendor choices without explicit approval
+**Knowledge Graph (Neo4j):**
+- Powered by Graphiti (graphiti-core library)
+- Extracts entities and relationships from ingested content
+- Managed by: `src/unified/graph_store.py`
 
-❌ **Do NOT assume graceful degradation**
-- Both databases REQUIRED ("All or Nothing")
-- No fallback to RAG-only mode
-- No toggling between environments
+**Unified Ingestion:**
+- `src/unified/mediator.py` - Orchestrates sequential writes (RAG first, then Graph)
+- **Important:** Not truly atomic yet - potential for inconsistency if second write fails
+- Future enhancement: Two-phase commit
 
-❌ **Do NOT create unnecessary files/documents**
-- Documentation belongs in `.reference/`
-- This file is memory only (references everything else)
+### CLI Command Structure
 
----
+**Thin orchestrator pattern:** `src/cli.py` imports and registers command groups from `src/cli_commands/`:
+- `service.py` - start/stop/restart/status
+- `collection.py` - create/list/info/delete collections
+- `ingest.py` - text/file/directory/url ingestion
+- `document.py` - list/view/update/delete documents
+- `search.py` - semantic search
+- `graph.py` - query-relationships/query-temporal
+- `analyze.py` - website structure analysis
+- `config.py` - show/edit configuration
+- `logs.py` - view service logs
 
-## Key References
+### MCP Server Architecture
 
-| Need | See |
-|------|-----|
-| Complete CLI commands | `.reference/CLI_REFERENCE.md` |
-| System overview | `.reference/OVERVIEW.md` |
-| MCP tools & usage | `.reference/MCP_QUICK_START.md` |
-| Cloud deployment guide | `.reference/CLOUD_DEPLOYMENT.md` |
-| Search optimization results | `.reference/SEARCH_OPTIMIZATION.md` |
-| Knowledge Graph details | `.reference/KNOWLEDGE_GRAPH.md` |
-| Pricing analysis | `.reference/PRICING.md` |
-| Startup validation specs | `docs/STARTUP_VALIDATION_IMPLEMENTATION.md` |
-| Implementation gaps | `docs/IMPLEMENTATION_GAPS_AND_ROADMAP.md` |
+**Entry point:** `src/mcp/server.py`
+- Uses FastMCP framework
+- Lifespan manager initializes RAG + Graph components at startup
+- **Fail-fast design:** Server won't start if PostgreSQL OR Neo4j unavailable
+- Startup validations: Schema checks for both databases
+- Health check endpoint: `/health` (for Docker healthchecks)
 
----
+**Tool implementations:** `src/mcp/tools.py`
+- 17 MCP tools exposed to AI agents
+- All tools follow pattern: `@mcp.tool()` decorator → calls `*_impl()` function
+- **CRITICAL:** MCP tool parameters must NOT use `Optional[T]` type hints
+  - ✅ Correct: `param: str | None = None`
+  - ❌ Wrong: `param: Optional[str] = None`
+  - Reason: MCP/Pydantic frameworks reject Optional[] wrappers
 
-## Recent Work & Decisions (2025-10-21)
+### Web Crawling
 
-**Completed:**
-- ✅ Removed automatic GitHub Actions CI/CD (manual deployment only)
-- ✅ Decided: PyPI distribution via `uv publish`
-- ✅ Decided: Local OR Cloud, never both (single environment at a time)
-- ✅ Mandatory Knowledge Graph architecture ("All or Nothing")
-- ✅ Startup validation for both PostgreSQL and Neo4j
-- ✅ MCP tool count: 17 tools registered and functional
-- ✅ Delete collection tool with graph cleanup
-- ✅ Configuration system: YAML + environment variables (section 2025-10-22)
+**Key modules:**
+- `src/ingestion/web_crawler.py` - Crawl4AI-based crawler with link following
+- `src/ingestion/website_analyzer.py` - Sitemap analysis and URL pattern discovery
 
-**Configuration Strategy (2025-10-22):**
+**Crawl modes:**
+- `mode="ingest"` - New crawl, errors if URL already exists
+- `mode="reingest"` - Update existing, deletes old pages first
 
-Three scenarios, three configurations:
+**Duplicate prevention:** `src/mcp/deduplication.py` prevents concurrent identical operations
 
-1. **System CLI (installed via setup.py):**
-   - System config directory (OS-specific, permanent, created by setup.py)
-     - macOS: `~/Library/Application Support/rag-memory/config.yaml`
-     - Linux: `~/.config/rag-memory/config.yaml`
-     - Windows: `%APPDATA%\rag-memory\config.yaml`
-   - Mount paths: Configured by user during setup (could be anywhere on their system)
-   - OPENAI_API_KEY in config.yaml
+### Database Migrations
 
-2. **Local Development (repo cloned):**
-   - `.env` file (gitignored) - stores ONLY OPENAI_API_KEY
-   - `config/config.dev.yaml` (committed) - database URLs, dev mounts
-   - Mounts point to: `.reference/` directory in repo
-   - conftest.py sets RAG_CONFIG_PATH to repo config directory
+**Alembic-based:** Migrations in `deploy/alembic/versions/`
+```bash
+# Run migrations
+uv run rag migrate
 
-3. **Automated Tests (repo cloned):**
-   - `.env` file (gitignored) - stores ONLY OPENAI_API_KEY
-   - `config/config.test.yaml` (committed) - test database URLs, test mounts
-   - Mounts point to: `test-data/` directory in repo (test documents)
-   - conftest.py sets RAG_CONFIG_PATH to repo config directory
+# Create new migration
+uv run alembic revision --autogenerate -m "description"
+```
 
-Key principle: `.env` is ONLY for secrets (OPENAI_API_KEY), everything else is in YAML. YAML files are committed and source-controlled. `.env` is gitignored.
+**Migration guide:** `docs/DATABASE_MIGRATION_GUIDE.md`
 
-**In Progress:**
-- Create `scripts/setup.py` (interactive one-command setup for users)
-- Update `.env.example` to show OPENAI_API_KEY only
-- Update `config/config.dev.yaml` to use `.reference/` as default mount
-- Create `config/config.test.yaml` to use `test-data/` as default mount
-- Create `test-data/` directory with sample test documents
-- Update conftest.py to load `.env` + YAML config
+## Important Implementation Details
 
-**Pending:**
-- Verify end-to-end configuration works for all three scenarios
-- Test fresh PyPI install in clean environment
-- Create `.reference/DATA_MIGRATION.md` (guide for local → cloud migration)
+### Document Chunking
+- Hierarchical splitting: headers → paragraphs → sentences
+- ~1000 chars per chunk, 200 char overlap
+- Module: `src/core/chunking.py`
+- Each chunk independently embedded and stored with position metadata
 
----
+### Vector Search
+- OpenAI `text-embedding-3-small` (1536 dimensions, $0.02/1M tokens)
+- HNSW index for approximate nearest neighbor search
+- Cosine similarity with normalized vectors
+- Module: `src/retrieval/search.py`
 
-## scripts/setup.py - One-Command User Setup (2025-10-22)
+### Knowledge Graph
+- Graphiti extracts entities and relationships during ingestion
+- Graph queries use LLM for entity matching (~500-800ms)
+- Collection scoping isolates graphs by domain
+- Module: `src/unified/graph_store.py`
 
-**Purpose:** User runs `python scripts/setup.py` once. Script handles entire setup: Docker, containers, system config, tool installation.
+### Environment Detection
+Configuration loader detects context automatically:
+1. Check `RAG_CONFIG_PATH` env var (test override)
+2. Check `./config/` (repo-local, for development)
+3. Fall back to platformdirs (system-level, for end users)
 
-**User experience:** One command, interactive prompts, everything done. Then user can delete repo.
+**First-run wizard:** `src/core/first_run.py` - Interactive setup if config missing
 
-**Setup.py Flow (All-or-Nothing at Each Step):**
+## Testing Patterns
 
-1. **Check Docker installed**
-   - If NO: "Install Docker, open new terminal, re-run this script"
-   - HALT and EXIT
+### Test Organization
+- `tests/unit/` - Fast, isolated unit tests
+- `tests/integration/` - Database-dependent integration tests
+  - `integration/backend/` - RAG + Graph ingestion tests
+  - `integration/cli/` - CLI command tests
+  - `integration/mcp/` - MCP tool tests
+  - `integration/web/` - Web crawler tests
 
-2. **Check Docker daemon running**
-   - If NO: "Start Docker, then press Enter to continue"
-   - PAUSE/WAIT for user input, then retry check in same script
+### Test Configuration
+- Uses `RAG_CONFIG_PATH` and `RAG_CONFIG_FILE` env vars to isolate test config
+- Shared fixtures in `tests/conftest.py`
+- Per-module fixtures in test subdirectories
 
-3. **Check if RAG Memory local containers running**
-   - If YES: "Containers exist. Tear down and rebuild (volumes preserved)? (yes/no)"
-     - If NO: HALT and EXIT
-     - If YES: Run `docker-compose down`, continue
-   - If NO: Continue
+### Common Test Patterns
+```python
+# Use test-specific config
+os.environ['RAG_CONFIG_FILE'] = 'config.test.yaml'
 
-4. **Start containers**
-   - Run `docker-compose up -d`
-   - Wait for health checks to pass
+# Clean up test data
+db.execute("DELETE FROM collections WHERE name LIKE 'test_%'")
 
-5. **Check if system config exists**
-   - If YES: "Config exists. Overwrite it? (yes/no)"
-     - If NO: HALT and EXIT
-     - If YES: Continue to overwrite
-   - If NO: Continue
+# Async test (for MCP tools)
+@pytest.mark.asyncio
+async def test_mcp_tool():
+    result = await tool_function(...)
+```
 
-6. **Prompt for OPENAI_API_KEY**
-   - Validate not empty
-   - If invalid: re-prompt
+## Common Development Tasks
 
-7. **Prompt for database_url, neo4j_uri, neo4j_user, neo4j_password**
-   - Validate connectivity or at least format
-   - If invalid: re-prompt
+### Adding a New MCP Tool
+1. Add tool implementation to `src/mcp/tools.py` as `new_tool_impl()`
+2. Add tool wrapper in `src/mcp/server.py` with `@mcp.tool()` decorator
+3. **Remember:** No `Optional[T]` in parameter type hints
+4. Add integration test in `tests/integration/mcp/test_new_tool.py`
+5. Update MCP tool count in README.md
 
-8. **Create system config directory**
-   - Ensure OS-specific config directory exists (using platformdirs)
+### Adding a New CLI Command
+1. Create command function in appropriate `src/cli_commands/*.py` module
+2. Use `@click.command()` or `@click.group()` decorator
+3. Import and register in `src/cli.py`
+4. Add integration test in `tests/integration/cli/`
+5. Update CLI reference in `.reference/CLI_GUIDE.md`
 
-9. **Write config.yaml**
-   - Write config.yaml to system config directory with all settings
-   - Set permissions to 0o600 (user-only)
+### Modifying Database Schema
+1. Create migration: `uv run alembic revision --autogenerate -m "description"`
+2. Review generated migration in `deploy/alembic/versions/`
+3. Test migration: `uv run rag migrate`
+4. Update validation logic in `src/core/database.py` (validate_schema method)
+5. Add test in `tests/unit/test_database_health.py`
 
-10. **Install tool**
-    - Run `uv tool install .`
+### Working with Knowledge Graph
+- Graph is **mandatory** (fail-fast if Neo4j unavailable)
+- All ingestion goes through `UnifiedIngestionMediator`
+- Graph extraction happens automatically after RAG ingestion
+- Use `graph_store.validate_schema()` to check Neo4j health
+- See `docs/IMPLEMENTATION_GAPS_AND_ROADMAP.md` for Gap 2.1 details
 
-11. **Verify installation**
-    - Run `rag status` to confirm tool works
+## Debugging Tips
 
-12. **Print success message**
-    - "Setup complete! You can now delete this repository and use 'rag' commands anywhere."
+### Enable Verbose Logging
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+```
 
----
+### Check Database State
+```bash
+# Connect to PostgreSQL
+docker exec -it rag-memory-postgres psql -U postgres -d ragmemory
 
-## PyPI Distribution & CLI Tool Management (2025-10-22)
+# Useful queries
+\dt  # List tables
+SELECT COUNT(*) FROM source_documents;
+SELECT COUNT(*) FROM document_chunks;
+```
 
-**Research Findings on `uv tool install` with Git:**
-- ✅ Can specify git URLs and tags: `uv tool install git+https://github.com/user/rag-memory@v1.0.0`
-- ❌ Installation can be flaky (observed malformed tool environments in testing)
-- ❌ `uv tool upgrade` does NOT work with git-installed tools (documented limitation)
-- ❌ Users would need to manually reinstall with new tags each time
-- **Conclusion:** Git-based tool installation is NOT reliable for production upgrades
+### Check Neo4j State
+```bash
+# Open Neo4j browser
+open http://localhost:7474
 
-**Decision: Use PyPI for CLI Tool Distribution**
-- MCP server code and Docker files stay in git repo (users git clone)
-- CLI tool ONLY distributed via PyPI for reliable system-wide installation
-- User workflow:
-  1. `git clone` repo once
-  2. `python scripts/setup.py` runs setup from repo
-  3. `uv tool install rag-memory` installs CLI system-wide from PyPI (optional convenience)
-  4. Later: `git pull` upgrades MCP server code, Docker files
-  5. Later: `uv tool upgrade rag-memory` upgrades CLI tool
-- Config file (in OS-specific location) is portable, shared between both
+# Cypher query examples
+MATCH (n) RETURN count(n);  // Count all nodes
+MATCH (e:Entity) RETURN e LIMIT 10;  // List entities
+```
 
-**Key Principle:** Config file (stored in OS-specific location via platformdirs) is the single source of truth, separate from both repo and PyPI distribution.
+### MCP Server Logs
+- File logs: `logs/mcp_server.log`
+- Suppressed by default: Neo4j notifications, httpx verbose logs
+- Temporarily enable crawl4ai logs in `src/mcp/server.py:67`
 
----
+### Common Issues
+- **"Database not found"** → Check `.env` has `DATABASE_URL`
+- **"Neo4j connection failed"** → Run `uv run rag start`
+- **"Collection doesn't exist"** → Collections require explicit creation
+- **MCP tool parameter errors** → Check for `Optional[T]` type hints (not allowed)
 
-## Session Memory
+## Documentation Structure
 
-**Important Lessons Learned (for future sessions):**
+- **`.reference/`** - End-user guides (installation, MCP, troubleshooting)
+- **`docs/`** - Technical documentation (architecture, migrations, environment vars)
+- **`README.md`** - Quick start and feature overview
+- **`CLAUDE.md`** (this file) - Developer onboarding
 
-1. **ASK BEFORE DECIDING** - Don't make architectural choices without explicit permission
-2. **Don't assume use cases** - Personal ≠ Team ≠ Organizational
-3. **Don't create unnecessary documents** - Everything goes in `.reference/` or this file
-4. **Keep CLAUDE.md focused** - It's for memories, not a manual
-5. **Deployment is intentional** - No surprises (no automatic deployments)
+## Slash Commands
 
----
+Located in `.claude/commands/`:
+- `/getting-started` - Interactive RAG Memory introduction
+- `/cloud-setup` - Deploy to Supabase/Neo4j Aura/Fly.io
+- `/reference-audit` - Audit .reference/ directory for accuracy
 
-**Last Updated:** 2025-10-21
-**Status:** Production-ready for local and cloud deployment
+## Package Distribution
+
+**PyPI package:** `rag-memory`
+```bash
+# Build package
+uv run python -m build
+
+# Upload to PyPI
+uv run twine upload dist/*
+```
+
+**Entry points** (defined in `pyproject.toml`):
+- `rag` - Main CLI tool
+- `rag-mcp` - MCP server (accepts CLI args)
+- `rag-mcp-stdio` - MCP server for Claude Desktop/Cursor
+- `rag-mcp-sse` - MCP server for MCP Inspector
+- `rag-mcp-http` - MCP server for web integrations
