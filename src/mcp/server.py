@@ -42,33 +42,42 @@ from src.mcp.tools import (
     update_collection_metadata_impl,
 )
 
-# Configure cross-platform file logging
-log_dir = Path(__file__).parent.parent.parent / "logs"
-log_dir.mkdir(exist_ok=True)
-
-logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(log_dir / "mcp_server.log"),
-        logging.StreamHandler()  # Also log to stderr for debugging
-    ]
-)
-
-# Suppress harmless Neo4j server notifications (they query properties before they exist)
-# These are cosmetic warnings about missing indices on array properties, not errors.
-# Real Neo4j errors will still be shown.
-logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
-
-# Suppress verbose httpx HTTP request logs (OpenAI API calls)
-# These clutter logs during graph extraction and embeddings generation.
-# Errors and warnings still visible.
-logging.getLogger("httpx").setLevel(logging.WARNING)
-
-# TEMPORARILY: Ensure crawl4ai logging is visible (for verifying patched code)
-logging.getLogger("crawl4ai").setLevel(logging.INFO)
-
 logger = logging.getLogger(__name__)
+
+
+def configure_logging():
+    """
+    Configure logging for MCP server.
+
+    Called when server starts, NOT at module import time.
+    This prevents CLI commands from triggering DEBUG logging when they
+    import from src.mcp.tools.
+    """
+    # Configure cross-platform file logging
+    log_dir = Path(__file__).parent.parent.parent / "logs"
+    log_dir.mkdir(exist_ok=True)
+
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(log_dir / "mcp_server.log"),
+            logging.StreamHandler()  # Also log to stderr for debugging
+        ]
+    )
+
+    # Suppress harmless Neo4j server notifications (they query properties before they exist)
+    # These are cosmetic warnings about missing indices on array properties, not errors.
+    # Real Neo4j errors will still be shown.
+    logging.getLogger("neo4j.notifications").setLevel(logging.ERROR)
+
+    # Suppress verbose httpx HTTP request logs (OpenAI API calls)
+    # These clutter logs during graph extraction and embeddings generation.
+    # Errors and warnings still visible.
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+
+    # TEMPORARILY: Ensure crawl4ai logging is visible (for verifying patched code)
+    logging.getLogger("crawl4ai").setLevel(logging.INFO)
 
 # Global variables to hold RAG components (initialized by lifespan)
 db = None
@@ -1313,6 +1322,9 @@ def main():
     import sys
     import asyncio
     import click
+
+    # Configure logging when server starts (not at module import)
+    configure_logging()
 
     @click.command()
     @click.option(
