@@ -268,10 +268,10 @@ def initialize_test_postgres():
 @pytest_asyncio.fixture(autouse=True, scope="function")
 async def cleanup_after_each_test():
     """
-    ATOMIC TEST ISOLATION: Clean all data from both databases after every test.
+    ATOMIC TEST ISOLATION: Clean all data from both databases after every ASYNC test.
 
-    This fixture ensures every integration test is completely isolated:
-    - Runs after EVERY test function (autouse=True)
+    This fixture ensures every async integration test is completely isolated:
+    - Runs after EVERY async test function (autouse=True)
     - Deletes ALL data from PostgreSQL tables (collections, chunks, documents)
     - Deletes ALL nodes and relationships from Neo4j
     - No test-specific cleanup logic needed - this is universal
@@ -279,8 +279,10 @@ async def cleanup_after_each_test():
     This is non-negotiable: Each test must start with zero data, end with zero data.
     The next test gets a completely blank slate.
 
-    Location: conftest.py (global, applies to all tests)
+    Location: conftest.py (global, applies to all async tests)
     Mechanism: async fixture with yield (cleanup runs AFTER test completes)
+
+    Note: For SYNC tests, see cleanup_after_each_test_sync below.
     """
     yield  # Test runs here
 
@@ -303,7 +305,7 @@ async def cleanup_after_each_test():
     except Exception as e:
         raise RuntimeError(f"PostgreSQL cleanup failed: {e}")
 
-    # Neo4j cleanup - delete all nodes and relationships
+    # Neo4j cleanup - delete all nodes and relationships (ASYNC)
     try:
         neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7689")
         neo4j_user = os.getenv("NEO4J_USER", "neo4j")
@@ -317,6 +319,64 @@ async def cleanup_after_each_test():
             password=neo4j_password
         )
         await graphiti.driver.execute_query("MATCH (n) DETACH DELETE n")
+    except Exception as e:
+        raise RuntimeError(f"Neo4j cleanup failed: {e}")
+
+
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_after_each_test_sync():
+    """
+    ATOMIC TEST ISOLATION: Clean all data from both databases after every SYNC test.
+
+    This is the SYNC version of cleanup_after_each_test for tests that aren't async.
+
+    This fixture ensures every sync integration test is completely isolated:
+    - Runs after EVERY sync test function (autouse=True)
+    - Deletes ALL data from PostgreSQL tables (collections, chunks, documents)
+    - Deletes ALL nodes and relationships from Neo4j
+    - No test-specific cleanup logic needed - this is universal
+
+    This is non-negotiable: Each test must start with zero data, end with zero data.
+    The next test gets a completely blank slate.
+
+    Location: conftest.py (global, applies to all sync tests)
+    Mechanism: sync fixture with yield (cleanup runs AFTER test completes)
+
+    Note: For ASYNC tests, see cleanup_after_each_test above.
+    """
+    yield  # Test runs here
+
+    # CLEANUP PHASE: Delete everything from both databases after test completes
+
+    # PostgreSQL cleanup - delete in order respecting foreign keys
+    try:
+        db = Database()
+        conn = db.connect()
+        with conn.cursor() as cur:
+            # chunk_collections references both chunks and collections
+            cur.execute("DELETE FROM chunk_collections;")
+            # document_chunks references source_documents
+            cur.execute("DELETE FROM document_chunks;")
+            # collections table
+            cur.execute("DELETE FROM collections;")
+            # source_documents table
+            cur.execute("DELETE FROM source_documents;")
+        db.close()
+    except Exception as e:
+        raise RuntimeError(f"PostgreSQL cleanup failed: {e}")
+
+    # Neo4j cleanup - delete all nodes and relationships (SYNC)
+    try:
+        from neo4j import GraphDatabase
+
+        neo4j_uri = os.getenv("NEO4J_URI", "bolt://localhost:7689")
+        neo4j_user = os.getenv("NEO4J_USER", "neo4j")
+        neo4j_password = os.getenv("NEO4J_PASSWORD", "test-password")
+
+        driver = GraphDatabase.driver(neo4j_uri, auth=(neo4j_user, neo4j_password))
+        with driver.session() as session:
+            session.run("MATCH (n) DETACH DELETE n")
+        driver.close()
     except Exception as e:
         raise RuntimeError(f"Neo4j cleanup failed: {e}")
 
