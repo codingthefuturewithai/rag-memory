@@ -301,6 +301,7 @@ async def cleanup_after_each_test():
             cur.execute("DELETE FROM collections;")
             # source_documents table
             cur.execute("DELETE FROM source_documents;")
+        conn.commit()  # CRITICAL: Commit the deletions!
         db.close()
     except Exception as e:
         raise RuntimeError(f"PostgreSQL cleanup failed: {e}")
@@ -368,6 +369,7 @@ def cleanup_after_each_test_sync(request):
             cur.execute("DELETE FROM collections;")
             # source_documents table
             cur.execute("DELETE FROM source_documents;")
+        conn.commit()  # CRITICAL: Commit the deletions!
         db.close()
     except Exception as e:
         raise RuntimeError(f"PostgreSQL cleanup failed: {e}")
