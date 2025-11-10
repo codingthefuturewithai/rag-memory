@@ -74,10 +74,9 @@ Thumbs.db
 *.log
 logs/
 
-# Benchmark test results (generated data)
+# Test results (generated data)
 test-results/
 test_mcp_server/
-benchmarking/
 
 # Local backups and data (keep locally, don't commit)
 data/
