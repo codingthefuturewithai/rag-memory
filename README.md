@@ -116,7 +116,7 @@ rag ingest url https://docs.example.com --collection docs --follow-links --max-d
 rag recrawl https://docs.example.com --collection docs --follow-links --max-depth 2
 ```
 
-### Search
+### Semantic Search (RAG Layer)
 
 **⚠️ IMPORTANT: Use Natural Language, Not Keywords**
 This system uses **semantic similarity search**, not keyword matching. Always use complete questions or sentences:
@@ -132,6 +132,37 @@ rag search "What are the best practices for error handling?" --collection <name>
 
 # Search with metadata filter
 rag search "How do I use decorators in Python?" --metadata '{"topic":"python"}'
+```
+
+### Knowledge Graph Search
+
+**Query Entity Relationships:**
+```bash
+# Find connections between concepts
+rag graph query-relationships "How does PostgreSQL relate to semantic search?" --limit 5
+
+# With threshold tuning
+rag graph query-relationships "What connects Docker to Kubernetes?" --threshold 0.5
+
+# Scoped to collection
+rag graph query-relationships "How do transformers relate to attention mechanisms?" --collection ai-docs
+
+# Verbose output (shows node IDs, timestamps)
+rag graph query-relationships "How does Python relate to machine learning?" --verbose
+```
+
+**Query Temporal Evolution:**
+```bash
+# See how knowledge changed over time
+rag graph query-temporal "How has my understanding of quantum computing evolved?" --limit 10
+
+# Filter by time window
+rag graph query-temporal "What decisions did I make in December?" \
+  --valid-from "2025-12-01T00:00:00" \
+  --valid-until "2025-12-31T23:59:59"
+
+# With confidence threshold
+rag graph query-temporal "How has my focus changed?" --threshold 0.5 --collection business-docs
 ```
 
 ### Document Management
@@ -187,16 +218,23 @@ Then restart Claude Desktop.
 
 **4. Test:** Ask your agent "List RAG Memory collections"
 
-### Available MCP Tools (17 Total)
+### Available MCP Tools (18 Total)
 
 **Core RAG (3 tools):**
 - `search_documents` - Semantic search across knowledge base
 - `list_collections` - Discover available collections
 - `ingest_text` - Add text content with auto-chunking
 
-**Collection Management (2 tools):**
+**Knowledge Graph (2 tools):**
+- `query_relationships` - Search entity relationships using natural language
+- `query_temporal` - Query how knowledge evolved over time
+
+**Collection Management (5 tools):**
 - `create_collection` - Create new collections (description required)
-- `update_collection_description` - Update existing collection descriptions
+- `get_collection_info` - Collection stats and crawl history
+- `get_collection_metadata_schema` - View metadata schema for a collection
+- `update_collection_metadata` - Update collection metadata schema (additive only)
+- `delete_collection` - Delete collection and all its documents (admin function)
 
 **Document Management (4 tools):**
 - `list_documents` - Browse documents with pagination
@@ -204,14 +242,13 @@ Then restart Claude Desktop.
 - `update_document` - Edit existing documents (triggers re-chunking/re-embedding)
 - `delete_document` - Remove outdated documents
 
-**Advanced Ingestion (5 tools):**
-- `get_collection_info` - Collection stats and crawl history
+**Advanced Ingestion (4 tools):**
 - `analyze_website` - Sitemap analysis for planning crawls
 - `ingest_url` - Crawl web pages with duplicate prevention (crawl/recrawl modes)
 - `ingest_file` - Ingest from file system
 - `ingest_directory` - Batch ingest from directories
 
-See [docs/MCP_SERVER_GUIDE.md](./docs/MCP_SERVER_GUIDE.md) for complete tool reference and examples.
+See [`.reference/MCP_QUICK_START.md`](./.reference/MCP_QUICK_START.md) for complete tool reference and examples.
 
 ## Configuration System
 
@@ -300,17 +337,17 @@ src/
 ├── retrieval/
 │   └── search.py          # Semantic search with pgvector
 └── mcp/
-    ├── server.py          # MCP server (FastMCP)
-    └── tools.py           # 14 MCP tool implementations
+    ├── server.py          # MCP server (FastMCP) with 18 MCP tools
+    └── tools.py           # 18 MCP tool implementations
 ```
 
 ## Documentation
 
 - **[.reference/OVERVIEW.md](./.reference/OVERVIEW.md)** - Quick overview for slash command
-- **[.reference/MCP_QUICK_START.md](./.reference/MCP_QUICK_START.md)** - MCP setup guide
+- **[.reference/MCP_QUICK_START.md](./.reference/MCP_QUICK_START.md)** - MCP setup guide with all 18 tools documented
 - **[docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)** - Configuration system explained
-- **[docs/MCP_SERVER_GUIDE.md](./docs/MCP_SERVER_GUIDE.md)** - Complete MCP tool reference (14 tools)
 - **[docs/DATABASE_MIGRATION_GUIDE.md](./docs/DATABASE_MIGRATION_GUIDE.md)** - Database schema migration guide (Alembic)
+- **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - System architecture and design decisions
 - **[CLAUDE.md](./CLAUDE.md)** - Development guide and CLI reference
 
 ## Prerequisites
@@ -399,8 +436,7 @@ MIT License - See LICENSE file for details.
 - Check [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
 
 **For MCP server setup:**
-- See [.reference/MCP_QUICK_START.md](./.reference/MCP_QUICK_START.md)
-- Read [docs/MCP_SERVER_GUIDE.md](./docs/MCP_SERVER_GUIDE.md)
+- See [.reference/MCP_QUICK_START.md](./.reference/MCP_QUICK_START.md) - Complete tool reference and examples
 
 **For issues:**
 - Check troubleshooting sections above
