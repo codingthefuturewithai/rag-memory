@@ -216,12 +216,19 @@ async def health_check(request: Request) -> Response:
     """
     try:
         # Check PostgreSQL connection
-        pg_healthy = db and db.health_check()
+        if db:
+            pg_healthy = db.health_check()
+        else:
+            pg_healthy = False
         logger.debug(f"Health check - PostgreSQL: db={db is not None}, pg_healthy={pg_healthy}")
 
         # Check Neo4j connection (ASYNC - must await and check status)
-        neo4j_health_result = graph_store and await graph_store.health_check()
-        neo4j_healthy = neo4j_health_result and neo4j_health_result.get("status") == "healthy"
+        if graph_store:
+            neo4j_health_result = await graph_store.health_check()
+            neo4j_healthy = neo4j_health_result.get("status") == "healthy"
+        else:
+            neo4j_health_result = None
+            neo4j_healthy = False
         logger.debug(f"Health check - Neo4j: graph_store={graph_store is not None}, neo4j_health_result={neo4j_health_result}, neo4j_healthy={neo4j_healthy}")
 
         if pg_healthy and neo4j_healthy:
