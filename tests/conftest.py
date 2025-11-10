@@ -324,7 +324,7 @@ async def cleanup_after_each_test():
 
 
 @pytest.fixture(autouse=True, scope="function")
-def cleanup_after_each_test_sync():
+def cleanup_after_each_test_sync(request):
     """
     ATOMIC TEST ISOLATION: Clean all data from both databases after every SYNC test.
 
@@ -332,6 +332,7 @@ def cleanup_after_each_test_sync():
 
     This fixture ensures every sync integration test is completely isolated:
     - Runs after EVERY sync test function (autouse=True)
+    - Skips async tests (those marked with @pytest.mark.asyncio or pytest.mark.anyio)
     - Deletes ALL data from PostgreSQL tables (collections, chunks, documents)
     - Deletes ALL nodes and relationships from Neo4j
     - No test-specific cleanup logic needed - this is universal
@@ -344,6 +345,12 @@ def cleanup_after_each_test_sync():
 
     Note: For ASYNC tests, see cleanup_after_each_test above.
     """
+    # Check if test is async/anyio - if so, skip (let async fixture handle it)
+    test_markers = [mark.name for mark in request.node.iter_markers()]
+    if "asyncio" in test_markers or "anyio" in test_markers:
+        yield  # Skip cleanup for async tests
+        return
+
     yield  # Test runs here
 
     # CLEANUP PHASE: Delete everything from both databases after test completes
