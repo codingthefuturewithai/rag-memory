@@ -205,63 +205,20 @@ mcp = FastMCP("rag-memory", instructions=_server_instructions, lifespan=lifespan
 @mcp.custom_route("/health", methods=["GET"])
 async def health_check(request: Request) -> Response:
     """
-    Health check endpoint for Docker container healthchecks.
+    Simplified health check endpoint for Docker container healthchecks.
 
-    Verifies both PostgreSQL and Neo4j connectivity to ensure
-    the MCP server is fully operational.
+    Returns healthy if the HTTP endpoint is responding, indicating that
+    Uvicorn and the Starlette app are operational.
+
+    NOTE: Does NOT check database connectivity due to FastMCP architecture limitations.
+    Database components are initialized in the MCP lifespan, which only runs when
+    MCP clients connect. Docker healthchecks run before any client connection,
+    so databases cannot be verified at this stage.
 
     Returns:
-        {"status": "healthy"} - Both databases operational
-        503 error - One or both databases unavailable
+        200 OK: {"status": "healthy"} - HTTP endpoint is responding
     """
-    # Log that endpoint was called (always log, even before try block)
-    print(f"DEBUG: Health check endpoint called", flush=True)
-    logger.info("Health check endpoint called")
-
-    try:
-        # Check PostgreSQL connection (ASYNC - must await and check status)
-        print(f"DEBUG: Checking PostgreSQL (db exists: {db is not None})", flush=True)
-        if db:
-            pg_health_result = await db.health_check()
-            pg_healthy = pg_health_result.get("status") == "healthy"
-            print(f"DEBUG: PostgreSQL result: {pg_health_result}, healthy: {pg_healthy}", flush=True)
-        else:
-            pg_health_result = None
-            pg_healthy = False
-            print(f"DEBUG: PostgreSQL db is None, setting healthy=False", flush=True)
-        logger.debug(f"Health check - PostgreSQL: db={db is not None}, pg_health_result={pg_health_result}, pg_healthy={pg_healthy}")
-
-        # Check Neo4j connection (ASYNC - must await and check status)
-        print(f"DEBUG: Checking Neo4j (graph_store exists: {graph_store is not None})", flush=True)
-        if graph_store:
-            neo4j_health_result = await graph_store.health_check()
-            neo4j_healthy = neo4j_health_result.get("status") == "healthy"
-            print(f"DEBUG: Neo4j result: {neo4j_health_result}, healthy: {neo4j_healthy}", flush=True)
-        else:
-            neo4j_health_result = None
-            neo4j_healthy = False
-            print(f"DEBUG: Neo4j graph_store is None, setting healthy=False", flush=True)
-        logger.debug(f"Health check - Neo4j: graph_store={graph_store is not None}, neo4j_health_result={neo4j_health_result}, neo4j_healthy={neo4j_healthy}")
-
-        print(f"DEBUG: Final health status - pg_healthy={pg_healthy}, neo4j_healthy={neo4j_healthy}", flush=True)
-        if pg_healthy and neo4j_healthy:
-            print(f"DEBUG: Returning 200 healthy", flush=True)
-            return JSONResponse({"status": "healthy", "postgres": "ok", "neo4j": "ok"})
-        else:
-            print(f"DEBUG: Returning 503 unhealthy", flush=True)
-            logger.warning(f"Health check failed - pg_healthy={pg_healthy}, neo4j_healthy={neo4j_healthy}")
-            return JSONResponse(
-                {
-                    "status": "unhealthy",
-                    "postgres": "ok" if pg_healthy else "unavailable",
-                    "neo4j": "ok" if neo4j_healthy else "unavailable"
-                },
-                status_code=503
-            )
-    except Exception as e:
-        print(f"DEBUG: Health check exception: {type(e).__name__}: {e}", flush=True)
-        logger.error(f"Health check failed with exception: {e}", exc_info=True)
-        return JSONResponse({"status": "unhealthy", "error": str(e)}, status_code=503)
+    return JSONResponse({"status": "healthy"})
 
 
 # Tool definitions (FastMCP auto-generates from type hints + docstrings)
