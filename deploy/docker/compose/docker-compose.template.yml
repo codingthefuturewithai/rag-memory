@@ -131,12 +131,8 @@ services:
       BACKUP_LATEST_SYMLINK: "backup-latest.tar.gz"
       BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-14}"
       BACKUP_PRUNING_PREFIX: "backup-"
-    healthcheck:
-      test: ["CMD-SHELL", "find /archive -name 'backup-*.tar.gz' -mtime -1 | grep -q . || exit 1"]
-      interval: 3600s
-      timeout: 10s
-      retries: 2
-      start_period: 7200s
+    # No healthcheck - backup is a cron job, not a connectivity service
+    # Checking for backup files fails on fresh installs before first backup runs
     labels:
       description: "RAG Memory - Automated Daily Backups"
       backup_location: "Configured in system config"
