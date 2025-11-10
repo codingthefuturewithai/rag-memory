@@ -248,7 +248,7 @@ Then restart Claude Desktop.
 - `ingest_file` - Ingest from file system
 - `ingest_directory` - Batch ingest from directories
 
-See [`.reference/MCP_QUICK_START.md`](./.reference/MCP_QUICK_START.md) for complete tool reference and examples.
+See [`.reference/MCP_GUIDE.md`](./.reference/MCP_GUIDE.md) for complete tool reference and examples.
 
 ## Configuration System
 
@@ -344,7 +344,7 @@ src/
 ## Documentation
 
 - **[.reference/OVERVIEW.md](./.reference/OVERVIEW.md)** - Quick overview for slash command
-- **[.reference/MCP_QUICK_START.md](./.reference/MCP_QUICK_START.md)** - MCP setup guide with all 18 tools documented
+- **[.reference/MCP_GUIDE.md](./.reference/MCP_GUIDE.md)** - MCP setup guide with all 18 tools documented
 - **[docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)** - Configuration system explained
 - **[docs/DATABASE_MIGRATION_GUIDE.md](./docs/DATABASE_MIGRATION_GUIDE.md)** - Database schema migration guide (Alembic)
 - **[docs/ARCHITECTURE.md](./docs/ARCHITECTURE.md)** - System architecture and design decisions
@@ -436,7 +436,7 @@ MIT License - See LICENSE file for details.
 - Check [docs/ENVIRONMENT_VARIABLES.md](./docs/ENVIRONMENT_VARIABLES.md)
 
 **For MCP server setup:**
-- See [.reference/MCP_QUICK_START.md](./.reference/MCP_QUICK_START.md) - Complete tool reference and examples
+- See [.reference/MCP_GUIDE.md](./.reference/MCP_GUIDE.md) - Complete tool reference and examples
 
 **For issues:**
 - Check troubleshooting sections above
