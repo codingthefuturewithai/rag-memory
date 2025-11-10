@@ -215,12 +215,14 @@ async def health_check(request: Request) -> Response:
         503 error - One or both databases unavailable
     """
     try:
-        # Check PostgreSQL connection
+        # Check PostgreSQL connection (ASYNC - must await and check status)
         if db:
-            pg_healthy = db.health_check()
+            pg_health_result = await db.health_check()
+            pg_healthy = pg_health_result.get("status") == "healthy"
         else:
+            pg_health_result = None
             pg_healthy = False
-        logger.debug(f"Health check - PostgreSQL: db={db is not None}, pg_healthy={pg_healthy}")
+        logger.debug(f"Health check - PostgreSQL: db={db is not None}, pg_health_result={pg_health_result}, pg_healthy={pg_healthy}")
 
         # Check Neo4j connection (ASYNC - must await and check status)
         if graph_store:
