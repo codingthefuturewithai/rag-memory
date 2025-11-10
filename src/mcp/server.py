@@ -218,8 +218,9 @@ async def health_check(request: Request) -> Response:
         # Check PostgreSQL connection
         pg_healthy = db and db.health_check()
 
-        # Check Neo4j connection
-        neo4j_healthy = graph_store and graph_store.health_check()
+        # Check Neo4j connection (ASYNC - must await and check status)
+        neo4j_health_result = graph_store and await graph_store.health_check()
+        neo4j_healthy = neo4j_health_result and neo4j_health_result.get("status") == "healthy"
 
         if pg_healthy and neo4j_healthy:
             return JSONResponse({"status": "healthy", "postgres": "ok", "neo4j": "ok"})
