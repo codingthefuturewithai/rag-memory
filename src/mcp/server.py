@@ -47,7 +47,7 @@ log_dir = Path(__file__).parent.parent.parent / "logs"
 log_dir.mkdir(exist_ok=True)
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
         logging.FileHandler(log_dir / "mcp_server.log"),
@@ -217,14 +217,17 @@ async def health_check(request: Request) -> Response:
     try:
         # Check PostgreSQL connection
         pg_healthy = db and db.health_check()
+        logger.debug(f"Health check - PostgreSQL: db={db is not None}, pg_healthy={pg_healthy}")
 
         # Check Neo4j connection (ASYNC - must await and check status)
         neo4j_health_result = graph_store and await graph_store.health_check()
         neo4j_healthy = neo4j_health_result and neo4j_health_result.get("status") == "healthy"
+        logger.debug(f"Health check - Neo4j: graph_store={graph_store is not None}, neo4j_health_result={neo4j_health_result}, neo4j_healthy={neo4j_healthy}")
 
         if pg_healthy and neo4j_healthy:
             return JSONResponse({"status": "healthy", "postgres": "ok", "neo4j": "ok"})
         else:
+            logger.warning(f"Health check failed - pg_healthy={pg_healthy}, neo4j_healthy={neo4j_healthy}")
             return JSONResponse(
                 {
                     "status": "unhealthy",
@@ -234,7 +237,7 @@ async def health_check(request: Request) -> Response:
                 status_code=503
             )
     except Exception as e:
-        logger.error(f"Health check failed: {e}")
+        logger.error(f"Health check failed with exception: {e}", exc_info=True)
         return JSONResponse({"status": "unhealthy", "error": str(e)}, status_code=503)
 
 
