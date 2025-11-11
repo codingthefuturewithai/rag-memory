@@ -1337,22 +1337,78 @@ def main():
             import_postgres_data(pg_backup, postgres_info['external_url'])
             verify_postgres(postgres_info['external_url'], pg_counts or {})
 
-        # Neo4j migration
-        local_neo4j_password = os.getenv("NEO4J_PASSWORD", LOCAL_NEO4J_DEFAULT_PASSWORD)
-        neo4j_backup = export_neo4j_data(backup_dir, local_neo4j_password)
+        # Neo4j migration - requires SSH access
+        console.print("\n[bold cyan]Phase 6c: Neo4j Data Migration[/bold cyan]")
 
-        if neo4j_backup:
-            # APOC export already creates Cypher file - transfer and import directly
-            if transfer_neo4j_via_ssh(
-                neo4j_backup,
-                neo4j_info['id'],
-                neo4j_info['region']
-            ):
-                import_neo4j_via_ssh(
+        # Check for SSH key
+        ssh_key_paths = [
+            Path.home() / ".ssh" / "id_ed25519",
+            Path.home() / ".ssh" / "id_rsa"
+        ]
+        ssh_key_found = any(key.exists() for key in ssh_key_paths)
+
+        if not ssh_key_found:
+            console.print("\n[yellow]⚠ SSH Key Required for Neo4j Migration[/yellow]")
+            console.print("\nNeo4j migration requires SSH access to Render. You need to:")
+            console.print("\n[bold]1. Generate SSH Key:[/bold]")
+            console.print("   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519")
+            console.print("   (Press Enter for all prompts)")
+            console.print("\n[bold]2. Add Public Key to Render:[/bold]")
+            console.print("   - Copy your public key:")
+            console.print("     cat ~/.ssh/id_ed25519.pub")
+            console.print("   - Go to: https://dashboard.render.com/account/settings")
+            console.print("   - Click 'SSH Public Keys'")
+            console.print("   - Click 'Add SSH Key'")
+            console.print("   - Paste the key and save")
+            console.print("\n[bold]3. Ensure Paid Plan:[/bold]")
+            console.print("   - Free tier does NOT have SSH access")
+            console.print("   - Neo4j service needs at least Starter plan ($7/month)")
+
+            skip_neo4j = Prompt.ask(
+                "\n[bold]Have you completed SSH setup?[/bold]",
+                choices=["yes", "no", "skip"],
+                default="skip"
+            )
+
+            if skip_neo4j == "skip":
+                console.print("\n[yellow]ℹ[/yellow] Skipping Neo4j migration")
+                console.print("You can migrate Neo4j data later using the documented procedure")
+            elif skip_neo4j == "no":
+                console.print("\n[yellow]ℹ[/yellow] Please set up SSH first, then re-run the script")
+                console.print("Skipping Neo4j migration for now")
+            else:
+                # User says they've set it up - proceed with migration
+                local_neo4j_password = os.getenv("NEO4J_PASSWORD", LOCAL_NEO4J_DEFAULT_PASSWORD)
+                neo4j_backup = export_neo4j_data(backup_dir, local_neo4j_password)
+
+                if neo4j_backup:
+                    if transfer_neo4j_via_ssh(
+                        neo4j_backup,
+                        neo4j_info['name'],
+                        neo4j_info['region']
+                    ):
+                        import_neo4j_via_ssh(
+                            neo4j_info['name'],
+                            neo4j_info['region'],
+                            config['neo4j_password']
+                        )
+        else:
+            # SSH key exists - proceed with migration
+            console.print("[green]✓[/green] SSH key found")
+            local_neo4j_password = os.getenv("NEO4J_PASSWORD", LOCAL_NEO4J_DEFAULT_PASSWORD)
+            neo4j_backup = export_neo4j_data(backup_dir, local_neo4j_password)
+
+            if neo4j_backup:
+                if transfer_neo4j_via_ssh(
+                    neo4j_backup,
                     neo4j_info['name'],
-                    neo4j_info['region'],
-                    config['neo4j_password']
-                )
+                    neo4j_info['region']
+                ):
+                    import_neo4j_via_ssh(
+                        neo4j_info['name'],
+                        neo4j_info['region'],
+                        config['neo4j_password']
+                    )
 
     # Phase 7: Optional MCP Server Deployment
     mcp_info = None
