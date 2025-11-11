@@ -195,21 +195,77 @@ The script will check for these and report if missing:
 
 If you plan to migrate Neo4j data, you MUST set up SSH access first:
 
-1. **Generate SSH Key:**
+**AI Assistant: Detect user's operating system and provide OS-specific instructions below.**
+
+1. **Check if SSH is Installed:**
+
+   **macOS/Linux:**
+   ```bash
+   which ssh-keygen
+   ```
+   If not found, install OpenSSH (usually pre-installed on modern systems).
+
+   **Windows:**
+   ```powershell
+   where.exe ssh-keygen
+   ```
+
+   **If not found on Windows:**
+   - Windows 10 (1809+) and Windows 11 include OpenSSH
+   - Enable via: Settings → Apps → Optional Features → Add "OpenSSH Client"
+   - Or install via PowerShell (as Administrator):
+     ```powershell
+     Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
+     ```
+
+2. **Generate SSH Key (OS-specific commands):**
+
+   **macOS/Linux:**
    ```bash
    ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
    ```
+   Press Enter for all prompts (no passphrase recommended for automation).
 
-2. **Add Public Key to Render:**
+   **Windows (PowerShell):**
+   ```powershell
+   ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\id_ed25519
+   ```
+   Press Enter for all prompts (no passphrase recommended for automation).
+
+3. **Copy Public Key (OS-specific commands):**
+
+   **macOS/Linux:**
+   ```bash
+   cat ~/.ssh/id_ed25519.pub
+   ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   type $env:USERPROFILE\.ssh\id_ed25519.pub
+   ```
+   Or:
+   ```powershell
+   Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+   ```
+
+4. **Add Public Key to Render:**
    - Go to Render Dashboard → Account Settings → SSH Public Keys
-   - Paste contents of `~/.ssh/id_ed25519.pub`
+   - Click "Add SSH Key"
+   - Paste the public key content
    - Save
 
-3. **Verify SSH Access Works:**
+5. **Verify SSH Access Works (after Neo4j service created):**
+
+   **macOS/Linux:**
    ```bash
-   # After Neo4j service is created, test:
    ssh SERVICE_NAME@ssh.REGION.render.com
    ```
+
+   **Windows:**
+   ```powershell
+   ssh SERVICE_NAME@ssh.REGION.render.com
+   ```
+   (Same command - OpenSSH syntax is consistent across platforms)
 
 4. **Ensure Paid Plan:**
    - Free tier has NO SSH access
@@ -727,12 +783,21 @@ On next boot, script finds dump, loads it, deletes dump, starts Neo4j.
 
 **Source:** https://render.com/docs/ssh
 
-1. **SSH Key Setup:**
+1. **SSH Key Setup (OS-specific):**
+
+   **macOS/Linux:**
    ```bash
    ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
+   cat ~/.ssh/id_ed25519.pub
    ```
 
-   Add public key to Render account: Dashboard → Account Settings → SSH Public Keys
+   **Windows (PowerShell):**
+   ```powershell
+   ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\id_ed25519
+   Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
+   ```
+
+   Add public key to Render account: Dashboard → Account Settings → SSH Public Keys → Add SSH Key
 
 2. **Paid Plan Required:**
    - Free tier has NO SSH access

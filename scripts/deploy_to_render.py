@@ -1350,19 +1350,62 @@ def main():
         if not ssh_key_found:
             console.print("\n[yellow]⚠ SSH Key Required for Neo4j Migration[/yellow]")
             console.print("\nNeo4j migration requires SSH access to Render. You need to:")
-            console.print("\n[bold]1. Generate SSH Key:[/bold]")
-            console.print("   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519")
-            console.print("   (Press Enter for all prompts)")
-            console.print("\n[bold]2. Add Public Key to Render:[/bold]")
-            console.print("   - Copy your public key:")
-            console.print("     cat ~/.ssh/id_ed25519.pub")
-            console.print("   - Go to: https://dashboard.render.com/account/settings")
-            console.print("   - Click 'SSH Public Keys'")
-            console.print("   - Click 'Add SSH Key'")
-            console.print("   - Paste the key and save")
-            console.print("\n[bold]3. Ensure Paid Plan:[/bold]")
-            console.print("   - Free tier does NOT have SSH access")
-            console.print("   - Neo4j service needs at least Starter plan ($7/month)")
+
+            # Detect operating system
+            import platform
+            os_type = platform.system()
+
+            # Check if ssh-keygen is available
+            try:
+                ssh_check = subprocess.run(
+                    ["ssh-keygen", "-V"] if os_type != "Windows" else ["ssh-keygen.exe", "-V"],
+                    capture_output=True,
+                    timeout=5
+                )
+                ssh_available = True
+            except (subprocess.TimeoutExpired, FileNotFoundError):
+                ssh_available = False
+
+            if not ssh_available:
+                console.print("\n[yellow]⚠ ssh-keygen not found![/yellow]")
+                if os_type == "Windows":
+                    console.print("\n[bold]Install OpenSSH on Windows:[/bold]")
+                    console.print("   Option 1: Settings → Apps → Optional Features → Add 'OpenSSH Client'")
+                    console.print("   Option 2: PowerShell (as Administrator):")
+                    console.print("     Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0")
+                else:
+                    console.print("\n[bold]Install OpenSSH:[/bold]")
+                    console.print("   macOS: Should be pre-installed (check with: which ssh-keygen)")
+                    console.print("   Linux: sudo apt install openssh-client (Debian/Ubuntu)")
+                    console.print("          sudo yum install openssh-clients (RHEL/CentOS)")
+                console.print("\n[yellow]After installing, re-run this script.[/yellow]")
+            else:
+                # Show OS-specific instructions
+                console.print("\n[bold]1. Generate SSH Key:[/bold]")
+                if os_type == "Windows":
+                    console.print("   [cyan]PowerShell:[/cyan]")
+                    console.print("   ssh-keygen -t ed25519 -f $env:USERPROFILE\\.ssh\\id_ed25519")
+                else:
+                    console.print("   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519")
+                console.print("   (Press Enter for all prompts - no passphrase recommended)")
+
+                console.print("\n[bold]2. Copy Public Key:[/bold]")
+                if os_type == "Windows":
+                    console.print("   [cyan]PowerShell:[/cyan]")
+                    console.print("   Get-Content $env:USERPROFILE\\.ssh\\id_ed25519.pub")
+                    console.print("   [dim]Or:[/dim] type %USERPROFILE%\\.ssh\\id_ed25519.pub")
+                else:
+                    console.print("   cat ~/.ssh/id_ed25519.pub")
+
+                console.print("\n[bold]3. Add Public Key to Render:[/bold]")
+                console.print("   - Go to: https://dashboard.render.com/account/settings")
+                console.print("   - Click 'SSH Public Keys'")
+                console.print("   - Click 'Add SSH Key'")
+                console.print("   - Paste the key and save")
+
+                console.print("\n[bold]4. Ensure Paid Plan:[/bold]")
+                console.print("   - Free tier does NOT have SSH access")
+                console.print("   - Neo4j service needs at least Starter plan ($7/month)")
 
             skip_neo4j = Prompt.ask(
                 "\n[bold]Have you completed SSH setup?[/bold]",
