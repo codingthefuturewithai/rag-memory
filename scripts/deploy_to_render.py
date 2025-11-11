@@ -690,6 +690,117 @@ def create_neo4j_service(
         return None
 
 
+def create_mcp_server(
+    api_key: str,
+    owner_id: str,
+    environment_id: str,
+    region: str,
+    plan: str,
+    postgres_url: str,
+    neo4j_uri: str,
+    neo4j_password: str,
+    openai_api_key: str,
+    repo_url: str,
+    branch: str = "main"
+) -> Optional[Dict[str, Any]]:
+    """
+    Create MCP server as Docker web service on Render.
+
+    Sources:
+    - OpenAPI spec: servicePOST, webServiceDetailsPOST schemas
+    - https://render.com/docs/web-services (port binding requirements)
+    - https://render.com/docs/docker (Dockerfile deployment)
+    - https://render.com/docs/deploy-fastapi (FastAPI/uvicorn configuration)
+
+    The MCP server will:
+    - Deploy from GitHub repository with Dockerfile
+    - Connect to both PostgreSQL and Neo4j in Render
+    - Expose SSE endpoint on public HTTPS URL
+    - Bind to 0.0.0.0:$PORT (Render requirement)
+
+    Args:
+        repo_url: GitHub repository URL (e.g., "https://github.com/user/rag-memory")
+        branch: Git branch to deploy from (default: "main")
+    """
+    console.print("\n[bold cyan]🚀 Creating MCP server...[/bold cyan]")
+
+    # MCP server environment variables
+    # These connect the cloud MCP server to cloud databases
+    env_vars = [
+        {"key": "DATABASE_URL", "value": postgres_url},
+        {"key": "NEO4J_URI", "value": neo4j_uri},
+        {"key": "NEO4J_USER", "value": "neo4j"},
+        {"key": "NEO4J_PASSWORD", "value": neo4j_password},
+        {"key": "OPENAI_API_KEY", "value": openai_api_key},
+        {"key": "PYTHONUNBUFFERED", "value": "1"},  # For real-time logging
+    ]
+
+    payload = {
+        "type": "web_service",
+        "name": "rag-memory-mcp",
+        "ownerId": owner_id,
+        "environmentId": environment_id,
+        "repo": repo_url,
+        "branch": branch,
+        "autoDeploy": "yes",  # Auto-deploy on git push
+        "rootDir": "",  # Use repository root
+        "envVars": env_vars,
+        "serviceDetails": {
+            "runtime": "docker",  # Build from Dockerfile
+            "plan": plan,
+            "region": region,
+            "healthCheckPath": "/health",  # MCP server health endpoint
+            # Note: Dockerfile must bind to 0.0.0.0:$PORT
+            # Source: https://render.com/docs/web-services
+        }
+    }
+
+    try:
+        response = requests.post(
+            f"{RENDER_API_BASE}/services",
+            headers={
+                **RENDER_API_HEADERS,
+                "Authorization": f"Bearer {api_key}"
+            },
+            json=payload,
+            timeout=60
+        )
+
+        if response.status_code == 400:
+            error_msg = response.json().get('message', 'Bad request')
+            console.print(f"[red]✗ Failed to create MCP server: {error_msg}[/red]")
+            return None
+
+        response.raise_for_status()
+        service_data = response.json()
+
+        # Extract service details
+        service = service_data.get('service', {})
+        service_id = service.get('id')
+        service_url = service.get('serviceDetails', {}).get('url')
+
+        console.print(f"[green]✓[/green] MCP server created successfully")
+        console.print(f"[dim]  Service ID: {service_id}[/dim]")
+        console.print(f"[dim]  Region: {region}[/dim]")
+
+        if service_url:
+            console.print(f"\n[bold green]🌐 MCP Server URL:[/bold green] {service_url}")
+            console.print(f"[dim]  SSE endpoint: {service_url}/sse[/dim]")
+            console.print(f"[dim]  Health check: {service_url}/health[/dim]")
+
+        return {
+            'id': service_id,
+            'url': service_url,
+            'region': region
+        }
+
+    except requests.exceptions.RequestException as e:
+        console.print(f"[red]✗ Failed to create MCP server: {e}[/red]")
+        if hasattr(e, 'response') and e.response is not None:
+            console.print(f"[dim]{e.response.text}[/dim]")
+        return None
+
+
 def wait_for_service_ready(api_key: str, service_id: str, max_wait_seconds: int = 300) -> bool:
     """
     Wait for a Render service to be ready/available.
@@ -801,137 +912,185 @@ def import_postgres_data(backup_file: Path, external_url: str) -> bool:
 
 def export_neo4j_data(backup_dir: Path, neo4j_password: str) -> Optional[Path]:
     """
-    Export Neo4j database using APOC.
+    Export Neo4j database using neo4j-admin dump.
 
-    Uses APOC's apoc.export.cypher.all() which creates a Cypher file
-    with proper node ID handling for import.
+    Source: https://neo4j.com/docs/operations-manual/current/backup-restore/offline-backup/
+
+    CRITICAL: Database must be OFFLINE before dumping.
+    Creates a .dump file that can be restored with neo4j-admin database load.
     """
-    console.print("\n[bold cyan]📦 Exporting Neo4j data...[/bold cyan]")
+    console.print("\n[bold cyan]📦 Exporting Neo4j database...[/bold cyan]")
 
-    # Export to temp location inside container
-    container_export_path = "/var/lib/neo4j/import/neo4j_export.cypher"
-    backup_file = backup_dir / "neo4j_export.cypher"
+    backup_file = backup_dir / "neo4j.dump"
 
     try:
-        # Export using APOC inside container
-        console.print("  → Running APOC export...")
-        export_cmd = [
-            "docker", "exec", LOCAL_NEO4J_CONTAINER,
-            "cypher-shell",
-            "-u", LOCAL_NEO4J_USER,
-            "-p", neo4j_password,
-            f"CALL apoc.export.cypher.all('{container_export_path}', {{}})"
-        ]
+        # Stop Neo4j (REQUIRED for offline dump)
+        console.print("  → Stopping local Neo4j container...")
+        stop_result = subprocess.run(
+            ["docker", "stop", LOCAL_NEO4J_CONTAINER],
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
 
-        result = subprocess.run(export_cmd, capture_output=True, text=True, timeout=300)
-
-        if result.returncode != 0:
-            console.print(f"[red]✗ APOC export failed: {result.stderr}[/red]")
+        if stop_result.returncode != 0:
+            console.print(f"[red]✗ Failed to stop Neo4j: {stop_result.stderr}[/red]")
             return None
 
-        # Copy file out of container
-        console.print("  → Copying export file from container...")
+        # Create dump using neo4j-admin (database must be stopped)
+        console.print("  → Creating database dump with neo4j-admin...")
+        dump_cmd = [
+            "docker", "exec", LOCAL_NEO4J_CONTAINER,
+            "neo4j-admin", "database", "dump",
+            "neo4j",  # Database name
+            "--to-path=/dumps",
+            "--overwrite-destination=true"
+        ]
+
+        dump_result = subprocess.run(dump_cmd, capture_output=True, text=True, timeout=300)
+
+        if dump_result.returncode != 0:
+            console.print(f"[red]✗ Dump failed: {dump_result.stderr}[/red]")
+            # Restart Neo4j before returning
+            subprocess.run(["docker", "start", LOCAL_NEO4J_CONTAINER], timeout=30)
+            return None
+
+        # Copy dump from container to host
+        console.print("  → Copying dump file from container...")
         copy_cmd = [
             "docker", "cp",
-            f"{LOCAL_NEO4J_CONTAINER}:{container_export_path}",
+            f"{LOCAL_NEO4J_CONTAINER}:/dumps/neo4j.dump",
             str(backup_file)
         ]
 
-        result = subprocess.run(copy_cmd, capture_output=True, text=True)
+        copy_result = subprocess.run(copy_cmd, capture_output=True, text=True, timeout=60)
 
-        if result.returncode != 0:
-            console.print(f"[red]✗ Failed to copy file: {result.stderr}[/red]")
+        # Restart Neo4j
+        console.print("  → Restarting local Neo4j...")
+        subprocess.run(["docker", "start", LOCAL_NEO4J_CONTAINER], timeout=30)
+
+        if copy_result.returncode != 0:
+            console.print(f"[red]✗ Failed to copy dump: {copy_result.stderr}[/red]")
             return None
 
         size_mb = backup_file.stat().st_size / (1024 * 1024)
-        console.print(f"[green]✓[/green] Neo4j exported ({size_mb:.2f} MB)")
+        console.print(f"[green]✓[/green] Neo4j dump created ({size_mb:.2f} MB)")
         return backup_file
 
     except subprocess.TimeoutExpired:
-        console.print("[red]✗ Export timed out after 5 minutes[/red]")
+        console.print("[red]✗ Dump timed out[/red]")
+        # Attempt to restart Neo4j
+        subprocess.run(["docker", "start", LOCAL_NEO4J_CONTAINER], timeout=30)
         return None
     except Exception as e:
         console.print(f"[red]✗ Export failed: {e}[/red]")
+        # Attempt to restart Neo4j
+        subprocess.run(["docker", "start", LOCAL_NEO4J_CONTAINER], timeout=30)
         return None
 
 
 def transfer_neo4j_via_ssh(
-    cypher_file: Path,
-    service_id: str,
+    dump_file: Path,
+    service_name: str,
     region: str
 ) -> bool:
     """
-    Transfer Neo4j export file via SCP.
+    Transfer Neo4j dump file to Render persistent disk via SCP.
 
     Source: https://render.com/docs/ssh
+    Render recommends: scp -s (SFTP mode)
     """
-    console.print("\n[bold cyan]🚀 Transferring data to Render via SSH...[/bold cyan]")
+    console.print("\n[bold cyan]🚀 Transferring dump to Render via SSH...[/bold cyan]")
 
-    ssh_host = f"ssh.{region}.render.com"
-    ssh_user = service_id
-    remote_path = f"{NEO4J_IMPORT_MOUNT_PATH}/import.cypher"
+    ssh_host = f"{service_name}@ssh.{region}.render.com"
+    # Transfer to persistent disk mount path (confirmed in Render dashboard)
+    remote_path = f"{NEO4J_IMPORT_MOUNT_PATH}/neo4j.dump"
 
     try:
-        # Transfer file via SCP
-        console.print(f"  → Uploading to {ssh_host}...")
+        # Transfer file via SCP using SFTP mode (-s)
+        console.print(f"  → Uploading {dump_file.name} ({dump_file.stat().st_size / (1024*1024):.2f} MB)...")
         scp_cmd = [
             "scp",
+            "-s",  # SFTP mode (Render recommended)
             "-o", "StrictHostKeyChecking=accept-new",
-            str(cypher_file),
-            f"{ssh_user}@{ssh_host}:{remote_path}"
+            str(dump_file),
+            f"{ssh_host}:{remote_path}"
         ]
 
-        result = subprocess.run(scp_cmd, capture_output=True, text=True)
+        result = subprocess.run(scp_cmd, capture_output=True, text=True, timeout=600)
 
         if result.returncode != 0:
             console.print(f"[red]✗ SCP failed: {result.stderr}[/red]")
             return False
 
-        console.print("[green]✓[/green] File transferred successfully")
+        console.print("[green]✓[/green] Dump transferred to Render persistent disk")
         return True
 
+    except subprocess.TimeoutExpired:
+        console.print("[red]✗ Transfer timed out[/red]")
+        return False
     except Exception as e:
         console.print(f"[red]✗ Transfer failed: {e}[/red]")
         return False
 
 
 def import_neo4j_via_ssh(
-    service_id: str,
+    service_name: str,
     region: str,
     neo4j_password: str
 ) -> bool:
     """
-    Import Neo4j data via SSH using cypher-shell.
+    Import Neo4j dump on Render using neo4j-admin database load.
 
-    Source: https://render.com/docs/ssh
+    Source: https://neo4j.com/docs/operations-manual/current/backup-restore/restore-dump/
+
+    CRITICAL: Database must be STOPPED before loading.
+    This uses Method A (in-place load via SSH) from the documented approach.
     """
-    console.print("\n[bold cyan]📥 Importing Neo4j data via SSH...[/bold cyan]")
+    console.print("\n[bold cyan]📥 Importing Neo4j dump via SSH...[/bold cyan]")
 
-    ssh_host = f"ssh.{region}.render.com"
-    ssh_user = service_id
-    remote_cypher = f"{NEO4J_IMPORT_MOUNT_PATH}/import.cypher"
+    ssh_host = f"{service_name}@ssh.{region}.render.com"
+    dump_path = NEO4J_IMPORT_MOUNT_PATH  # Directory containing neo4j.dump
 
     try:
-        # Execute cypher-shell to import data
-        console.print("  → Running cypher-shell import...")
+        # Method A: Interactive SSH session, run commands step-by-step
+        # This approach handles Render's container restart behavior
+        console.print("  → Connecting to Render service...")
+        console.print("  → Stopping Neo4j (required for offline load)...")
+        console.print("  → Running neo4j-admin database load...")
+        console.print("  → Starting Neo4j...")
+
+        # Single SSH command that chains all operations
+        # If Render auto-restarts on stop, this will fail and user should use Method B
+        import_commands = " && ".join([
+            "neo4j stop",
+            f"neo4j-admin database load neo4j --from-path={dump_path} --overwrite-destination=true",
+            "neo4j start",
+            "sleep 10",  # Wait for startup
+            f"cypher-shell -u neo4j -p '{neo4j_password}' \"MATCH (n) RETURN count(n) as node_count;\""
+        ])
+
         ssh_cmd = [
             "ssh",
             "-o", "StrictHostKeyChecking=accept-new",
-            f"{ssh_user}@{ssh_host}",
-            f"cypher-shell -u neo4j -p '{neo4j_password}' < {remote_cypher}"
+            ssh_host,
+            import_commands
         ]
 
-        result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=300)
+        result = subprocess.run(ssh_cmd, capture_output=True, text=True, timeout=600)
 
         if result.returncode != 0:
             console.print(f"[red]✗ Import failed: {result.stderr}[/red]")
+            console.print("\n[yellow]⚠ If Render auto-restarted the container, you need Method B:[/yellow]")
+            console.print("[yellow]  Use the bootstrap entrypoint script approach documented in CLOUD_SETUP.md[/yellow]")
             return False
 
         console.print("[green]✓[/green] Neo4j data imported successfully")
+        console.print(f"\nVerification output:\n{result.stdout}")
         return True
 
     except subprocess.TimeoutExpired:
-        console.print("[red]✗ Import timed out after 5 minutes[/red]")
+        console.print("[red]✗ Import timed out[/red]")
         return False
     except Exception as e:
         console.print(f"[red]✗ Import failed: {e}[/red]")
@@ -1190,14 +1349,78 @@ def main():
                 neo4j_info['region']
             ):
                 import_neo4j_via_ssh(
-                    neo4j_info['id'],
+                    neo4j_info['name'],
                     neo4j_info['region'],
                     config['neo4j_password']
                 )
 
+    # Phase 7: Optional MCP Server Deployment
+    mcp_info = None
+    deploy_mcp = Prompt.ask(
+        "\n[bold]Deploy MCP server to Render?[/bold]",
+        choices=["yes", "no"],
+        default="no"
+    )
+
+    if deploy_mcp == "yes":
+        console.print("\n[bold cyan]Phase 7: MCP Server Deployment[/bold cyan]")
+
+        # Get GitHub repository URL
+        mcp_repo = Prompt.ask(
+            "GitHub repository URL for RAG Memory",
+            default="https://github.com/yourusername/rag-memory"
+        )
+
+        mcp_branch = Prompt.ask(
+            "Git branch to deploy",
+            default="main"
+        )
+
+        mcp_plan = Prompt.ask(
+            "MCP server plan",
+            default="starter",
+            choices=["starter", "standard", "pro", "pro_plus", "pro_max", "pro_ultra"]
+        )
+
+        # Get OpenAI API key (required for MCP server)
+        openai_key = os.getenv('OPENAI_API_KEY')
+        if not openai_key:
+            openai_key = Prompt.ask(
+                "OpenAI API key (required for embeddings and graph extraction)",
+                password=True
+            )
+
+        mcp_info = create_mcp_server(
+            api_key=api_key,
+            owner_id=owner_id,
+            environment_id=environment_id,
+            region=config['region'],
+            plan=mcp_plan,
+            postgres_url=postgres_info['external_url'],
+            neo4j_uri=neo4j_info['internal_url'],
+            neo4j_password=config['neo4j_password'],
+            openai_api_key=openai_key,
+            repo_url=mcp_repo,
+            branch=mcp_branch
+        )
+
+        if mcp_info:
+            console.print("\n[green]✓[/green] MCP server deployment initiated")
+            console.print("[dim]Note: Build and deployment may take 5-10 minutes[/dim]")
+            console.print(f"[dim]Monitor at: https://dashboard.render.com/web/{mcp_info['id']}[/dim]")
+        else:
+            console.print("\n[yellow]⚠[/yellow] MCP server deployment failed")
+    else:
+        console.print("\n[yellow]ℹ[/yellow] MCP server deployment skipped")
+        console.print("You can run MCP server locally and point it to cloud databases:")
+        console.print(f"  DATABASE_URL={postgres_info['external_url']}")
+        console.print(f"  NEO4J_URI={neo4j_info['internal_url']}")
+
     # Phase 8: Display connection info
     console.print("\n" + "="*70)
-    console.print(Panel.fit(
+
+    # Build output message based on what was deployed
+    output_msg = (
         f"[bold green]✅ Deployment Complete![/bold green]\n\n"
         f"[bold]PostgreSQL:[/bold]\n"
         f"  External URL: {postgres_info['external_url']}\n"
@@ -1206,16 +1429,45 @@ def main():
         f"  Internal URL (for MCP): {neo4j_info['internal_url']}\n"
         f"  Username: neo4j\n"
         f"  Password: <your configured password>\n\n"
-        f"[bold]Next Steps:[/bold]\n"
-        f"1. Create MCP Server service (manual or API)\n"
-        f"2. Configure MCP Server environment variables:\n"
-        f"   - DATABASE_URL={postgres_info['internal_url']}\n"
-        f"   - NEO4J_URI={neo4j_info['internal_url']}\n"
-        f"   - NEO4J_USER=neo4j\n"
-        f"   - NEO4J_PASSWORD=<your password>\n"
-        f"   - OPENAI_API_KEY=<your key>\n"
-        f"3. Test deployment\n"
-        f"4. Update Claude Desktop/Cursor MCP config",
+    )
+
+    if mcp_info:
+        # MCP server was deployed
+        output_msg += (
+            f"[bold]MCP Server:[/bold]\n"
+            f"  URL: {mcp_info['url']}\n"
+            f"  SSE Endpoint: {mcp_info['url']}/sse\n"
+            f"  Health Check: {mcp_info['url']}/health\n\n"
+            f"[bold]Next Steps:[/bold]\n"
+            f"1. Wait for MCP server build to complete (~5-10 min)\n"
+            f"2. Test health endpoint: curl {mcp_info['url']}/health\n"
+            f"3. Update Claude Desktop/Cursor MCP config:\n"
+            f"   {{\n"
+            f"     \"mcpServers\": {{\n"
+            f"       \"rag-memory\": {{\n"
+            f"         \"url\": \"{mcp_info['url']}/sse\"\n"
+            f"       }}\n"
+            f"     }}\n"
+            f"   }}\n"
+            f"4. Test with: Claude Desktop → Settings → MCP"
+        )
+    else:
+        # MCP server not deployed - show manual instructions
+        output_msg += (
+            f"[bold]Next Steps:[/bold]\n"
+            f"1. Run MCP server locally OR deploy manually:\n"
+            f"   Local: Set these environment variables:\n"
+            f"   - DATABASE_URL={postgres_info['external_url']}\n"
+            f"   - NEO4J_URI={neo4j_info['internal_url']}\n"
+            f"   - NEO4J_USER=neo4j\n"
+            f"   - NEO4J_PASSWORD=<your password>\n"
+            f"   - OPENAI_API_KEY=<your key>\n"
+            f"2. Test deployment\n"
+            f"3. Update Claude Desktop/Cursor MCP config"
+        )
+
+    console.print(Panel.fit(
+        output_msg,
         title="🎉 Success",
         border_style="green"
     ))

@@ -3,6 +3,7 @@
     "allow": [
       "Read(**)",
       "Glob(**)",
+      "WebFetch(domain:render.com)",
       "Bash(ls *)",
       "Bash(cat *)",
       "Bash(pwd)",

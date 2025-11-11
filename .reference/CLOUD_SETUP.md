@@ -378,66 +378,101 @@ Most time spent waiting for:
 
 ---
 
-## MCP Server Setup
+## MCP Server Setup (Optional)
 
-**Current Status:** MCP Server creation not yet automated in script. Manual setup required.
+**Status:** ✅ Automated in script as optional deployment
 
-**AI Assistant: Guide user through MCP server creation by:**
-1. WebFetching https://render.com/docs for current GitHub web service deployment process
-2. Following the configuration below
+The script now offers to deploy the MCP server to Render during Phase 7. This is **optional** - you can:
+- **Option A:** Deploy MCP server to Render (full cloud deployment)
+- **Option B:** Run MCP server locally, connecting to cloud databases
+- **Option C:** Deploy MCP server manually later
 
-### Configuration Requirements
+### When Script Prompts for MCP Deployment
 
-- **Service Type:** Web Service
-- **Name:** `rag-memory-mcp`
-- **Repository:** User's RAG Memory GitHub repo
-- **Branch:** `main` (or deployment branch)
-- **Root Directory:** Leave empty (Dockerfile is at repo root)
-- **Runtime:** Docker (auto-detected from Dockerfile)
-- **Region:** Same as databases (important - reduces latency)
-- **Plan:** Paid plan recommended
-  - **AI Assistant:** Research current Render web service plans
-  - Minimum: 512MB RAM recommended
-  - Free tier may suspend after inactivity (not recommended for production)
-
-### Environment Variables Required
-
-**AI Assistant Instructions:**
-1. Guide user to environment variables section in Render's MCP service dashboard
-   - **Do NOT provide specific UI paths** - WebFetch current Render docs for how to set environment variables
-2. Tell user which variables to configure (list below)
-3. Tell user where to get each value
-4. **NEVER ask user to provide any values to you in chat**
-5. User will enter all values directly in Render's UI
-
-**Variables user must configure:**
-
-```bash
-# PostgreSQL - Use INTERNAL URL for service-to-service
-# User gets this from script output or Render PostgreSQL dashboard
-DATABASE_URL=<internal-postgresql-url>
-
-# Neo4j - Use internal connection (service-to-service)
-NEO4J_URI=neo4j://rag-memory-neo4j:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=<password-configured-in-script>
-
-# OpenAI
-OPENAI_API_KEY=<user-openai-api-key>
-
-# Server configuration
-PORT=8000
-FASTMCP_HOST=0.0.0.0
-ENVIRONMENT=production
+The script will ask:
+```
+Deploy MCP server to Render? (yes/no) [no]:
 ```
 
-**Critical:** PostgreSQL and Neo4j must use **Internal URLs** (service-to-service within Render network).
+**Choose "yes" if:**
+- You want complete cloud deployment
+- You plan to access MCP server from multiple machines
+- You want auto-deployment on git push
 
-### Deployment
+**Choose "no" if:**
+- You prefer local development with cloud databases
+- You want to deploy MCP server manually later
+- You're testing the database setup first
 
-First build takes 5-10 minutes.
+### Automated Deployment Process (if yes)
 
-**AI Assistant: Guide user to check build logs for progress and any errors.**
+Script will prompt for:
+
+1. **GitHub Repository URL**
+   - Your fork of rag-memory repository
+   - Example: `https://github.com/yourusername/rag-memory`
+
+2. **Git Branch**
+   - Branch to deploy from (default: `main`)
+
+3. **Service Plan**
+   - Starter ($7/month) - Recommended for testing
+   - Standard/Pro/Pro Plus - For production workloads
+
+4. **OpenAI API Key**
+   - Required for embeddings and graph extraction
+   - Script checks `OPENAI_API_KEY` environment variable first
+   - Prompts if not found
+
+### What Gets Configured Automatically
+
+The script creates a Render web service with:
+
+**Environment Variables** (set automatically):
+```bash
+DATABASE_URL=<external-postgresql-url>
+NEO4J_URI=neo4j://rag-memory-neo4j:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=<your-configured-password>
+OPENAI_API_KEY=<your-api-key>
+PYTHONUNBUFFERED=1
+```
+
+**Service Configuration:**
+- Runtime: Docker (builds from `deploy/docker/Dockerfile`)
+- Region: Same as databases
+- Health Check: `/health` endpoint
+- Auto-deploy: Enabled (deploys on git push)
+- Public URL: `https://rag-memory-mcp.onrender.com` (or similar)
+- SSE Endpoint: `https://rag-memory-mcp.onrender.com/sse`
+
+### Build Time
+
+First deployment takes **5-10 minutes**:
+1. Render clones your repository
+2. Builds Docker image (installs dependencies)
+3. Starts MCP server
+4. Runs health checks
+
+Monitor at: `https://dashboard.render.com/web/<service-id>`
+
+### Local MCP Server (Alternative)
+
+If you chose "no" to cloud deployment, run MCP server locally:
+
+```bash
+# Set environment variables
+export DATABASE_URL="<external-postgresql-url-from-script>"
+export NEO4J_URI="neo4j://rag-memory-neo4j:7687"
+export NEO4J_USER="neo4j"
+export NEO4J_PASSWORD="<your-password>"
+export OPENAI_API_KEY="<your-key>"
+
+# Run MCP server
+uv run rag-mcp-sse
+```
+
+Script output shows the exact URLs to use.
 
 ---
 
@@ -521,6 +556,133 @@ Config to add:
 ```
 
 **Other AI agents:** Use SSE endpoint: `https://rag-memory-mcp.onrender.com/sse`
+
+---
+
+## Neo4j Data Migration Deep Dive
+
+The script uses `neo4j-admin dump/load` approach (not APOC) for Neo4j migration.
+
+**Source:** https://neo4j.com/docs/operations-manual/current/backup-restore/
+
+### Method A: In-Place Load via SSH (Default)
+
+Script attempts this first. Works if Render doesn't auto-restart container when Neo4j stops.
+
+**What the script does:**
+
+1. **Export locally:**
+   ```bash
+   docker stop rag-memory-neo4j
+   docker exec rag-memory-neo4j neo4j-admin database dump neo4j --to-path=/dumps
+   docker cp rag-memory-neo4j:/dumps/neo4j.dump /tmp/
+   docker start rag-memory-neo4j
+   ```
+
+2. **Transfer to Render:**
+   ```bash
+   scp -s /tmp/neo4j.dump SERVICE_NAME@ssh.REGION.render.com:/var/data/
+   ```
+
+3. **Import on Render:**
+   ```bash
+   ssh SERVICE_NAME@ssh.REGION.render.com
+   neo4j stop
+   neo4j-admin database load neo4j --from-path=/var/data --overwrite-destination=true
+   neo4j start
+   ```
+
+**If this fails:** Script suggests Method B (bootstrap script).
+
+### Method B: Bootstrap Script (Robust Alternative)
+
+Use this if Render auto-restarts the container when you stop Neo4j.
+
+**Why this works:** Container restores dump on boot, then starts Neo4j normally.
+
+#### Step 1: Create Bootstrap Script
+
+Create `scripts/neo4j-entrypoint.sh` in your repository:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DUMP_DIR="${NEO4J_DUMP_DIR:-/var/data}"
+DB_NAME="${NEO4J_DB_NAME:-neo4j}"
+DUMP_FILE="$(ls -1 ${DUMP_DIR}/*.dump 2>/dev/null | head -n 1 || true)"
+
+if [ -n "${DUMP_FILE}" ]; then
+  echo ">> Found dump: ${DUMP_FILE}. Loading into ${DB_NAME}..."
+  # Server is not running at boot
+  neo4j-admin database load "${DB_NAME}" \
+    --from-path="${DUMP_DIR}" \
+    --overwrite-destination=true
+  echo ">> Load complete. Removing dump to prevent re-loading..."
+  rm -f "${DUMP_FILE}"
+fi
+
+echo ">> Starting Neo4j..."
+exec neo4j
+```
+
+#### Step 2: Update Dockerfile for Neo4j
+
+Modify your Neo4j deployment to use this entrypoint:
+
+```dockerfile
+FROM neo4j:5.23.0-community
+
+# Copy bootstrap script
+COPY scripts/neo4j-entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Use bootstrap script as entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+```
+
+#### Step 3: Deploy Updated Neo4j Service
+
+Push changes to GitHub, Render will redeploy automatically if auto-deploy enabled.
+
+#### Step 4: Transfer Dump and Trigger Restart
+
+```bash
+# Transfer dump to persistent disk
+scp -s /tmp/neo4j.dump SERVICE_NAME@ssh.REGION.render.com:/var/data/
+
+# Trigger restart (Render Dashboard → Service → Manual Deploy → Clear build cache & deploy)
+```
+
+On next boot, script finds dump, loads it, deletes dump, starts Neo4j.
+
+### Prerequisites for SSH Access
+
+**Source:** https://render.com/docs/ssh
+
+1. **SSH Key Setup:**
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
+   ```
+
+   Add public key to Render account: Dashboard → Account Settings → SSH Public Keys
+
+2. **Paid Plan Required:**
+   - Free tier has NO SSH access
+   - Minimum: Starter plan for Neo4j service
+
+3. **Verify SSH Access:**
+   ```bash
+   ssh SERVICE_NAME@ssh.REGION.render.com
+   ```
+
+### Disk Mount Path
+
+Neo4j service must have persistent disk mounted. Script uses `/var/data` by default.
+
+**Verify in Render Dashboard:**
+- Service → Disks tab
+- Confirm mount path matches what's used in commands
 
 ---
 

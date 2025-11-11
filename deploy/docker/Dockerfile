@@ -45,8 +45,9 @@ ENV PYTHONUNBUFFERED=1
 # Expose port
 EXPOSE 8000
 
-# Note: Health checks are handled by Fly.io TCP checks in fly.toml
-# FastMCP does not support HTTP health endpoints
+# Note: Health checks can use /health endpoint (see server.py:214)
+# FastMCP server includes health check at /health
 
-# Run MCP server with SSE transport on port 8000
-CMD ["python", "-m", "src.mcp.server", "--transport", "sse", "--port", "8000"]
+# Run MCP server with SSE transport
+# Uses PORT environment variable (Render/Fly.io) or defaults to 8000
+CMD ["sh", "-c", "python -m src.mcp.server --transport sse --port ${PORT:-8000}"]
