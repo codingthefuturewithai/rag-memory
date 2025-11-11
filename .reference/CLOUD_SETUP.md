@@ -140,27 +140,87 @@ The script will check for these and report if missing:
   - Attaches persistent disk (1GB) mounted at `/data`
   - Polls service status until "available"
 
-**Phase 6: Data Migration (if user chose to migrate)**
+**Phase 6: Database Schema Setup**
+- Runs Alembic migrations to create PostgreSQL schema
+- Creates tables: `source_documents`, `document_chunks`, `collections`, `chunk_collections`
+- Sets up HNSW index for vector search
+- Temporary DATABASE_URL override for migration
+- Continues even if tables already exist
+
+**Phase 6b: Data Migration (if user chose to migrate)**
 - **PostgreSQL Migration:**
-  - Exports local data using `docker exec pg_dump`
-  - Imports to Render using `psql --single-transaction`
+  - Exports local data using `docker exec pg_dump` with `--no-owner --no-privileges` flags
+  - Imports to Render using `psql` (handles SSL correctly)
   - Verifies document and chunk counts match
 - **Neo4j Migration:**
-  - Exports local graph using APOC `apoc.export.cypher.all()`
-  - Copies export file out of local container
-  - Transfers to Render via SSH/SCP
-  - Imports via SSH using `cypher-shell`
-  - **Note:** Uses SSH workaround because Neo4j port 7687 not externally accessible on Render
+  - **REQUIRES SSH SETUP BEFORE RUNNING SCRIPT** (see Prerequisites below)
+  - Stops local Neo4j (required for offline dump)
+  - Exports using `neo4j-admin database dump` (creates .dump file)
+  - Restarts local Neo4j automatically
+  - Transfers dump to Render via `scp -s` (SFTP mode)
+  - Imports via SSH using `neo4j-admin database load`
+  - **Method A:** Attempts in-place load (stop Neo4j, load, start)
+  - **If Method A fails:** Suggests Method B (bootstrap script, see Neo4j Migration Deep Dive)
+  - **Note:** Requires paid plan for SSH access
 
-**Phase 7: Display Connection Information**
+**Phase 7: Optional MCP Server Deployment**
+- Prompts: "Deploy MCP server to Render? (yes/no) [no]"
+- **If "yes":**
+  - Prompts for GitHub repository URL
+  - Prompts for git branch (default: main)
+  - Prompts for service plan (starter/standard/pro/etc.)
+  - Prompts for OpenAI API key (or uses OPENAI_API_KEY env var)
+  - Creates web service via `POST /services` API call
+  - Sets environment variables automatically:
+    - DATABASE_URL (PostgreSQL external URL)
+    - NEO4J_URI (Neo4j internal URL for service-to-service)
+    - NEO4J_USER, NEO4J_PASSWORD
+    - OPENAI_API_KEY
+  - Deploys from GitHub using Dockerfile
+  - **Build takes 5-10 minutes after script completes**
+- **If "no":**
+  - Shows environment variables for running MCP server locally
+  - User can connect local MCP to cloud databases
+
+**Phase 8: Display Connection Information**
 - Shows project name and environment
 - Shows External and Internal URLs for both databases
-- Provides environment variables for MCP server
-- Lists next steps
+- **If MCP deployed:** Shows MCP server URL and SSE endpoint
+- **If MCP not deployed:** Shows environment variables for local MCP
+- Lists next steps (customized based on deployment choices)
+
+### What User Must Do BEFORE Running Script
+
+**For Neo4j Data Migration (Optional):**
+
+If you plan to migrate Neo4j data, you MUST set up SSH access first:
+
+1. **Generate SSH Key:**
+   ```bash
+   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
+   ```
+
+2. **Add Public Key to Render:**
+   - Go to Render Dashboard → Account Settings → SSH Public Keys
+   - Paste contents of `~/.ssh/id_ed25519.pub`
+   - Save
+
+3. **Verify SSH Access Works:**
+   ```bash
+   # After Neo4j service is created, test:
+   ssh SERVICE_NAME@ssh.REGION.render.com
+   ```
+
+4. **Ensure Paid Plan:**
+   - Free tier has NO SSH access
+   - Neo4j service needs at least Starter plan ($7/month)
+
+**Note:** If you skip SSH setup, Neo4j migration will fail. Script will show error message with instructions.
 
 ### What User Must Provide During Script Execution
 
 The script will prompt for:
+
 1. **Render API key** (or set `RENDER_API_KEY` env var beforehand)
 2. **Region selection** (numbered list 1-5, default 1)
 3. **PostgreSQL plan** - MUST use UNDERSCORES (default: `basic_256mb`)
@@ -169,6 +229,13 @@ The script will prompt for:
    - Web services use standard plan names: `starter`, `starter_plus`, `standard`, `pro`, etc.
 5. **Neo4j password** (user creates secure password for Render Neo4j)
 6. **If migrating:** Confirmation at each step
+7. **MCP Server Deployment** (prompted in Phase 7):
+   - Deploy to Render? (yes/no, default: no)
+   - If yes:
+     - GitHub repository URL (your fork of rag-memory)
+     - Git branch (default: main)
+     - Service plan (starter/standard/pro/etc.)
+     - OpenAI API key (or uses OPENAI_API_KEY env var)
 
 **CRITICAL - Plan Names Use UNDERSCORES (not hyphens):**
 - Pricing page shows: `Basic-256mb` (with hyphen, display name)
