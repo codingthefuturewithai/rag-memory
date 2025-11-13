@@ -51,9 +51,6 @@ backups/
 
 # Docker
 docker-compose.yml
-# Ignore root Dockerfile but keep deploy/docker/Dockerfile for Render
-/Dockerfile
-.dockerignore
 
 # Migration archives
 migrations/archive/
