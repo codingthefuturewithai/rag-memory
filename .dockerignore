@@ -54,14 +54,20 @@ backups/
 
 # Docker
 docker-compose.yml
-Dockerfile
+# Ignore root Dockerfile but keep deploy/docker/Dockerfile for Render
+/Dockerfile
 .dockerignore
+
+# Keep deploy directory Dockerfiles
+!deploy/docker/Dockerfile
 
 # Migration archives
 migrations/archive/
 
 # Scripts (development only)
 scripts/
+# Exception: init_neo4j_schema.py needed in Neo4j container for schema initialization via SSH
+!scripts/init_neo4j_schema.py
 build.sh
 
 # Deployment docs (not needed in container)
