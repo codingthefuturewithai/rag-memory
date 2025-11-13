@@ -58,9 +58,6 @@ docker-compose.yml
 /Dockerfile
 .dockerignore
 
-# Keep deploy directory Dockerfiles
-!deploy/docker/Dockerfile
-
 # Migration archives
 migrations/archive/
 
