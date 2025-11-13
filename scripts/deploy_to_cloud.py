@@ -848,7 +848,7 @@ def create_mcp_server(
             "runtime": "docker",
             "plan": plan,
             "region": region,
-            "dockerfilePath": "deploy/docker/Dockerfile",
+            "dockerfilePath": "Dockerfile",
             "healthCheckPath": "/health",
         }
     }
