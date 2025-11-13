@@ -30,10 +30,7 @@ test-results/
 # Documentation (not needed at runtime)
 docs/
 .reference/
-*.md
-
-# Keep README.md (required by pyproject.toml)
-!README.md
+# Note: README.md is NOT excluded - it's required by pyproject.toml
 
 # Build artifacts
 dist/
