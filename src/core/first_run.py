@@ -27,16 +27,26 @@ def validate_config_exists() -> bool:
 
     For CLI usage: Exits with helpful error message if config is missing or incomplete.
     For MCP usage: Can be checked before server startup.
+    For Docker/Cloud: Works with environment variables alone (no config file required).
 
     Returns:
         True if config is valid, False if invalid (CLI will have exited)
     """
     config_path = get_config_path()
 
-    # Check if config file exists
+    # Check if all required configuration is present (file OR env vars)
+    missing = get_missing_config_keys()
+
+    # If no missing keys, configuration is valid (either from file or env vars)
+    if not missing:
+        return True
+
+    # Configuration is incomplete - provide helpful error message
+    # Check if config file exists to customize the error message
     if not config_path.exists():
         console.print("\n[bold red]✗ Configuration not found[/bold red]")
-        console.print(f"[yellow]Expected location: {config_path}[/yellow]\n")
+        console.print(f"[yellow]Expected location: {config_path}[/yellow]")
+        console.print(f"[yellow]Missing environment variables: {', '.join(missing)}[/yellow]\n")
         console.print("[cyan]To set up RAG Memory, run:[/cyan]")
         console.print("[bold]  python scripts/setup.py[/bold]\n")
         console.print("[dim]This will:[/dim]")
@@ -45,19 +55,15 @@ def validate_config_exists() -> bool:
         console.print("[dim]  - Optionally install CLI tool system-wide[/dim]\n")
         return False
 
-    # Check if all required configuration is present
-    missing = get_missing_config_keys()
-    if missing:
-        console.print("\n[bold red]✗ Configuration is incomplete[/bold red]")
-        console.print(f"[yellow]Missing settings: {', '.join(missing)}[/yellow]")
-        console.print(f"[dim]Configuration file: {config_path}[/dim]\n")
-        console.print("[cyan]To update configuration, run:[/cyan]")
-        console.print("[bold]  python scripts/update-config.py[/bold]\n")
-        console.print("[dim]Then rebuild Docker containers:[/dim]")
-        console.print("[dim]  docker-compose up -d --build[/dim]\n")
-        return False
-
-    return True
+    # Config file exists but is incomplete
+    console.print("\n[bold red]✗ Configuration is incomplete[/bold red]")
+    console.print(f"[yellow]Missing settings: {', '.join(missing)}[/yellow]")
+    console.print(f"[dim]Configuration file: {config_path}[/dim]\n")
+    console.print("[cyan]To update configuration, run:[/cyan]")
+    console.print("[bold]  python scripts/update-config.py[/bold]\n")
+    console.print("[dim]Then rebuild Docker containers:[/dim]")
+    console.print("[dim]  docker-compose up -d --build[/dim]\n")
+    return False
 
 
 def ensure_config_or_exit():
