@@ -842,14 +842,16 @@ def create_mcp_server(
         "repo": repo_url,
         "branch": branch,
         "autoDeploy": "yes",
-        "rootDir": "",
         "envVars": env_vars,
         "serviceDetails": {
             "runtime": "docker",
             "plan": plan,
             "region": region,
-            "dockerfilePath": "deploy/docker/Dockerfile",
             "healthCheckPath": "/health",
+            "envSpecificDetails": {
+                "dockerfilePath": "deploy/docker/Dockerfile",
+                "dockerContext": "."
+            }
         }
     }
 
