@@ -16,7 +16,14 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 # These warnings are cosmetic - the variables still load correctly.
 logging.getLogger("dotenv.main").setLevel(logging.ERROR)
 
-# Import all command groups and commands
+# CRITICAL: Load configuration BEFORE importing command modules
+# Third-party libraries (graphiti-core, crawl4ai) auto-load ~/.env at import time.
+# By loading our config first, we ensure system config takes precedence over ~/.env.
+# Priority: 1) Shell env vars, 2) System config, 3) ~/.env (ignored if already set)
+from src.core.config_loader import load_environment_variables
+load_environment_variables()
+
+# Import all command groups and commands (AFTER config is loaded)
 from src.cli_commands.service import service_group, start, stop, restart, status
 from src.cli_commands.collection import collection
 from src.cli_commands.ingest import ingest
