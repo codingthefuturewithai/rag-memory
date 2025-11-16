@@ -1,8 +1,8 @@
-# Cloud Deployment Guide for Render
+# Cloud Deployment Guide
 
 **For interactive guidance, run:** `/cloud-setup` slash command
 
-This is the complete technical reference for deploying RAG Memory to Render using the automated deployment script.
+This is the complete technical reference for deploying RAG Memory to the cloud using the automated deployment script.
 
 ---
 
@@ -10,1110 +10,732 @@ This is the complete technical reference for deploying RAG Memory to Render usin
 
 1. [Overview](#overview)
 2. [Prerequisites](#prerequisites)
-3. [Automated Deployment Script](#automated-deployment-script)
-4. [Running the Deployment](#running-the-deployment)
-5. [MCP Server Setup](#mcp-server-setup)
-6. [Verification and Testing](#verification-and-testing)
-7. [Troubleshooting](#troubleshooting)
-8. [Manual Deployment (Fallback)](#manual-deployment-fallback)
-9. [Cost Estimates](#cost-estimates)
+3. [Running the Deployment](#running-the-deployment)
+4. [What the Script Does](#what-the-script-does)
+5. [Verification and Testing](#verification-and-testing)
+6. [Troubleshooting](#troubleshooting)
+7. [Cost Estimates](#cost-estimates)
+8. [Reference Links](#reference-links)
 
 ---
 
 ## Overview
 
-RAG Memory can be deployed to Render using the **automated deployment script** which handles:
+RAG Memory deploys to cloud infrastructure using the **automated deployment script** (`scripts/deploy_to_cloud.py`) which handles:
 
-- ✅ Creates Render Project to organize resources
-- ✅ Creates production environment within project
-- ✅ Creates PostgreSQL database in project environment via Render REST API
-- ✅ Enables pgvector extension automatically
-- ✅ Creates Neo4j Docker service in project environment via Render REST API
-- ✅ Configures all environment variables programmatically
-- ✅ Detects local Docker data and offers migration
-- ✅ Migrates PostgreSQL data (pg_dump → psql)
-- ✅ Migrates Neo4j data (APOC export → SSH/SCP → import)
-- ✅ Verifies data integrity after migration
-- ✅ All resources properly organized within a single project
-- ✅ No manual dashboard steps required for databases
+**Services Created:**
+- ✅ **PostgreSQL database** (Render) - Vector storage with pgvector
+- ✅ **Neo4j Aura** - Knowledge graph (managed cloud service)
+- ✅ **MCP Server** (Render) - Docker web service with FastMCP
 
-**What's NOT automated (yet):**
-- MCP Server creation (manual step after databases are ready)
+**Automated Tasks:**
+- ✅ Creates all services via REST APIs
+- ✅ Enables pgvector extension
+- ✅ Runs database migrations
+- ✅ Initializes Neo4j Graphiti schema (28 indexes/constraints)
+- ✅ Configures all environment variables
+- ✅ Detects and migrates local Docker data (optional)
+- ✅ Verifies connectivity and data integrity
 
-**Script location:** `scripts/deploy_to_render.py`
+**Total deployment time:** 20-30 minutes (databases take ~5-10 min each, migrations vary by data size)
 
 ---
 
 ## Prerequisites
 
-### Required for All Deployments
+### Account Requirements
 
-**Render Account with API Key:**
-- **AI Assistant:** If user doesn't have Render account, guide them to https://render.com to create one
-- **API Key Creation:**
-  - **AI Assistant:** Direct user to create API key at https://dashboard.render.com/u/settings#api-keys
-  - User will need this key for the deployment script
-  - API key grants access to user's workspaces for programmatic service creation
+**Render Account:**
+- Create account at: https://render.com
+- Create API key at: https://dashboard.render.com/u/settings#api-keys
+- **Payment method required** - Free tier not available via API
+- Estimated cost: $15-25/month for all services
 
-**Payment Method:**
-- Render API requires paid plans (free tier not available via API)
-- **AI Assistant:** Research current Render plan pricing at https://render.com/pricing
-- Minimum estimated cost: $15-20/month for all services
+**Neo4j Aura Account:**
+- Create account at: https://console.neo4j.io
+- Create API credentials: Account → API Credentials
+  - Client ID
+  - Client Secret
+- **Professional tier required** for 2GB instances ($65/month)
+  - Free tier (512MB) available but limited
+  - Aura Free works for testing but has strict limits
 
-**OpenAI API Key:**
-- Required for embeddings
-- Get from: https://platform.openai.com/api-keys
+**OpenAI Account:**
+- Create account at: https://platform.openai.com
+- Create API key at: https://platform.openai.com/api-keys
+- Cost: ~$1-5/month for embeddings
+
+### Local Tools
 
 **Python Environment:**
-- Python 3.8+ (already included in RAG Memory project via uv)
+- Python 3.10+ (included in RAG Memory via `uv`)
+- No manual installation needed - `uv` handles everything
 
-### Additional Requirements for Data Migration
-
-**Only needed if migrating from local Docker:**
-
-- **docker** - Verify: `docker --version`
-- **psql** - PostgreSQL client
+**Data Migration (Optional - only if migrating from local Docker):**
+- `docker` - Verify: `docker --version`
+- `psql` - PostgreSQL client
   - macOS: `brew install postgresql`
   - Ubuntu/Debian: `sudo apt-get install postgresql-client`
-  - Windows: Install from https://www.postgresql.org/download/windows/
-  - Alternative: Use Docker: `alias psql='docker run --rm -i postgres:16 psql'`
-- **ssh** and **scp** - Usually pre-installed on macOS/Linux
-  - Windows: Use WSL or Git Bash
-- **Local Docker deployment running** with RAG Memory containers
-
-### System Tools (Auto-Detected by Script)
-
-The script will check for these and report if missing:
-- curl (for API calls)
-- jq (for JSON parsing - auto-installs if missing)
-
----
-
-## Automated Deployment Script
-
-### When to Use the Script
-
-**AI Assistant: Guide user to run the automated deployment script in these scenarios:**
-
-1. **Fresh Deployment** - User wants to set up RAG Memory on Render from scratch
-2. **Migration** - User has local Docker data and wants to move it to Render
-3. **Both** - Script automatically detects local data and asks user which path to take
-
-### What the Script Does Automatically
-
-**Phase 1: Environment Detection**
-- Checks if Docker is running (skip if fresh deployment)
-- Detects local PostgreSQL and Neo4j containers
-- Counts documents, chunks, nodes, relationships
-- Asks user: migrate data or fresh deployment?
-
-**Phase 2: Render API Authentication**
-- Prompts for Render API key (or uses `RENDER_API_KEY` env var)
-- Retrieves workspace/owner ID from Render API
-- If multiple workspaces, lets user choose
-
-**Phase 3: Project Creation**
-- Creates Render Project via `POST /projects` API call
-- Creates production environment within project
-- Extracts environment ID for associating resources
-- All subsequent resources will be created within this project
-
-**Phase 4: Configuration Collection**
-- Prompts user to select:
-  - Region (oregon, ohio, virginia, frankfurt, singapore)
-  - PostgreSQL plan (user checks https://render.com/pricing for current options)
-  - Neo4j web service plan (user checks pricing for current options)
-  - Neo4j password (user chooses secure password)
-- **AI Assistant: Direct user to check current Render pricing for plan names**
-
-**Phase 5: Service Creation via API**
-- **PostgreSQL:**
-  - Creates database via `POST /postgres` API call with `environmentId`
-  - Associates database with project environment
-  - Automatically enables pgvector extension
-  - Retrieves External and Internal connection URLs
-  - Waits for connection strings to be available (may take up to 2 minutes)
-- **Neo4j:**
-  - Creates Docker web service via `POST /services` API call with `environmentId`
-  - Associates service with project environment
-  - Configures environment variables (NEO4J_AUTH, APOC plugins, memory settings)
-  - Attaches persistent disk (1GB) mounted at `/data`
-  - Polls service status until "available"
-
-**Phase 6: Database Schema Setup**
-- Runs Alembic migrations to create PostgreSQL schema
-- Creates tables: `source_documents`, `document_chunks`, `collections`, `chunk_collections`
-- Sets up HNSW index for vector search
-- Temporary DATABASE_URL override for migration
-- Continues even if tables already exist
-
-**Phase 6b: Data Migration (if user chose to migrate)**
-- **PostgreSQL Migration:**
-  - Exports local data using `docker exec pg_dump` with `--no-owner --no-privileges` flags
-  - Imports to Render using `psql` (handles SSL correctly)
-  - Verifies document and chunk counts match
-- **Neo4j Migration:**
-  - **REQUIRES SSH SETUP BEFORE RUNNING SCRIPT** (see Prerequisites below)
-  - Stops local Neo4j (required for offline dump)
-  - Exports using `neo4j-admin database dump` (creates .dump file)
-  - Restarts local Neo4j automatically
-  - Transfers dump to Render via `scp -s` (SFTP mode)
-  - Imports via SSH using `neo4j-admin database load`
-  - **Method A:** Attempts in-place load (stop Neo4j, load, start)
-  - **If Method A fails:** Suggests Method B (bootstrap script, see Neo4j Migration Deep Dive)
-  - **Note:** Requires paid plan for SSH access
-
-**Phase 7: Optional MCP Server Deployment**
-- Prompts: "Deploy MCP server to Render? (yes/no) [no]"
-- **If "yes":**
-  - Prompts for GitHub repository URL
-  - Prompts for git branch (default: main)
-  - Prompts for service plan (starter/standard/pro/etc.)
-  - Prompts for OpenAI API key (or uses OPENAI_API_KEY env var)
-  - Creates web service via `POST /services` API call
-  - Sets environment variables automatically:
-    - DATABASE_URL (PostgreSQL external URL)
-    - NEO4J_URI (Neo4j internal URL for service-to-service)
-    - NEO4J_USER, NEO4J_PASSWORD
-    - OPENAI_API_KEY
-  - Deploys from GitHub using Dockerfile
-  - **Build takes 5-10 minutes after script completes**
-- **If "no":**
-  - Shows environment variables for running MCP server locally
-  - User can connect local MCP to cloud databases
-
-**Phase 8: Display Connection Information**
-- Shows project name and environment
-- Shows External and Internal URLs for both databases
-- **If MCP deployed:** Shows MCP server URL and SSE endpoint
-- **If MCP not deployed:** Shows environment variables for local MCP
-- Lists next steps (customized based on deployment choices)
-
-### What User Must Do BEFORE Running Script
-
-**For Neo4j Data Migration (Optional):**
-
-If you plan to migrate Neo4j data, you MUST set up SSH access first:
-
-**AI Assistant: Detect user's operating system and provide OS-specific instructions below.**
-
-1. **Check if SSH is Installed:**
-
-   **macOS/Linux:**
-   ```bash
-   which ssh-keygen
-   ```
-   If not found, install OpenSSH (usually pre-installed on modern systems).
-
-   **Windows:**
-   ```powershell
-   where.exe ssh-keygen
-   ```
-
-   **If not found on Windows:**
-   - Windows 10 (1809+) and Windows 11 include OpenSSH
-   - Enable via: Settings → Apps → Optional Features → Add "OpenSSH Client"
-   - Or install via PowerShell (as Administrator):
-     ```powershell
-     Add-WindowsCapability -Online -Name OpenSSH.Client~~~~0.0.1.0
-     ```
-
-2. **Generate SSH Key (OS-specific commands):**
-
-   **macOS/Linux:**
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
-   ```
-   Press Enter for all prompts (no passphrase recommended for automation).
-
-   **Windows (PowerShell):**
-   ```powershell
-   ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\id_ed25519
-   ```
-   Press Enter for all prompts (no passphrase recommended for automation).
-
-3. **Copy Public Key (OS-specific commands):**
-
-   **macOS/Linux:**
-   ```bash
-   cat ~/.ssh/id_ed25519.pub
-   ```
-
-   **Windows (PowerShell):**
-   ```powershell
-   type $env:USERPROFILE\.ssh\id_ed25519.pub
-   ```
-   Or:
-   ```powershell
-   Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
-   ```
-
-4. **Add Public Key to Render:**
-   - Go to Render Dashboard → Account Settings → SSH Public Keys
-   - Click "Add SSH Key"
-   - Paste the public key content
-   - Save
-
-5. **Verify SSH Access Works (after Neo4j service created):**
-
-   **macOS/Linux:**
-   ```bash
-   ssh SERVICE_NAME@ssh.REGION.render.com
-   ```
-
-   **Windows:**
-   ```powershell
-   ssh SERVICE_NAME@ssh.REGION.render.com
-   ```
-   (Same command - OpenSSH syntax is consistent across platforms)
-
-4. **Ensure Paid Plan:**
-   - Free tier has NO SSH access
-   - Neo4j service needs at least Starter plan ($7/month)
-
-**Note:** If you skip SSH setup, Neo4j migration will fail. Script will show error message with instructions.
-
-### What User Must Provide During Script Execution
-
-The script will prompt for:
-
-1. **Render API key** (or set `RENDER_API_KEY` env var beforehand)
-2. **Region selection** (numbered list 1-5, default 1)
-3. **PostgreSQL plan** - MUST use UNDERSCORES (default: `basic_256mb`)
-   - PostgreSQL uses flexible plans with underscores: `basic_256mb`, `basic_1gb`, `pro_4gb`, etc.
-4. **Neo4j web service plan** (default: `starter`)
-   - Web services use standard plan names: `starter`, `starter_plus`, `standard`, `pro`, etc.
-5. **Neo4j password** (user creates secure password for Render Neo4j)
-6. **If migrating:** Confirmation at each step
-7. **MCP Server Deployment** (prompted in Phase 7):
-   - Deploy to Render? (yes/no, default: no)
-   - If yes:
-     - GitHub repository URL (your fork of rag-memory)
-     - Git branch (default: main)
-     - Service plan (starter/standard/pro/etc.)
-     - OpenAI API key (or uses OPENAI_API_KEY env var)
-
-**CRITICAL - Plan Names Use UNDERSCORES (not hyphens):**
-- Pricing page shows: `Basic-256mb` (with hyphen, display name)
-- Blueprint YAML uses: `basic-256mb` (with hyphen, Infrastructure as Code format)
-- REST API requires: `basic_256mb` (with UNDERSCORE, programmatic name)
-- **The deployment script uses REST API, so UNDERSCORES are required**
-
-**Valid PostgreSQL Plans (REST API format with underscores):**
-- Basic: `basic_256mb`, `basic_1gb`, `basic_4gb`
-- Pro: `pro_4gb`, `pro_8gb`, `pro_16gb`, ... `pro_512gb`
-- Accelerated: `accelerated_16gb`, ... `accelerated_1024gb`
-
-**Note:** Legacy plans (`starter`, `standard`, `pro`, `pro_plus`) are NO LONGER ACCEPTED by the API for new databases. Use flexible plans only.
-
-**Valid Web Service Plans (for Neo4j, REST API format with underscores):**
-- `free`, `starter`, `starter_plus`, `standard`, `standard_plus`, `pro`, `pro_plus`, `pro_max`, `pro_ultra`
+  - Windows: https://www.postgresql.org/download/windows/
+  - Alternative: `alias psql='docker run --rm -i postgres:16 psql'`
 
 ---
 
 ## Running the Deployment
 
-### Step 1: Navigate to Project Directory
+### Step 1: Navigate to Project
 
 ```bash
 cd /path/to/rag-memory
 ```
 
-### Step 2: Set API Key (Optional)
+### Step 2: Set Environment Variables (Optional)
 
 ```bash
-# Optional: Set API key to avoid interactive prompt
-export RENDER_API_KEY="your-render-api-key-here"
+# Optional: Set credentials to avoid interactive prompts
+export RENDER_API_KEY="rnd_xxx"
+export AURA_CLIENT_ID="xxx"
+export AURA_CLIENT_SECRET="xxx"
+export OPENAI_API_KEY="sk-proj-xxx"
 ```
 
-**AI Assistant: Guide user to create API key at https://dashboard.render.com/u/settings#api-keys if they don't have one.**
+If not set, script will prompt for each.
 
 ### Step 3: Run Deployment Script
 
 ```bash
-uv run python scripts/deploy_to_render.py
+python scripts/deploy_to_cloud.py
 ```
 
 ### Step 4: Follow Interactive Prompts
 
 **The script will guide you through:**
 
-1. **Detection Phase:**
-   ```
-   🔍 Detecting local Docker deployment...
-   ✓ PostgreSQL container: Running
-     → PostgreSQL: 15 documents, 342 chunks
-   ✓ Neo4j container: Running
-     → Neo4j: 89 nodes, 124 relationships
+#### 1. Data Migration Detection
 
-   📊 Local data detected!
-   Do you want to migrate your local data to Render? [Y/n]:
-   ```
+```
+🔍 Detecting local Docker deployment...
+✓ Found PostgreSQL container: 15 documents, 342 chunks
+✓ Found Neo4j container: 89 nodes, 124 relationships
 
-   **AI Assistant: If user has local data, explain their options:**
-   - Yes → Migrate all data to Render (recommended if data is important)
-   - No → Fresh deployment (start clean, local data stays in Docker)
+Migrate local data to cloud? [Y/n]:
+```
 
-2. **API Authentication:**
-   ```
-   📋 Render API Key Required
-   Create one at: https://dashboard.render.com/u/settings#api-keys
+- **Yes** - Migrates all data to cloud (recommended if data is important)
+- **No** - Fresh deployment (local data stays in Docker)
 
-   Enter your Render API key: ********
+#### 2. API Authentication
 
-   🔍 Fetching workspace ID...
-   ✓ Using workspace: My Workspace (own-abc123)
-   ```
+```
+🔐 Render API Key
+Create at: https://dashboard.render.com/u/settings#api-keys
 
-3. **Configuration:**
-   ```
-   ⚙️  Deployment Configuration
+Enter Render API key: ********
 
-   Select region:
-     1. oregon
-     2. ohio
-     3. virginia
-     4. frankfurt
-     5. singapore
-   Region [1]: 1
+🔍 Fetching workspace ID...
+✓ Using workspace: My Workspace (own-abc123)
+```
 
-   PostgreSQL Plan:
-   IMPORTANT: Use UNDERSCORES not hyphens (e.g., basic_256mb not basic-256mb)
-   Valid plans: basic_256mb, basic_1gb, basic_4gb, pro_4gb, pro_8gb, ...
-   Plan [basic_256mb]:
+```
+🔐 Neo4j Aura API Credentials
+Create at: https://console.neo4j.io → Account → API Credentials
 
-   Neo4j Web Service Plan:
-   IMPORTANT: Plan names are case-sensitive (must be lowercase)
-   Check current valid plan names at:
-     - https://render.com/docs/blueprint-spec (search 'Web Service plan')
-     - https://api-docs.render.com/reference/create-service
-   Note: SSH access required for migration (starter or higher)
-   Plan [starter]:
+Aura Client ID: ********
+Aura Client Secret: ********
+```
 
-   Neo4j Configuration:
-   Neo4j password (will be set on Render): ********
-   ```
+```
+🔑 OpenAI API Key
+Required for embeddings and knowledge graph
 
-   **AI Assistant: Guide user on plan selection:**
-   - PostgreSQL: Recommend `basic_256mb` for small deployments (UNDERSCORE not hyphen)
-   - Neo4j: Recommend `starter` (includes SSH for migration)
-   - **CRITICAL**: Remind user to use UNDERSCORES (basic_256mb not basic-256mb)
+OpenAI API Key: ********
+```
 
-4. **Confirmation:**
-   ```
-   Deployment Summary:
-     Region: oregon
-     PostgreSQL: Basic-256mb
-     Neo4j: Starter
-     Migrate data: Yes
+#### 3. Configuration
 
-   Proceed with deployment? [Y/n]:
-   ```
+```
+⚙️  Deployment Configuration
 
-5. **Service Creation:**
-   ```
-   🗄️  Creating PostgreSQL database...
-   ✓ PostgreSQL created: rag-memory-db
-     Database ID: postgres-abc123
+Region selection:
+  1. oregon
+  2. ohio
+  3. virginia
+  4. frankfurt
+  5. singapore
+Region (1): 3
 
-   🔌 Enabling pgvector extension...
-   ✓ pgvector extension enabled
+PostgreSQL Plan:
+Valid plans: basic_256mb, basic_1gb, basic_4gb, pro_4gb, etc.
+Plan (basic_256mb):
 
-   🔗 Creating Neo4j service...
-   ✓ Neo4j service created: rag-memory-neo4j
-     Service ID: srv-xyz789
-     Region: oregon
+Neo4j Aura Instance Size:
+Valid sizes: 1GB, 2GB, 4GB, 8GB, 16GB
+Memory (2GB): 2GB
 
-   ⏳ Waiting for service srv-xyz789 to be ready...
-     Status: starting
-   ✓ Service is ready
-   ```
+Cloud Provider for Aura:
+Options: aws, gcp, azure
+Provider (aws):
+```
 
-6. **Migration (if data selected):**
-   ```
-   📦 Exporting PostgreSQL data...
-   ✓ PostgreSQL exported (2.34 MB)
+**Plan Selection Guidance:**
+- **PostgreSQL:** `basic_256mb` for small/test deployments, `basic_1gb` for production
+- **Neo4j Aura:** 2GB minimum recommended for real workloads (Free tier = 512MB, very limited)
+- **Cloud Provider:** AWS generally has best region availability
 
-   📤 Importing PostgreSQL to Render...
-     → Enabling pgvector extension...
-     ✓ pgvector enabled
-     → Importing data (this may take a few minutes)...
-   ✓ PostgreSQL imported successfully
+#### 4. Confirmation
 
-   🔍 Verifying PostgreSQL...
-     Documents: 15 (expected 15) ✓
-     Chunks: 342 (expected 342) ✓
+```
+Deployment Summary:
+  Project: rag-memory
+  Region: virginia
+  PostgreSQL (Render): basic_256mb
+  Neo4j (Aura): 2GB on aws
+  Migrate data: Yes
 
-   📦 Exporting Neo4j data...
-     → Running APOC export...
-     → Copying export file from container...
-   ✓ Neo4j exported (0.45 MB)
+Proceed with deployment? [y/n] (y):
+```
 
-   🚀 Transferring data to Render via SSH...
-     → Uploading to ssh.oregon.render.com...
-   ✓ File transferred successfully
+#### 5. Service Creation & Migration
 
-   📥 Importing Neo4j data via SSH...
-     → Running cypher-shell import...
-   ✓ Neo4j data imported successfully
-   ```
+```
+🚀 Creating PostgreSQL database on Render...
+✓ PostgreSQL created: rag-memory-db
+  Database ID: dpg-xxx
+  Waiting for database to be ready...
+  Status: creating, waiting... (0s)
+  Status: available ✓
 
-   **AI Assistant: If migration takes long time (>5 minutes), this is normal for large datasets. Guide user to be patient.**
+🔌 Enabling pgvector extension...
+✓ pgvector extension enabled
 
-7. **Success:**
-   ```
-   ✅ Deployment Complete!
+⏳ Waiting 30s for PostgreSQL SSL initialization...
 
-   PostgreSQL:
-     External URL: postgresql://user:pass@hostname.render.com/ragmemory
-     Database: ragmemory
+📊 Running database migrations...
+✓ Alembic migrations complete
 
-   Neo4j:
-     Internal URL (for MCP): neo4j://rag-memory-neo4j:7687
-     Username: neo4j
-     Password: <your configured password>
+🔗 Creating Neo4j Aura instance...
+✓ Aura instance created
+  Instance ID: xxx
+  Connection URL: neo4j+s://xxx.databases.neo4j.io
+  Username: neo4j
+  Password: <auto-generated-64-chars>
 
-   Next Steps:
-   1. Create MCP Server service (manual or API)
-   2. Configure MCP Server environment variables:
-      - DATABASE_URL=<internal-postgresql-url>
-      - NEO4J_URI=neo4j://rag-memory-neo4j:7687
-      - NEO4J_USER=neo4j
-      - NEO4J_PASSWORD=<your password>
-      - OPENAI_API_KEY=<your key>
-   3. Test deployment
-   4. Update Claude Desktop/Cursor MCP config
-   ```
+⏳ Waiting for Aura instance to be ready...
+  Status: creating... (30s)
+✓ Aura instance ready
 
-### Script Execution Time
+🔧 Initializing Graphiti schema on Aura...
+✓ Graphiti schema initialized (28 indexes/constraints)
 
-**AI Assistant: Set user expectations for timing:**
+📦 Migrating PostgreSQL data...
+✓ Data exported (2.34 MB)
+✓ Data imported
+🔍 Verifying counts...
+  Documents: 15/15 ✓
+  Chunks: 342/342 ✓
 
-- Fresh deployment (no data): 5-10 minutes
-- Small dataset (<100 docs, <1000 nodes): 10-15 minutes
-- Medium dataset (100-1000 docs, 1000-10000 nodes): 15-30 minutes
-- Large dataset (>1000 docs, >10000 nodes): 30-60+ minutes
+📦 Migrating Neo4j data...
+✓ Export complete (0.45 MB)
+✓ Import complete via Bolt connection
 
-Most time spent waiting for:
-- Neo4j service to become available (2-5 minutes)
-- Data transfer over network
-- Neo4j import processing
+🚀 Creating MCP server on Render...
+  Repository: https://github.com/codingthefuturewithai/rag-memory
+  Branch: main
+  Plan: starter
+
+✓ MCP server created: rag-memory-mcp
+  Service ID: srv-xxx
+  Building Docker image... (5-10 minutes)
+
+✓ Build complete
+✓ Service is LIVE
+  URL: https://rag-memory-mcp.onrender.com
+```
+
+#### 6. Deployment Summary
+
+```
+✅ Deployment Complete!
+
+PostgreSQL (Render):
+  External URL: postgresql://user:pass@dpg-xxx.render.com/ragmemory
+  Database: ragmemory
+
+Neo4j (Aura):
+  Connection URL: neo4j+s://xxx.databases.neo4j.io
+  Username: neo4j
+  Password: xlQOa8E5phSrtYOjRBPn... (first 20 chars shown)
+  Console: https://console.neo4j.io/
+
+MCP Server (Render):
+  URL: https://rag-memory-mcp.onrender.com
+  SSE Endpoint: https://rag-memory-mcp.onrender.com/sse
+  Health Check: https://rag-memory-mcp.onrender.com/health
+
+Next Steps:
+  1. Save Neo4j password (check Neo4j-credentials-*.txt file)
+  2. Test MCP server health: curl https://rag-memory-mcp.onrender.com/health
+  3. Connect AI agent: claude mcp add --transport sse rag-memory https://rag-memory-mcp.onrender.com/sse
+```
+
+**CRITICAL:** Script saves Neo4j credentials to `Neo4j-credentials-RAG Memory MCP Server-Created-<timestamp>.txt` in project root
 
 ---
 
-## MCP Server Setup (Optional)
+## What the Script Does
 
-**Status:** ✅ Automated in script as optional deployment
+### Phase 1: Environment Detection
 
-The script now offers to deploy the MCP server to Render during Phase 7. This is **optional** - you can:
-- **Option A:** Deploy MCP server to Render (full cloud deployment)
-- **Option B:** Run MCP server locally, connecting to cloud databases
-- **Option C:** Deploy MCP server manually later
+- Checks if Docker is running
+- Detects local RAG Memory containers
+- Counts documents, chunks, nodes, relationships
+- Asks user if they want to migrate data
 
-### When Script Prompts for MCP Deployment
+### Phase 2: Render Setup
 
-The script will ask:
-```
-Deploy MCP server to Render? (yes/no) [no]:
-```
+**PostgreSQL Creation:**
+1. Creates database via `POST /postgres` API
+2. Polls until status = `available` (~2-5 minutes)
+3. Retrieves External connection URL from API
+4. Enables pgvector extension via `psql`
+5. Waits 30 seconds for SSL cert initialization
+6. Runs Alembic migrations to create schema
 
-**Choose "yes" if:**
-- You want complete cloud deployment
-- You plan to access MCP server from multiple machines
-- You want auto-deployment on git push
+**Key Details:**
+- Password auto-generated by Render (returned in API response)
+- External URL format: `postgresql://user:pass@host.render.com/dbname`
+- Tables created: `source_documents`, `document_chunks`, `collections`, `chunk_collections`
+- HNSW index created for vector search
 
-**Choose "no" if:**
-- You prefer local development with cloud databases
-- You want to deploy MCP server manually later
-- You're testing the database setup first
+### Phase 3: Neo4j Aura Setup
 
-### Automated Deployment Process (if yes)
+**Instance Creation:**
+1. Gets OAuth token using client credentials
+2. Fetches tenant ID from account
+3. Creates instance via `POST /v1/instances` API
+4. API auto-generates password (64 characters)
+5. Returns: instance ID, connection URL, username, password
+6. Polls until status = `running` (~5-10 minutes)
 
-Script will prompt for:
+**Schema Initialization:**
+1. Connects via Bolt: `neo4j+s://xxx.databases.neo4j.io`
+2. Initializes Graphiti using `graphiti-core` library
+3. Creates 28 indexes and constraints for knowledge graph
+4. Verifies schema with `SHOW INDEXES` query
 
-1. **GitHub Repository URL**
-   - Your fork of rag-memory repository
-   - Example: `https://github.com/yourusername/rag-memory`
+**Key Details:**
+- Connection uses Bolt with TLS (`neo4j+s://`)
+- Password auto-generated (never manually typed)
+- Username is always `neo4j` (Aura default)
+- Bolt connections work perfectly (unlike Neo4j on Render Docker)
 
-2. **Git Branch**
-   - Branch to deploy from (default: `main`)
+### Phase 4: Data Migration (Optional)
 
-3. **Service Plan**
-   - Starter ($7/month) - Recommended for testing
-   - Standard/Pro/Pro Plus - For production workloads
+**PostgreSQL Migration:**
+1. Exports using `docker exec pg_dump` with `--no-owner --no-privileges`
+2. Imports using `psql` to External URL
+3. Verifies document and chunk counts match
 
-4. **OpenAI API Key**
-   - Required for embeddings and graph extraction
-   - Script checks `OPENAI_API_KEY` environment variable first
-   - Prompts if not found
+**Neo4j Migration:**
+1. Connects to local Neo4j via Bolt
+2. Uses Graphiti's export capabilities
+3. Imports to Aura via Bolt connection
+4. Verifies node and relationship counts match
 
-### What Gets Configured Automatically
+**Key Details:**
+- No SSH required (Bolt works for Aura)
+- Migration safe to retry
+- Verification catches discrepancies
 
-The script creates a Render web service with:
+### Phase 5: MCP Server Deployment
 
-**Environment Variables** (set automatically):
-```bash
-DATABASE_URL=<external-postgresql-url>
-NEO4J_URI=neo4j://rag-memory-neo4j:7687
-NEO4J_USER=neo4j
-NEO4J_PASSWORD=<your-configured-password>
-OPENAI_API_KEY=<your-api-key>
-PYTHONUNBUFFERED=1
-```
+**Service Creation:**
+1. Creates Docker web service via `POST /services` API
+2. Sets environment variables:
+   - `DATABASE_URL` - PostgreSQL External URL
+   - `NEO4J_URI` - Aura connection URL
+   - `NEO4J_USER` - `neo4j`
+   - `NEO4J_PASSWORD` - Auto-generated password from Aura
+   - `OPENAI_API_KEY` - User's API key
+   - `PYTHONUNBUFFERED=1` - Immediate log output
 
-**Service Configuration:**
-- Runtime: Docker (builds from `deploy/docker/Dockerfile`)
-- Region: Same as databases
-- Health Check: `/health` endpoint
-- Auto-deploy: Enabled (deploys on git push)
-- Public URL: `https://rag-memory-mcp.onrender.com` (or similar)
-- SSE Endpoint: `https://rag-memory-mcp.onrender.com/sse`
-
-### Build Time
-
-First deployment takes **5-10 minutes**:
-1. Render clones your repository
-2. Builds Docker image (installs dependencies)
-3. Starts MCP server
-4. Runs health checks
-
-Monitor at: `https://dashboard.render.com/web/<service-id>`
-
-### Local MCP Server (Alternative)
-
-If you chose "no" to cloud deployment, run MCP server locally:
-
-```bash
-# Set environment variables
-export DATABASE_URL="<external-postgresql-url-from-script>"
-export NEO4J_URI="neo4j://rag-memory-neo4j:7687"
-export NEO4J_USER="neo4j"
-export NEO4J_PASSWORD="<your-password>"
-export OPENAI_API_KEY="<your-key>"
-
-# Run MCP server
-uv run rag-mcp-sse
-```
-
-Script output shows the exact URLs to use.
-
----
-
-## Verification and Testing
-
-### Step 1: Verify Services in Render Dashboard
-
-**AI Assistant: Guide user to check each service status:**
-
-1. **PostgreSQL** should show "Available"
-2. **Neo4j** should show "Available"
-3. **MCP Server** should show "Available"
-
-**AI Assistant: If any service shows error status:**
-- Guide user to check service logs
-- WebFetch Render docs for service troubleshooting
-- See Troubleshooting section below
-
-### Step 2: Test MCP Server Health
-
-```bash
-# Replace with your actual MCP server URL
-curl https://rag-memory-mcp.onrender.com/health
-```
-
-Should return: `{"status": "healthy"}`
-
-**AI Assistant: If health check fails:**
-- Guide user to check MCP server logs for errors
-- Verify environment variables are set correctly
-- Check PostgreSQL and Neo4j services are running
-
-### Step 3: Test with CLI (Optional)
-
-```bash
-# Set environment to use Render services
-export DATABASE_URL="<external-postgresql-url>"
-export NEO4J_URI="<external-neo4j-uri>"
-export NEO4J_USER="neo4j"
-export NEO4J_PASSWORD="<neo4j-password>"
-export OPENAI_API_KEY="<openai-api-key>"
-
-# Test basic operations
-uv run rag collection list
-uv run rag collection create test-collection "Test collection" "Testing" "Render deployment test"
-uv run rag ingest text "This is a test document" test-collection
-uv run rag search test-collection "test"
-```
-
-**Note:** Use External URLs for CLI testing from local machine.
-
-### Step 4: Connect AI Agents
-
-**Claude Code:**
-```bash
-claude mcp add --transport sse --scope user rag-memory https://rag-memory-mcp.onrender.com/sse
-```
-
-Restart Claude Code, then test:
-```
-List my RAG Memory collections
-Create a collection called "render-test" for testing deployment
-Search for "test" in render-test collection
-```
-
-**Claude Desktop:**
-
-**AI Assistant: Guide user to edit Claude Desktop config file:**
-- WebFetch Claude Desktop docs for config file location
-- Add rag-memory MCP server configuration
-
-Config to add:
+**Dockerfile Configuration:**
 ```json
 {
-  "mcpServers": {
-    "rag-memory": {
-      "url": "https://rag-memory-mcp.onrender.com/sse"
+  "serviceDetails": {
+    "runtime": "docker",
+    "healthCheckPath": "/health",
+    "envSpecificDetails": {
+      "dockerfilePath": "deploy/docker/Dockerfile",
+      "dockerContext": "."
     }
   }
 }
 ```
 
-**Other AI agents:** Use SSE endpoint: `https://rag-memory-mcp.onrender.com/sse`
+**CRITICAL:** `dockerfilePath` must be in `envSpecificDetails` (not directly in `serviceDetails`)
+
+**Build Process:**
+1. Render clones GitHub repository
+2. Runs multi-stage Docker build:
+   - Builder stage: Installs dependencies with `uv`
+   - Runtime stage: Copies code and runs server
+3. Starts MCP server on port 10000
+4. Runs health checks at `/health`
+5. Service goes live (~7-10 minutes total)
+
+**Startup Validation:**
+- Connects to PostgreSQL (validates schema)
+- Connects to Neo4j (validates schema with 28 indexes)
+- Server exits if either database unavailable (fail-fast design)
 
 ---
 
-## Neo4j Data Migration Deep Dive
+## Verification and Testing
 
-The script uses `neo4j-admin dump/load` approach (not APOC) for Neo4j migration.
+### Step 1: Check Service Status
 
-**Source:** https://neo4j.com/docs/operations-manual/current/backup-restore/
+Visit Render Dashboard: https://dashboard.render.com
 
-### Method A: In-Place Load via SSH (Default)
+**Expected Status:**
+- PostgreSQL: `Available` (green)
+- MCP Server: `Live` (green)
 
-Script attempts this first. Works if Render doesn't auto-restart container when Neo4j stops.
+Visit Neo4j Aura Console: https://console.neo4j.io
 
-**What the script does:**
+**Expected Status:**
+- Instance: `Running` (green)
 
-1. **Export locally:**
-   ```bash
-   docker stop rag-memory-neo4j
-   docker exec rag-memory-neo4j neo4j-admin database dump neo4j --to-path=/dumps
-   docker cp rag-memory-neo4j:/dumps/neo4j.dump /tmp/
-   docker start rag-memory-neo4j
-   ```
-
-2. **Transfer to Render:**
-   ```bash
-   scp -s /tmp/neo4j.dump SERVICE_NAME@ssh.REGION.render.com:/var/data/
-   ```
-
-3. **Import on Render:**
-   ```bash
-   ssh SERVICE_NAME@ssh.REGION.render.com
-   neo4j stop
-   neo4j-admin database load neo4j --from-path=/var/data --overwrite-destination=true
-   neo4j start
-   ```
-
-**If this fails:** Script suggests Method B (bootstrap script).
-
-### Method B: Bootstrap Script (Robust Alternative)
-
-Use this if Render auto-restarts the container when you stop Neo4j.
-
-**Why this works:** Container restores dump on boot, then starts Neo4j normally.
-
-#### Step 1: Create Bootstrap Script
-
-Create `scripts/neo4j-entrypoint.sh` in your repository:
+### Step 2: Test MCP Server Health
 
 ```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-DUMP_DIR="${NEO4J_DUMP_DIR:-/var/data}"
-DB_NAME="${NEO4J_DB_NAME:-neo4j}"
-DUMP_FILE="$(ls -1 ${DUMP_DIR}/*.dump 2>/dev/null | head -n 1 || true)"
-
-if [ -n "${DUMP_FILE}" ]; then
-  echo ">> Found dump: ${DUMP_FILE}. Loading into ${DB_NAME}..."
-  # Server is not running at boot
-  neo4j-admin database load "${DB_NAME}" \
-    --from-path="${DUMP_DIR}" \
-    --overwrite-destination=true
-  echo ">> Load complete. Removing dump to prevent re-loading..."
-  rm -f "${DUMP_FILE}"
-fi
-
-echo ">> Starting Neo4j..."
-exec neo4j
+curl https://rag-memory-mcp.onrender.com/health
 ```
 
-#### Step 2: Update Dockerfile for Neo4j
-
-Modify your Neo4j deployment to use this entrypoint:
-
-```dockerfile
-FROM neo4j:5.23.0-community
-
-# Copy bootstrap script
-COPY scripts/neo4j-entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
-# Use bootstrap script as entrypoint
-ENTRYPOINT ["/entrypoint.sh"]
+**Expected Response:**
+```json
+{"status":"healthy"}
 ```
 
-#### Step 3: Deploy Updated Neo4j Service
+### Step 3: Connect AI Agent
 
-Push changes to GitHub, Render will redeploy automatically if auto-deploy enabled.
-
-#### Step 4: Transfer Dump and Trigger Restart
-
+**Claude Code:**
 ```bash
-# Transfer dump to persistent disk
-scp -s /tmp/neo4j.dump SERVICE_NAME@ssh.REGION.render.com:/var/data/
+claude mcp add --transport sse --scope user rag-memory https://rag-memory-mcp.onrender.com/sse
 
-# Trigger restart (Render Dashboard → Service → Manual Deploy → Clear build cache & deploy)
+# Restart Claude Code session
+claude mcp list  # Verify rag-memory shows ✓ Connected
 ```
 
-On next boot, script finds dump, loads it, deletes dump, starts Neo4j.
+### Step 4: Test MCP Tools
 
-### Prerequisites for SSH Access
+Use the MCP server from Claude Code:
 
-**Source:** https://render.com/docs/ssh
+```
+List my RAG Memory collections
+```
 
-1. **SSH Key Setup (OS-specific):**
+Expected: Shows migrated collections (if data migrated) or empty list (if fresh deployment)
 
-   **macOS/Linux:**
-   ```bash
-   ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519
-   cat ~/.ssh/id_ed25519.pub
-   ```
+```
+Search for "test" in <collection-name>
+```
 
-   **Windows (PowerShell):**
-   ```powershell
-   ssh-keygen -t ed25519 -f $env:USERPROFILE\.ssh\id_ed25519
-   Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub
-   ```
+Expected: Returns relevant documents (if data migrated)
 
-   Add public key to Render account: Dashboard → Account Settings → SSH Public Keys → Add SSH Key
+```
+Query relationships: How does RAG Memory combine technologies?
+```
 
-2. **Paid Plan Required:**
-   - Free tier has NO SSH access
-   - Minimum: Starter plan for Neo4j service
+Expected: Returns knowledge graph relationships (if data migrated)
 
-3. **Verify SSH Access:**
-   ```bash
-   ssh SERVICE_NAME@ssh.REGION.render.com
-   ```
+### Step 5: Verify Data Migration (If Migrated)
 
-### Disk Mount Path
+**Document Count:**
+- Use MCP tool: "List documents in <collection-name>"
+- Compare count to local deployment
+- Should match exactly
 
-Neo4j service must have persistent disk mounted. Script uses `/var/data` by default.
+**Search Quality:**
+- Run same search query on both local and cloud
+- Results should be identical (same similarity scores)
 
-**Verify in Render Dashboard:**
-- Service → Disks tab
-- Confirm mount path matches what's used in commands
+**Knowledge Graph:**
+- Query relationships on both deployments
+- Same facts should be returned
 
 ---
 
 ## Troubleshooting
 
-### Script Fails: "Prerequisites check failed"
-
-**Problem:** Script reports missing tools
-
-**Solution:**
-```bash
-# Check what's missing
-docker --version
-psql --version
-ssh -V
-scp -h
-
-# Install missing tools (macOS example)
-brew install postgresql  # for psql
-```
-
-**AI Assistant: Guide user to install specific missing tool for their OS.**
-
 ### Script Fails: "Failed to get workspace ID"
 
-**Problem:** API authentication failed
+**Problem:** Render API authentication failed
 
 **Solutions:**
-1. Verify API key is correct (no extra spaces)
-2. Check API key has not been revoked
-3. Create new API key at https://dashboard.render.com/u/settings#api-keys
+1. Verify API key is correct (copy again from dashboard)
+2. Check API key hasn't been revoked
+3. Ensure API key has workspace access
+
+**Create new key:** https://dashboard.render.com/u/settings#api-keys
 
 ### Script Fails: "Failed to create PostgreSQL"
 
-**Problem:** API call to create database returned error
+**Problem:** Render API rejected database creation request
 
 **Common Causes:**
-1. **Plan name uses hyphens** - API requires UNDERSCORES: `basic_256mb` not `basic-256mb`
-2. **Legacy plan for new database** - `starter`, `standard`, `pro`, `pro_plus` NOT supported for new databases
-3. **Plan name invalid** - Use valid flexible plan with underscores:
-   - Basic: `basic_256mb`, `basic_1gb`, `basic_4gb`
-   - Pro: `pro_4gb`, `pro_8gb`, ... `pro_512gb`
-   - Accelerated: `accelerated_16gb`, ... `accelerated_1024gb`
-4. **Region invalid** - Use one of: oregon, ohio, virginia, frankfurt, singapore
-5. **Insufficient permissions** - Verify API key has workspace owner/admin access
-6. **Billing issue** - Verify Render account has valid payment method
+1. **Invalid plan name** - Must use underscores: `basic_256mb` (not `basic-256mb`)
+2. **Region invalid** - Use: `oregon`, `ohio`, `virginia`, `frankfurt`, or `singapore`
+3. **No payment method** - Add card to Render account
+4. **Insufficient permissions** - API key needs workspace owner/admin access
 
-### Script Fails: "Failed to create Neo4j"
+**Valid PostgreSQL Plans:**
+- Basic: `basic_256mb`, `basic_1gb`, `basic_4gb`
+- Pro: `pro_4gb`, `pro_8gb`, `pro_16gb`, ..., `pro_512gb`
 
-**Problem:** API call to create service returned error
+### Script Fails: "Failed to get Aura OAuth token"
+
+**Problem:** Neo4j Aura API authentication failed
+
+**Solutions:**
+1. Verify Client ID and Client Secret are correct
+2. Check credentials haven't been revoked
+3. Create new API credentials at: https://console.neo4j.io → Account → API Credentials
+
+### Script Fails: "Failed to create Aura instance"
+
+**Problem:** Aura API rejected instance creation
 
 **Common Causes:**
-1. **Plan name uses hyphens or spaces** - API requires underscores: `pro_plus` not `pro plus` or `pro-plus`
-2. **Plan name invalid** - Use valid plan with underscores:
-   - `free`, `starter`, `starter_plus`, `standard`, `standard_plus`, `pro`, `pro_plus`, `pro_max`, `pro_ultra`
-3. **Docker image not found** - Verify `neo4j:5-community` exists on Docker Hub
-4. **Resource limits** - Plan may not support persistent disks
-5. **Region issues** - Verify region is consistent with PostgreSQL
+1. **No payment method** - Aura requires billing for Professional tier (2GB+)
+2. **Invalid memory size** - Use: `1GB`, `2GB`, `4GB`, `8GB`, `16GB`
+3. **Invalid cloud provider** - Use: `aws`, `gcp`, or `azure`
+4. **Region availability** - Some regions only available on certain providers
 
-### Script Fails: "PostgreSQL connection failed"
+**Valid Aura Memory Sizes:**
+- Free: `512MB` (very limited, good for testing only)
+- Professional: `1GB`, `2GB` (recommended minimum), `4GB`, `8GB`, `16GB`
 
-**Problem:** Cannot connect to Render PostgreSQL during migration
+### Script Fails: "Graphiti schema initialization failed"
 
-**Solutions:**
-1. **Check External URL** - Script needs External URL for connection from local machine
-2. **Wait for service** - PostgreSQL may still be initializing (wait 2-3 minutes)
-3. **Verify password** - Check URL has correct password embedded
-4. **Test manually:**
-   ```bash
-   psql "<your-external-url>" -c "SELECT 1"
-   ```
-
-### Script Fails: "Neo4j connection failed"
-
-**Problem:** Cannot connect to Render Neo4j during migration
+**Problem:** Cannot connect to Neo4j Aura or create indexes
 
 **Solutions:**
-1. **Port 7687 not externally accessible** - This is expected on Render
-   - Migration uses SSH/SCP workaround (automated in script)
-   - If script says "connection failed", verify Neo4j service is running first
-2. **Service not ready** - Check Render dashboard, wait 3-5 minutes for startup
-3. **Password mismatch** - Verify password matches what you configured in script
-4. **SSH access not available** - Verify using paid plan (SSH requires paid tier)
+1. **Wait longer** - Aura instance may still be initializing (can take 10 minutes)
+2. **Check Aura console** - Verify instance status is "Running"
+3. **Verify password** - Script uses auto-generated password from API (should always work)
+4. **Network issue** - Check if Bolt port (7687) is blocked by firewall
 
-### Script Fails: "SSH/SCP transfer failed"
+**Manual verification:**
+```bash
+# Install neo4j driver
+pip install neo4j
 
-**Problem:** Cannot transfer Neo4j export file via SSH
+# Test connection
+python << 'EOF'
+from neo4j import GraphDatabase
 
-**Solutions:**
-1. **SSH key authentication** - Render may require SSH key setup
-   - **AI Assistant:** Guide user to set up SSH keys with Render
-   - WebFetch https://render.com/docs for SSH key setup instructions
-2. **Service ID incorrect** - Verify Neo4j service ID from Render dashboard
-3. **Region mismatch** - SSH host must match service region
-4. **Network/firewall** - Check SSH port 22 is not blocked
+driver = GraphDatabase.driver(
+    "neo4j+s://xxx.databases.neo4j.io",
+    auth=("neo4j", "password-from-credentials-file")
+)
+with driver.session() as session:
+    result = session.run("RETURN 1")
+    print(result.single()[0])
+driver.close()
+EOF
+```
 
-### Script Fails: "Import failed"
+Expected output: `1`
 
-**Problem:** Data import to Render failed
+### Script Fails: "MCP server build failed"
 
-**Solutions:**
-
-**PostgreSQL:**
-1. Check disk space on Render database
-2. Verify pgvector extension was enabled
-3. Check for schema conflicts (script includes `--clean --if-exists`)
-4. Review import errors in script output
-
-**Neo4j:**
-1. Check Neo4j logs for out-of-memory errors
-2. Verify persistent disk is attached
-3. Check APOC plugin is loaded
-4. Verify cypher-shell is accessible via SSH
-
-### Migration: Data Counts Don't Match
-
-**Problem:** Verification shows mismatched counts after migration
+**Problem:** Docker build failed on Render
 
 **Solutions:**
-1. **Re-run migration** - Script is safe to retry
-2. **Check local data didn't change** - Ensure local containers weren't modified during migration
+1. **Check build logs** - Dashboard → Service → Logs (shows exact error)
+2. **Missing uv.lock** - Verify file is committed to repository
+3. **Dockerfile path wrong** - Must be `deploy/docker/Dockerfile`
+4. **GitHub repo inaccessible** - Verify Render can access your repository
+
+**Common build errors:**
+- Missing `uv.lock`: Commit and push this file
+- Invalid Dockerfile syntax: Test build locally first
+- Missing dependencies: Check `pyproject.toml` is complete
+
+### MCP Server: Authentication failures to Neo4j
+
+**Problem:** Server logs show `Neo.ClientError.Security.Unauthorized`
+
+**Symptoms:**
+```
+ERROR Neo4j schema validation failed
+  - The client is unauthorized due to authentication failure
+```
+
+**Root Cause:** Wrong Neo4j password in environment variables
+
+**This should NEVER happen with deploy_to_cloud.py because:**
+- Password is auto-generated by Aura API
+- Same password used for schema init and MCP server
+- No manual typing involved
+
+**If it happens anyway:**
+1. Check `Neo4j-credentials-*.txt` file for correct password
+2. Verify MCP server environment variables in Render dashboard
+3. Compare passwords - they must match exactly
+4. Update `NEO4J_PASSWORD` in Render dashboard if mismatch
+
+### Data Migration: Counts don't match
+
+**Problem:** Verification shows different counts after migration
+
+**Solutions:**
+1. **Check local data didn't change** - Ensure containers weren't modified during migration
+2. **Re-run migration** - Script is safe to retry
 3. **Manual verification:**
-   ```bash
-   # PostgreSQL
-   psql "<external-url>" -c "SELECT COUNT(*) FROM source_documents; SELECT COUNT(*) FROM document_chunks;"
 
-   # Neo4j
-   docker run --rm neo4j:5-community \
-     cypher-shell -a "neo4j://rag-memory-neo4j.onrender.com:7687" -u neo4j \
-     "MATCH (n) RETURN count(n); MATCH ()-[r]->() RETURN count(r);"
-   ```
+```bash
+# PostgreSQL
+psql "<external-url>" -c "SELECT COUNT(*) FROM source_documents; SELECT COUNT(*) FROM document_chunks;"
 
-### MCP Server: Health Check Returns 503
+# Neo4j (from Python)
+from neo4j import GraphDatabase
+driver = GraphDatabase.driver("neo4j+s://xxx", auth=("neo4j", "pass"))
+with driver.session() as session:
+    nodes = session.run("MATCH (n) RETURN count(n)").single()[0]
+    rels = session.run("MATCH ()-[r]->() RETURN count(r)").single()[0]
+    print(f"Nodes: {nodes}, Relationships: {rels}")
+```
 
-**Problem:** `/health` endpoint not responding or returns error
+### MCP Server: Takes forever to start
 
-**Solutions:**
-1. **Check environment variables** - All required vars must be set
-2. **Verify Internal URLs** - DATABASE_URL and NEO4J_URI must use Internal URLs
-3. **Check logs** - Look for database connection errors
-4. **Verify databases running** - PostgreSQL and Neo4j must be "Available"
-5. **Build failed** - Check build logs for Docker build errors
+**Problem:** Service builds successfully but never becomes "Live"
+
+**Expected Behavior:**
+- Build: 5-7 minutes
+- Health checks: 1-2 minutes
+- Total: 7-10 minutes
+
+**If longer than 15 minutes:**
+1. **Check logs** - Look for errors during startup
+2. **Database connectivity** - Verify PostgreSQL and Neo4j are reachable
+3. **Health check failing** - Server may be crashing after start
+
+**Common causes:**
+- Database connection refused (wrong URLs)
+- Missing environment variables
+- OpenAI API key invalid (server can't start without it)
 
 ### General Debugging Strategy
 
-**AI Assistant: When user encounters errors:**
+**Step 1: Identify which service is failing**
+- PostgreSQL creation?
+- Neo4j Aura creation?
+- Schema initialization?
+- Data migration?
+- MCP server deployment?
 
-1. **Read error message carefully** - Often contains specific solution
-2. **Check service logs** - Most issues visible in logs
-   - Guide user to Render dashboard logs section
-   - WebFetch Render docs for log access if needed
-3. **Verify prerequisites** - Ensure all required tools installed
-4. **Test connectivity independently** - Isolate which service is failing
-5. **WebFetch current documentation** - Render's UI/API may have changed
-6. **Do NOT guess at solutions** - Research before advising
+**Step 2: Check service logs**
+- Render: Dashboard → Service → Logs
+- Aura: Console → Instance → Query Log
 
----
+**Step 3: Verify environment variables**
+- Render: Dashboard → Service → Environment
+- Check all 6 required variables are set correctly
 
-## Manual Deployment (Fallback)
+**Step 4: Test connectivity manually**
+- Use `psql` for PostgreSQL
+- Use Python `neo4j` driver for Aura
+- Use `curl` for MCP server health
 
-**AI Assistant: Only recommend manual deployment if:**
-- User explicitly requests it
-- Automated script fails repeatedly despite troubleshooting
-- User wants more control over specific configuration
-
-### Manual PostgreSQL Creation
-
-1. **AI Assistant: WebFetch https://render.com/docs** for current PostgreSQL database creation process
-2. Guide user through creation with these requirements:
-   - Name: `rag-memory-db`
-   - Database: `ragmemory`
-   - Region: User's choice (keep consistent)
-   - Plan: Paid plan with backups
-3. Enable pgvector:
-   ```bash
-   export DATABASE_URL="<external-url>"
-   psql "$DATABASE_URL" -c "CREATE EXTENSION IF NOT EXISTS vector;"
-   ```
-4. Initialize schema:
-   ```bash
-   cd /path/to/rag-memory
-   uv run alembic upgrade head
-   ```
-
-### Manual Neo4j Creation
-
-1. **AI Assistant: WebFetch https://render.com/docs** for current Docker web service deployment
-2. Guide user through creation with these requirements:
-   - Service Type: Web Service
-   - Image: `neo4j:5-community`
-   - Name: `rag-memory-neo4j`
-   - Environment variables: `NEO4J_AUTH`, `NEO4J_PLUGINS`, memory settings
-   - Persistent disk: `/data` mount, 1GB minimum
-3. Wait for service to start (2-5 minutes)
-4. Test connection
-
-### Manual Migration
-
-Use `scripts/migrate_to_render.py` for data migration even if services created manually:
-- Script detects existing services
-- Handles all data transfer logic
-- Includes verification
-
-**Or manually migrate:**
-
-**PostgreSQL:**
-```bash
-# Export
-docker exec rag-memory-postgres-local pg_dump -U raguser -d rag_memory --clean --if-exists > backup.sql
-
-# Import
-export DATABASE_URL="<external-url>"
-psql "$DATABASE_URL" --single-transaction < backup.sql
-```
-
-**Neo4j:**
-See `scripts/deploy_to_render.py` for Python-based Neo4j migration code.
+**Step 5: Consult documentation**
+- Render API docs: https://api-docs.render.com
+- Neo4j Aura docs: https://neo4j.com/docs/aura/
+- RAG Memory issues: https://github.com/codingthefuturewithai/rag-memory/issues
 
 ---
 
 ## Cost Estimates
 
-**AI Assistant: ALWAYS check https://render.com/pricing for current costs before advising user.**
+**Always check current pricing before deploying:**
+- Render: https://render.com/pricing
+- Neo4j Aura: https://neo4j.com/pricing
+- OpenAI: https://openai.com/pricing
 
 ### Typical Monthly Costs
 
-| Service | Requirements | Estimated Range |
-|---|---|---|
-| PostgreSQL | Automated backups, 256MB-1GB | $5-15/month |
-| Neo4j Docker | Persistent disk, 512MB-1GB RAM | $5-15/month |
-| MCP Server | Always-on, 512MB-1GB RAM | $5-15/month |
-| **Total** | Production-ready setup | **$15-45/month** |
+**Minimum Viable Production:**
 
-**Plus:**
-- OpenAI API: ~$1-5/month (embeddings only, not search)
-- Data transfer: Usually <$1/month (included in most plans)
+| Service | Plan | Cost |
+|---------|------|------|
+| PostgreSQL (Render) | Basic 256MB | ~$7/month |
+| Neo4j Aura | Professional 2GB | ~$65/month |
+| MCP Server (Render) | Starter | ~$7/month |
+| OpenAI API | Embeddings only | ~$1-5/month |
+| **Total** | | **~$80-85/month** |
 
-### Free Tier Limitations (Why Not Recommended)
+**Notes:**
+- Largest cost is Neo4j Aura Professional tier
+- Aura Free (512MB) available but very limited
+- OpenAI cost varies with usage (search is free, only embeddings cost)
+- Data transfer included in plans
 
-- ⚠️ **Not available via API** - Automated script requires paid plans
-- ⚠️ PostgreSQL: NO automated backups (data loss risk)
-- ⚠️ Neo4j: NO persistent disk (data lost on redeploy)
-- ⚠️ Services suspend after inactivity (slow cold starts)
-- ⚠️ Neo4j: NO SSH access (migration impossible)
-
-### Production Recommendations
-
-**AI Assistant: Strongly recommend paid plans for:**
-- Automated backups (PostgreSQL)
-- Persistent storage (Neo4j)
-- Always-on availability (all services)
-- SSH access (Neo4j - required for migration)
-
-**Minimum viable production setup:**
-- PostgreSQL: Lowest paid tier with automated backups
-- Neo4j: Lowest paid tier with persistent disk and SSH access
-- MCP Server: Lowest paid tier without suspension
+**Cost Optimization:**
+- Start with Aura Free for testing ($0/month)
+- Upgrade to Aura Professional when ready for production
+- Use smallest PostgreSQL plan that fits your data
+- Starter MCP plan sufficient for most workloads
 
 ---
 
 ## Reference Links
 
-### Documentation
+### Required Accounts
 
-- **Render API Documentation:** https://api-docs.render.com
-- **Render Pricing:** https://render.com/pricing
-- **Render General Docs:** https://render.com/docs (start here for UI-based tasks)
+- **Render:** https://render.com
+  - API Keys: https://dashboard.render.com/u/settings#api-keys
+  - Documentation: https://render.com/docs
+  - API Docs: https://api-docs.render.com
+  - Pricing: https://render.com/pricing
+
+- **Neo4j Aura:** https://console.neo4j.io
+  - API Credentials: Account → API Credentials
+  - Documentation: https://neo4j.com/docs/aura/
+  - Pricing: https://neo4j.com/pricing
+
+- **OpenAI:** https://platform.openai.com
+  - API Keys: https://platform.openai.com/api-keys
+  - Pricing: https://openai.com/pricing
 
 ### RAG Memory
 
-- **Deployment Script:** `scripts/deploy_to_render.py`
-- **Migration Script:** `scripts/migrate_to_render.py` (legacy, use deploy_to_render.py instead)
-- **Slash Command:** `/cloud-setup` (interactive guidance from AI assistant)
-
-### Getting Help
-
-- **RAG Memory:** GitHub Issues
-- **Render:** Community forums and support documentation
+- **Repository:** https://github.com/codingthefuturewithai/rag-memory
+- **Deployment Script:** `scripts/deploy_to_cloud.py`
+- **Issues:** https://github.com/codingthefuturewithai/rag-memory/issues
 
 ---
 
 ## Production Checklist
 
-Before going live:
+Before going live with production data:
 
-- [ ] All services deployed via script or manual process
-- [ ] All services on PAID plans (not free tier)
-- [ ] PostgreSQL automated backups enabled
-- [ ] Neo4j persistent disk attached and verified (mount path `/data`)
-- [ ] MCP server health check returns `{"status": "healthy"}`
-- [ ] Environment variables configured correctly in MCP server
-- [ ] Using Internal URLs for service-to-service connections
-- [ ] Database schema initialized (fresh) or migrated (existing data)
+- [ ] All services created and showing "Live"/"Running"
+- [ ] PostgreSQL on PAID plan (not free tier)
+- [ ] Neo4j Aura on Professional plan (2GB+ for production workloads)
+- [ ] MCP server on PAID plan (Starter minimum for always-on)
+- [ ] MCP server health check returns `{"status":"healthy"}`
+- [ ] Neo4j password saved securely (from credentials file)
+- [ ] All environment variables verified in Render dashboard
+- [ ] Database schema validated (28 Neo4j indexes confirmed)
+- [ ] Data migration verified (if applicable) - counts match
 - [ ] At least one AI agent connected and tested
-- [ ] Data integrity verified (create/search/list works)
-- [ ] Monitoring enabled (Render dashboard)
+- [ ] Search returns correct results
+- [ ] Knowledge graph queries work
+- [ ] Monitoring enabled (Render dashboard alerts)
 - [ ] Cost tracking reviewed and acceptable
-- [ ] Backup strategy confirmed (automated backups enabled)
+- [ ] Backup strategy confirmed (Render auto-backups enabled)
 
 ---
 
-**This guide supports the automated deployment script approach. For step-by-step interactive assistance, use the `/cloud-setup` slash command which will guide you through this documentation.**
+**This guide supports the automated deployment script (`scripts/deploy_to_cloud.py`). For step-by-step interactive assistance, use the `/cloud-setup` slash command.**
