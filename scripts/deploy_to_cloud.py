@@ -758,11 +758,13 @@ def initialize_aura_graphiti_schema(
 # Phase 4: Create MCP Server (Render)
 # ============================================================================
 
-def wait_for_service_ready(api_key: str, service_id: str, max_wait_seconds: int = 600) -> bool:
+def wait_for_service_ready(api_key: str, service_id: str, max_wait_seconds: int = 900) -> bool:
     """
     Wait for a Render service to be ready/available.
 
-    Polls GET /services/{serviceId} endpoint until status is 'available'
+    Polls GET /services/{serviceId}/deploys endpoint to check latest deploy status.
+    Returns True when deploy status is 'live', False on failure states.
+    Default timeout: 900 seconds (15 minutes) to accommodate MCP server build time (7-10 min)
     """
     console.print(f"\n[bold cyan]⏳ Waiting for service to build and deploy...[/bold cyan]")
 
@@ -770,27 +772,33 @@ def wait_for_service_ready(api_key: str, service_id: str, max_wait_seconds: int 
 
     while (time.time() - start_time) < max_wait_seconds:
         try:
+            # Get the latest deploy for this service
             response = requests.get(
-                f"{RENDER_API_BASE}/services/{service_id}",
+                f"{RENDER_API_BASE}/services/{service_id}/deploys",
                 headers={
                     **RENDER_API_HEADERS,
                     "Authorization": f"Bearer {api_key}"
                 },
+                params={"limit": 1},  # Only get the most recent deploy
                 timeout=30
             )
 
             if response.status_code == 200:
-                service = response.json()
-                status = service.get('serviceDetails', {}).get('state', 'unknown')
+                data = response.json()
 
-                console.print(f"[dim]  Status: {status}[/dim]", end="\r")
+                # Response is array of {cursor, deploy} objects
+                if data and len(data) > 0:
+                    latest_deploy = data[0].get('deploy', data[0])
+                    status = latest_deploy.get('status', 'unknown')
 
-                if status == 'available':
-                    console.print("\n[green]✓[/green] Service is ready")
-                    return True
-                elif status == 'build_failed' or status == 'failed':
-                    console.print(f"\n[red]✗ Service build/deployment failed[/red]")
-                    return False
+                    console.print(f"[dim]  Deploy status: {status}[/dim]", end="\r")
+
+                    if status == 'live':
+                        console.print("\n[green]✓[/green] Service is live and ready")
+                        return True
+                    elif status in ['build_failed', 'deploy_failed', 'failed', 'canceled']:
+                        console.print(f"\n[red]✗ Deployment failed with status: {status}[/red]")
+                        return False
 
             time.sleep(10)
 
